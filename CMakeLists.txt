@@ -50,11 +50,11 @@ file(GLOB IOT_HEADERS
         ${AWS_IOT_PRIV_HEADERS}
         )
 
-file(GLOB MQTT_SRC
+file(GLOB IOT_SRC
         ${AWS_IOT_SRC}
         )
 
-add_library(${PROJECT_NAME} ${IOT_HEADERS} ${MQTT_SRC})
+add_library(${PROJECT_NAME} ${IOT_HEADERS} ${IOT_SRC})
 aws_set_common_properties(${PROJECT_NAME})
 aws_prepare_symbol_visibility_args(${PROJECT_NAME} "AWS_IOT")
 aws_check_headers(${PROJECT_NAME} ${IOT_HEADERS})
