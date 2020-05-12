@@ -62,6 +62,7 @@ file(GLOB IOT_HEADERS
 file(GLOB IOT_SRC
         ${AWS_IOT_SRC}
         ${AWS_IOT_EXTERNAL_SRC}
+        ${AWS_IOT_PRIV_HEADERS}
         )
 
 add_library(${PROJECT_NAME} ${IOT_HEADERS} ${IOT_SRC})
