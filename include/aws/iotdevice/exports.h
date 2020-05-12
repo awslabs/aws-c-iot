@@ -18,17 +18,17 @@
 
 #if defined(USE_WINDOWS_DLL_SEMANTICS) || defined(WIN32)
 #    ifdef AWS_IOT_USE_IMPORT_EXPORT
-#        ifdef AWS_IOT_EXPORTS
+#        ifdef AWS_IOTDEVICE_EXPORTS
 #            define AWS_IOT_API __declspec(dllexport)
 #        else
 #            define AWS_IOT_API __declspec(dllimport)
-#        endif /* AWS_IOT_EXPORTS */
+#        endif /* AWS_IOTDEVICE_EXPORTS */
 #    else
 #        define AWS_IOT_API
 #    endif /* USE_IMPORT_EXPORT */
 
 #else
-#    if ((__GNUC__ >= 4) || defined(__clang__)) && defined(AWS_IOT_USE_IMPORT_EXPORT) && defined(AWS_IOT_EXPORTS)
+#    if ((__GNUC__ >= 4) || defined(__clang__)) && defined(AWS_IOT_USE_IMPORT_EXPORT) && defined(AWS_IOTDEVICE_EXPORTS)
 #        define AWS_IOT_API __attribute__((visibility("default")))
 #    else
 #        define AWS_IOT_API

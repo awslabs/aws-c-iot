@@ -34,11 +34,11 @@ include(CheckCCompilerFlag)
 include(AwsFindPackage)
 
 file(GLOB AWS_IOT_HEADERS
-        "include/aws/iot/*.h"
+        "include/aws/iotdevice/*.h"
         )
 
 file(GLOB AWS_IOT_PRIV_HEADERS
-        "include/aws/iot/private/*.h"
+        "include/aws/iotdevice/private/*.h"
         )
 
 file(GLOB AWS_IOT_SRC
