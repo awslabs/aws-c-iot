@@ -23,6 +23,8 @@ jobs:
           - manylinux2014-x64
           - manylinux2014-x86
     steps:
+    - name: Checkout Sources
+      uses: actions/checkout@v2
         # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
     - name: Build ${{ env.PACKAGE_NAME }}
       run: |
@@ -34,6 +36,8 @@ jobs:
   al2:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout Sources
+      uses: actions/checkout@v2
         # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
     - name: Build ${{ env.PACKAGE_NAME }} + consumers
       run: |
@@ -48,6 +52,8 @@ jobs:
       matrix:
         version: [3, 6, 8, 9]
     steps:
+    - name: Checkout Sources
+      uses: actions/checkout@v2
         # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
     - name: Build ${{ env.PACKAGE_NAME }}
       run: |
@@ -73,6 +79,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
+    - name: Checkout Sources
+      uses: actions/checkout@v2
     - name: Build ${{ env.PACKAGE_NAME }} + consumers
       run: |
         python -c "from urllib.request import urlretrieve; urlretrieve('${{ env.BUILDER_HOST }}/${{ env.BUILDER_SOURCE }}/${{ env.BUILDER_VERSION }}/builder.pyz?run=${{ env.RUN }}', 'builder.pyz')"
