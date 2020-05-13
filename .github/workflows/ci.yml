@@ -89,7 +89,7 @@ jobs:
   osx:
     runs-on: macos-latest
     steps:
-    -name: Checkout sources
+    - name: Checkout Sources
       uses: actions/checkout@v2
       path: ${{ env.GITHUB_WORKSPACE }}/${{ env.PACKAGE_NAME }}
     - name: Build ${{ env.PACKAGE_NAME }} + consumers
