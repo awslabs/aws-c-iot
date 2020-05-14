@@ -92,7 +92,8 @@ jobs:
     - name: Checkout Sources
       uses: actions/checkout@v2
       with:
-        path: ${{ env.GITHUB_WORKSPACE }}/${{ env.PACKAGE_NAME }}
+        path: |
+          ${{ env.GITHUB_WORKSPACE }}/${{ env.PACKAGE_NAME }}
     - name: Build ${{ env.PACKAGE_NAME }} + consumers
       run: |
         python3 -c "from urllib.request import urlretrieve; urlretrieve('${{ env.BUILDER_HOST }}/${{ env.BUILDER_SOURCE }}/${{ env.BUILDER_VERSION }}/builder.pyz?run=${{ env.RUN }}', 'builder')"
