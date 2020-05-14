@@ -25,13 +25,15 @@ jobs:
     steps:
     - name: Checkout Sources
       uses: actions/checkout@v2
+      with:
+        - path: 
         # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
     - name: Build ${{ env.PACKAGE_NAME }}
       run: |
         echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u awslabs --password-stdin
         export DOCKER_IMAGE=docker.pkg.github.com/awslabs/aws-crt-builder/aws-crt-${{ matrix.image }}:${{ env.BUILDER_VERSION }}
         docker pull $DOCKER_IMAGE
-        docker run --env GITHUB_REF $DOCKER_IMAGE build -p ${{ env.PACKAGE_NAME }}
+        docker run --env GITHUB_REF $DOCKER_IMAGE build -p ${{ env.PACKAGE_NAME }} -v "./aws-c-iot:/aws-c-iot"
 
   al2:
     runs-on: ubuntu-latest
@@ -66,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        version: [4.8, 5, 6, 7, 8]      
+        version: [4.8, 5, 6, 7, 8]
     steps:
         # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
     - name: Build ${{ env.PACKAGE_NAME }}
@@ -94,7 +96,6 @@ jobs:
     - name: Build ${{ env.PACKAGE_NAME }} + consumers
       run: |
         python3 -c "from urllib.request import urlretrieve; urlretrieve('${{ env.BUILDER_HOST }}/${{ env.BUILDER_SOURCE }}/${{ env.BUILDER_VERSION }}/builder.pyz?run=${{ env.RUN }}', 'builder')"
-        echo -e "CWD: $(pwd)\n"
         chmod a+x builder
         ./builder build -p ${{ env.PACKAGE_NAME }} --spec=downstream
 
