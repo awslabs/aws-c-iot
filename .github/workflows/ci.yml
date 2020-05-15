@@ -28,8 +28,11 @@ jobs:
         echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u awslabs --password-stdin
         export DOCKER_IMAGE=docker.pkg.github.com/awslabs/aws-crt-builder/aws-crt-${{ matrix.image }}:${{ env.BUILDER_VERSION }}
         docker pull $DOCKER_IMAGE
+        echo -e "Creating volume...\n"
         docker volume create ${{ env.PACKAGE_NAME }}
+        echo -e "Inspecting volume...\n"
         docker volume inspect ${{ env.PACKAGE_NAME }}
+        echo -e "Done inspecting volume...\n"
     - name: Checkout Sources
       uses: actions/checkout@v2
         # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
