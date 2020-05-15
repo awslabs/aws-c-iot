@@ -4,9 +4,5 @@
         { "name": "aws-c-io" },
         { "name": "aws-c-mqtt" },
         { "name": "aws-c-common" }
-    ],
-    "downstream": [
-    ],
-    "cmake_args": [
     ]
 }

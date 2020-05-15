@@ -1,6 +1,5 @@
 include(CTest)
 include(AwsTestHarness)
-include(AwsLibFuzzer)
 enable_testing()
 
 set(TEST_SRC metrics_tests.c)
