@@ -18,13 +18,12 @@ AlwaysBreakBeforeMultilineStrings: false
 BinPackArguments: false
 BinPackParameters: false
 BreakBeforeBinaryOperators: None
-BreakBeforeBraces: Allman
+BreakBeforeBraces: Attach
 BreakBeforeTernaryOperators: true
 BreakStringLiterals: true
 ColumnLimit:     120
 ContinuationIndentWidth: 4
 DerivePointerAlignment: false
-FixNamespaceComments : true
 IncludeBlocks:   Preserve
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
@@ -34,7 +33,6 @@ KeepEmptyLinesAtTheStartOfBlocks: true
 MacroBlockBegin: ''
 MacroBlockEnd:   ''
 MaxEmptyLinesToKeep: 1
-NamespaceIndentation: All
 PenaltyBreakAssignment: 2
 PenaltyBreakBeforeFirstCallParameter: 19
 PenaltyBreakComment: 300
