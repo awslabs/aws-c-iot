@@ -1,13 +1,11 @@
-## My Project
+## AWS C IoT
 
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
+C99 implementation of AWS IoT cloud services integration with devices
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
+This library is licensed under the Apache 2.0 License.
 
+## Usage
+
+TODO

@@ -1,0 +1,8 @@
+{
+    "name": "aws-c-iot",
+    "upstream": [
+        { "name": "aws-c-io" },
+        { "name": "aws-c-mqtt" },
+        { "name": "aws-c-common" }
+    ]
+}
