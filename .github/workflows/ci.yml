@@ -23,15 +23,21 @@ jobs:
           - manylinux2014-x64
           - manylinux2014-x86
     steps:
-    - name: Checkout Sources
-      uses: actions/checkout@v2
-        # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
-    - name: Build ${{ env.PACKAGE_NAME }}
+    - name: Docker Image Volume Initialization
       run: |
         echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u awslabs --password-stdin
         export DOCKER_IMAGE=docker.pkg.github.com/awslabs/aws-crt-builder/aws-crt-${{ matrix.image }}:${{ env.BUILDER_VERSION }}
         docker pull $DOCKER_IMAGE
-        docker run --mount source=/home/runner/work/aws-c-iot,target=/root --env GITHUB_REF $DOCKER_IMAGE build -p ${{ env.PACKAGE_NAME }} downstream
+        docker volume create ${{ env.PACKAGE_NAME }}
+        docker volume inspect ${{ env.PACKAGE_NAME }} #for output inspection only
+    - name: Checkout Sources
+      uses: actions/checkout@v2
+        # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
+      with:
+        path: /var/lib/docker/volumes/${{ env.PACKAGE_NAME }}/_data
+    - name: Build ${{ env.PACKAGE_NAME }}
+      run: |
+        docker run --mount source=${{ env.PACKAGE_NAME }},target=/root/${{ env.PACKAGE_NAME }} --env GITHUB_REF $DOCKER_IMAGE build -p ${{ env.PACKAGE_NAME }} downstream
 
   al2:
     runs-on: ubuntu-latest
