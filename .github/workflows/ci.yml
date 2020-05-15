@@ -29,7 +29,7 @@ jobs:
         export DOCKER_IMAGE=docker.pkg.github.com/awslabs/aws-crt-builder/aws-crt-${{ matrix.image }}:${{ env.BUILDER_VERSION }}
         docker pull $DOCKER_IMAGE
         docker volume create ${{ env.PACKAGE_NAME }}
-        docker volume inspect ${{ env.PACKAGE_NAME }} #for output inspection only
+        docker volume inspect ${{ env.PACKAGE_NAME }}
     - name: Checkout Sources
       uses: actions/checkout@v2
         # We can't use the `uses: docker://image` version yet, GitHub lacks authentication for actions -> packages
