@@ -5,18 +5,18 @@
 
 #include <aws/iotdevice/private/network.h>
 
-#include <aws/io/io.h>
 #include <aws/common/byte_buf.h>
 #include <aws/common/error.h>
 #include <aws/common/string.h>
+#include <aws/io/io.h>
 
 #include <arpa/inet.h>
+#include <errno.h>
+#include <ifaddrs.h>
 #include <linux/if_link.h>
 #include <netinet/in.h>
-#include <sys/ioctl.h>
-#include <errno.h>
 #include <stdio.h>
-#include <ifaddrs.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 int s_hashfn_foreach_total_iface_transfer_metrics(void *context, struct aws_hash_element *p_element) {
@@ -43,18 +43,18 @@ static void s_hex_addr_to_ip_str(char *ip_out, size_t ip_max_len, const char *he
 }
 
 void get_system_network_total(
-        struct aws_iotdevice_metric_network_transfer *total,
-        struct aws_iotdevice_network_ifconfig *ifconfig) {
+    struct aws_iotdevice_metric_network_transfer *total,
+    struct aws_iotdevice_network_ifconfig *ifconfig) {
     aws_hash_table_foreach(&ifconfig->iface_name_to_info, s_hashfn_foreach_total_iface_transfer_metrics, (void *)total);
 }
 
 void get_network_total_delta(
-        struct aws_iotdevice_metric_network_transfer *delta,
-        struct aws_iotdevice_metric_network_transfer *prev_total,
-        struct aws_iotdevice_metric_network_transfer *curr_total) {
+    struct aws_iotdevice_metric_network_transfer *delta,
+    struct aws_iotdevice_metric_network_transfer *prev_total,
+    struct aws_iotdevice_metric_network_transfer *curr_total) {
     AWS_PRECONDITION(delta != NULL);
     AWS_PRECONDITION(prev_total != NULL);
-    AWS_PRECONDITION(curr_total != NULL);    
+    AWS_PRECONDITION(curr_total != NULL);
 
     delta->bytes_in = curr_total->bytes_in - prev_total->bytes_in;
     delta->bytes_out = curr_total->bytes_out - prev_total->bytes_out;
@@ -65,13 +65,17 @@ void get_network_total_delta(
 /**
  * This file read is not terribly efficient if not enough bytes are allocated up front
  */
-int read_proc_net_from_file(struct aws_byte_buf *out_buf, struct aws_allocator *allocator, size_t size_hint, const char *filename) {
+int read_proc_net_from_file(
+    struct aws_byte_buf *out_buf,
+    struct aws_allocator *allocator,
+    size_t size_hint,
+    const char *filename) {
     AWS_ZERO_STRUCT(*out_buf);
-    
+
     if (aws_byte_buf_init(out_buf, allocator, size_hint)) {
         aws_raise_error(aws_last_error());
     }
-  
+
     FILE *fp = fopen(filename, "r");
     if (fp) {
         size_t read = fread(out_buf->buffer, 1, out_buf->capacity, fp);
@@ -81,7 +85,7 @@ int read_proc_net_from_file(struct aws_byte_buf *out_buf, struct aws_allocator *
                 aws_secure_zero(out_buf->buffer, out_buf->len);
                 aws_byte_buf_clean_up(out_buf);
             }
-            read = fread(&out_buf->buffer[out_buf->len], 1 , size_hint, fp);
+            read = fread(&out_buf->buffer[out_buf->len], 1, size_hint, fp);
             out_buf->len += read;
         }
         if (ferror(fp)) {
@@ -96,9 +100,11 @@ int read_proc_net_from_file(struct aws_byte_buf *out_buf, struct aws_allocator *
 }
 
 int get_net_connections(
-        struct aws_array_list *net_conns, struct aws_allocator *allocator,
-        const struct aws_iotdevice_network_ifconfig *ifconfig,
-        const struct aws_byte_cursor *proc_net_data, bool is_udp) {
+    struct aws_array_list *net_conns,
+    struct aws_allocator *allocator,
+    const struct aws_iotdevice_network_ifconfig *ifconfig,
+    const struct aws_byte_cursor *proc_net_data,
+    bool is_udp) {
     AWS_PRECONDITION(net_conns != NULL);
     AWS_PRECONDITION(allocator != NULL);
     AWS_PRECONDITION(ifconfig != NULL);
@@ -106,7 +112,7 @@ int get_net_connections(
 
     struct aws_array_list lines;
     AWS_ZERO_STRUCT(lines);
-    
+
     aws_array_list_init_dynamic(&lines, allocator, 10, sizeof(struct aws_byte_cursor));
     aws_byte_cursor_split_on_char(proc_net_data, '\n', &lines);
 
@@ -124,13 +130,20 @@ int get_net_connections(
         char remote_addr_h[9];
         char remote_port_h[5];
         char state_h[3];
-        int tokens_read = sscanf((const char *)line.ptr, "%*s %8s %*c %4s %8s %*c %4s %2s %*s", local_addr_h, local_port_h,
-                remote_addr_h, remote_port_h, state_h);
+        int tokens_read = sscanf(
+            (const char *)line.ptr,
+            "%*s %8s %*c %4s %8s %*c %4s %2s %*s",
+            local_addr_h,
+            local_port_h,
+            remote_addr_h,
+            remote_port_h,
+            state_h);
 
         if (tokens_read == 5) {
             uint16_t state = strtol(state_h, NULL, 16);
             if (state == ESTABLISHED || state == LISTEN || is_udp) {
-                struct aws_iotdevice_metric_net_connection *connection = aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_metric_net_connection));
+                struct aws_iotdevice_metric_net_connection *connection =
+                    aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_metric_net_connection));
                 if (connection == NULL) {
                     printf("Could not allocate connection memory...\n");
                 }
@@ -142,7 +155,7 @@ int get_net_connections(
                 connection->local_port = strtol(local_port_h, NULL, 16);
                 connection->remote_port = strtol(remote_port_h, NULL, 16);
                 connection->state = strtol(state_h, NULL, 16);
-                
+
                 struct aws_hash_element *element;
                 aws_hash_table_find(&ifconfig->iface_name_to_info, local_addr, &element);
                 if (element == NULL) {
@@ -156,8 +169,7 @@ int get_net_connections(
 
                 aws_array_list_push_back(net_conns, connection);
             }
-        }
-        else {
+        } else {
             printf("Bad line in /proc/net/**p file...\n");
         }
     }
@@ -165,11 +177,15 @@ int get_net_connections(
     return AWS_OP_SUCCESS;
 }
 
-int get_network_config_and_transfer(
-    struct aws_iotdevice_network_ifconfig *ifconfig,
-    struct aws_allocator *allocator) {
-    if (AWS_OP_SUCCESS != aws_hash_table_init(&ifconfig->iface_name_to_info, allocator, sizeof(struct aws_iotdevice_network_iface), 
-            aws_hash_c_string, aws_hash_callback_c_str_eq, NULL, NULL)) {
+int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
+    if (AWS_OP_SUCCESS != aws_hash_table_init(
+                              &ifconfig->iface_name_to_info,
+                              allocator,
+                              sizeof(struct aws_iotdevice_network_iface),
+                              aws_hash_c_string,
+                              aws_hash_callback_c_str_eq,
+                              NULL,
+                              NULL)) {
         return AWS_OP_ERR;
     }
     int result = AWS_OP_ERR;
@@ -218,15 +234,15 @@ int get_network_config_and_transfer(
             iface->metrics.packets_out = stats->tx_packets;
         }
 
-        if (AWS_OP_SUCCESS != (result = aws_hash_table_put(&ifconfig->iface_name_to_info, iface->ipv4_addr_str, iface, NULL))) {
+        if (AWS_OP_SUCCESS !=
+            (result = aws_hash_table_put(&ifconfig->iface_name_to_info, iface->ipv4_addr_str, iface, NULL))) {
             printf("Error putting entry into map: %d\n", result);
             goto cleanup;
-        }
-        else {
+        } else {
             result = AWS_OP_SUCCESS;
         }
 
-next_interface:
+    next_interface:
         close(fd);
         fd = 0;
         address = address->ifa_next;
@@ -241,4 +257,3 @@ cleanup:
     }
     return result;
 }
-

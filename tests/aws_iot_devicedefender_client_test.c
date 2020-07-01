@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-#include <aws/mqtt/mqtt.h>
 #include <aws/mqtt/client.h>
+#include <aws/mqtt/mqtt.h>
 
 #include <aws/io/channel.h>
 #include <aws/io/channel_bootstrap.h>

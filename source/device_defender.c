@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-
 #include <aws/iotdevice/device_defender.h>
-#include <aws/iotdevice/private/network.h>
 #include <aws/iotdevice/external/cJSON.h>
+#include <aws/iotdevice/private/network.h>
 
 #include <aws/common/clock.h>
 #include <aws/common/task_scheduler.h>
@@ -22,7 +21,6 @@ static void *s_cJSONAlloc(size_t sz) {
 static void s_cJSONFree(void *ptr) {
     aws_mem_release(s_library_allocator, ptr);
 }
-
 
 /*******************************************************************************
  * Library Init
@@ -73,10 +71,9 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator) {
         } else {
             s_library_allocator = aws_default_allocator();
         }
-        
+
         aws_register_error_info(&s_error_list);
         aws_register_log_subject_info_list(&s_logging_subjects_list);
-
 
         struct cJSON_Hooks allocation_hooks = {.malloc_fn = s_cJSONAlloc, .free_fn = s_cJSONFree};
         cJSON_InitHooks(&allocation_hooks);
@@ -84,7 +81,7 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator) {
         s_iotdevice_library_initialized = true;
     }
 
-    sum_iface_transfer_metrics(NULL, NULL);  /* TODO: silencing unused warning */
+    sum_iface_transfer_metrics(NULL, NULL); /* TODO: silencing unused warning */
 }
 
 /**
@@ -126,7 +123,7 @@ static int s_get_metric_report_json(
     cJSON_AddItemToObject(root, "header", header);
     cJSON_AddNumberToObject(header, "report_id", 1001);
     cJSON_AddStringToObject(header, "version", "1.0");
-    
+
     struct cJSON *metrics = cJSON_CreateObject();
     if (metrics == NULL) {
         goto cleanup;
@@ -168,7 +165,7 @@ static int s_get_metric_report_json(
     const size_t tcp_conn_sz = aws_array_list_length(tcp_conns);
     for (size_t tcp_index = 0; tcp_index < tcp_conn_sz; ++tcp_index) {
         struct aws_iotdevice_metric_net_connection *tcp_conn = NULL;
-        aws_array_list_get_at_ptr(tcp_conns, (void**)&tcp_conn, tcp_index);
+        aws_array_list_get_at_ptr(tcp_conns, (void **)&tcp_conn, tcp_index);
         if (tcp_conn->state == ESTABLISHED) {
             total_established_tcp_conns++;
             struct cJSON *conn = cJSON_CreateObject();
@@ -178,8 +175,7 @@ static int s_get_metric_report_json(
             char remote_addr[22];
             snprintf(remote_addr, 22, "%s:%u", aws_string_c_str(tcp_conn->remote_address), tcp_conn->remote_port);
             cJSON_AddStringToObject(conn, "remote_addr", remote_addr);
-        }
-        else if (tcp_conn->state == LISTEN) {
+        } else if (tcp_conn->state == LISTEN) {
             total_listening_tcp_ports++;
             struct cJSON *conn = cJSON_CreateObject();
             cJSON_AddItemToArray(tcp_listen_ports, conn);
@@ -187,10 +183,10 @@ static int s_get_metric_report_json(
             cJSON_AddNumberToObject(conn, "port", tcp_conn->local_port);
         }
     }
-    
+
     cJSON_AddNumberToObject(tcp_connections, "total", total_established_tcp_conns);
     cJSON_AddNumberToObject(listening_tcp_ports, "total", total_listening_tcp_ports);
-    
+
     struct cJSON *listening_udp_ports = cJSON_CreateObject();
     if (listening_udp_ports == NULL) {
         goto cleanup;
@@ -245,7 +241,7 @@ cleanup:
 static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_task_status status) {
     (void)task;
     struct aws_iotdevice_metric_task_ctx *task_ctx = (struct aws_iotdevice_metric_task_ctx *)userdata;
-    //struct aws_iotdevice_defender_metrics_report report;
+    // struct aws_iotdevice_defender_metrics_report report;
     struct aws_allocator *allocator = task_ctx->allocator;
     struct aws_byte_buf net_tcp;
     AWS_ZERO_STRUCT(net_tcp);
@@ -272,25 +268,19 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         AWS_ZERO_STRUCT(tcp_conns);
         struct aws_array_list udp_conns;
         AWS_ZERO_STRUCT(udp_conns);
-        
+
         aws_array_list_init_dynamic(&tcp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
         struct aws_byte_cursor net_tcp_cursor = aws_byte_cursor_from_buf(&net_tcp);
         if (AWS_OP_SUCCESS != get_net_connections(&tcp_conns, allocator, &ifconfig, &net_tcp_cursor, false)) {
-
         }
 
         struct aws_byte_cursor net_udp_cursor = aws_byte_cursor_from_buf(&net_udp);
         aws_array_list_init_dynamic(&udp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
         if (AWS_OP_SUCCESS != get_net_connections(&udp_conns, allocator, &ifconfig, &net_udp_cursor, true)) {
-            
         }
 
         struct aws_iotdevice_metric_network_transfer totals = {
-            .bytes_in = 0,
-            .bytes_out = 0,
-            .packets_in = 0,
-            .packets_out = 0
-        };
+            .bytes_in = 0, .bytes_out = 0, .packets_in = 0, .packets_out = 0};
         get_system_network_total(&totals, &ifconfig);
         if (task_ctx->has_previous_net_xfer) {
             struct aws_iotdevice_metric_network_transfer delta_xfer;
@@ -301,8 +291,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
 
             get_network_total_delta(&delta_xfer, &task_ctx->previous_net_xfer, &totals);
             s_get_metric_report_json(&json_report, &delta_xfer, &tcp_conns, &udp_conns);
-        }
-        else {
+        } else {
             task_ctx->has_previous_net_xfer = true;
             s_get_metric_report_json(&json_report, NULL, &tcp_conns, &udp_conns);
         }
@@ -314,12 +303,10 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         uint64_t now;
         aws_event_loop_current_clock_time(task_ctx->config.event_loop, &now);
         aws_event_loop_schedule_task_future(task_ctx->config.event_loop, task, now + task_ctx->config.task_period_ns);
-    }
-    else if (status == AWS_TASK_STATUS_CANCELED) {
+    } else if (status == AWS_TASK_STATUS_CANCELED) {
         printf("Task was cancelled!\n");
-    }
-    else {
-        //do cleanup for the task here
+    } else {
+        // do cleanup for the task here
     }
 
     aws_byte_buf_clean_up(&json_report);
@@ -337,14 +324,14 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
  */
 AWS_IOTDEVICE_API
 int aws_iotdevice_start_defender_v1_task(
-        struct aws_task *defender_task,
-        struct aws_allocator *allocator,
-        const struct aws_iotdevice_defender_report_task_config *config) {
-    
+    struct aws_task *defender_task,
+    struct aws_allocator *allocator,
+    const struct aws_iotdevice_defender_report_task_config *config) {
+
     /* to be freed on task cancellation, maybe within the task itself? */
-    struct aws_iotdevice_metric_task_ctx *task_ctx = 
-        (struct aws_iotdevice_metric_task_ctx *) aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_metric_task_ctx));
-    
+    struct aws_iotdevice_metric_task_ctx *task_ctx = (struct aws_iotdevice_metric_task_ctx *)aws_mem_acquire(
+        allocator, sizeof(struct aws_iotdevice_metric_task_ctx));
+
     task_ctx->allocator = allocator;
     task_ctx->previous_net_xfer.bytes_in = 0;
     task_ctx->previous_net_xfer.bytes_out = 0;

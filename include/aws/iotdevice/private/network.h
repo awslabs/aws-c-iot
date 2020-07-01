@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include <aws/common/hash_table.h>
 #include <aws/common/byte_buf.h>
+#include <aws/common/hash_table.h>
 
 #include <net/if.h>
 
@@ -25,13 +25,11 @@ struct aws_iotdevice_metric_net_connection {
     uint16_t state;
 };
 
-enum aws_iotdevice_network_connection_state {
-    ESTABLISHED = 1, LISTEN = 10
-};
+enum aws_iotdevice_network_connection_state { ESTABLISHED = 1, LISTEN = 10 };
 
 struct aws_iotdevice_network_iface {
-    char    iface_name[IFNAMSIZ];
-    char    ipv4_addr_str[16];
+    char iface_name[IFNAMSIZ];
+    char ipv4_addr_str[16];
     struct aws_iotdevice_metric_network_transfer metrics;
 };
 
@@ -53,18 +51,21 @@ struct aws_iotdevice_defender_task_ctx {
 int sum_iface_transfer_metrics(void *context, struct aws_hash_element *p_element);
 
 void get_system_network_total(
-        struct aws_iotdevice_metric_network_transfer *total,
-        struct aws_iotdevice_network_ifconfig *ifconfig);
-int get_network_config_and_transfer(
-    struct aws_iotdevice_network_ifconfig *ifconfig,
-    struct aws_allocator *allocator);
-int read_proc_net_from_file(struct aws_byte_buf *out_buf, struct aws_allocator *allocator, size_t size_hint, const char *filename);
+    struct aws_iotdevice_metric_network_transfer *total,
+    struct aws_iotdevice_network_ifconfig *ifconfig);
+int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator);
+int read_proc_net_from_file(
+    struct aws_byte_buf *out_buf,
+    struct aws_allocator *allocator,
+    size_t size_hint,
+    const char *filename);
 int get_net_connections(
-        struct aws_array_list *net_conns, struct aws_allocator *allocator,
-        const struct aws_iotdevice_network_ifconfig *ifconfig,
-        const struct aws_byte_cursor *proc_net_data, bool is_udp);
+    struct aws_array_list *net_conns,
+    struct aws_allocator *allocator,
+    const struct aws_iotdevice_network_ifconfig *ifconfig,
+    const struct aws_byte_cursor *proc_net_data,
+    bool is_udp);
 void get_network_total_delta(
-        struct aws_iotdevice_metric_network_transfer *delta,
-        struct aws_iotdevice_metric_network_transfer *prev_total,
-        struct aws_iotdevice_metric_network_transfer *curr_total);
-
+    struct aws_iotdevice_metric_network_transfer *delta,
+    struct aws_iotdevice_metric_network_transfer *prev_total,
+    struct aws_iotdevice_metric_network_transfer *curr_total);
