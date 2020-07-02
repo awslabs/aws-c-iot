@@ -137,7 +137,7 @@ static int s_get_metric_report_json(
         cJSON_AddStringToObject(conn, "interface", udp_conn->local_interface);
         cJSON_AddNumberToObject(conn, "port", udp_conn->local_port);
     }
-    cJSON_AddNumberToObject(listening_udp_ports, "total", total_udp_listeners);
+    cJSON_AddNumberToObject(listening_udp_ports, "total", (double)total_udp_listeners);
 
     if (net_xfer != NULL) {
         struct cJSON *network_stats = cJSON_CreateObject();
@@ -146,10 +146,10 @@ static int s_get_metric_report_json(
         }
         cJSON_AddItemToObject(metrics, "network_stats", network_stats);
 
-        cJSON_AddNumberToObject(network_stats, "bytes_in", net_xfer->bytes_in);
-        cJSON_AddNumberToObject(network_stats, "bytes_out", net_xfer->bytes_out);
-        cJSON_AddNumberToObject(network_stats, "packets_in", net_xfer->packets_in);
-        cJSON_AddNumberToObject(network_stats, "packets_out", net_xfer->packets_out);
+        cJSON_AddNumberToObject(network_stats, "bytes_in", (double)net_xfer->bytes_in);
+        cJSON_AddNumberToObject(network_stats, "bytes_out", (double)net_xfer->bytes_out);
+        cJSON_AddNumberToObject(network_stats, "packets_in", (double)net_xfer->packets_in);
+        cJSON_AddNumberToObject(network_stats, "packets_out", (double)net_xfer->packets_out);
     }
 
     char *json = cJSON_Print(root);
