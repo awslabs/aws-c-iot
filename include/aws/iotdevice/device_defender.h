@@ -2,42 +2,23 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#pragma once
+#ifndef _AWS_IOTDEVICE_DEFENDER_H_
+#define _AWS_IOTDEVICE_DEFENDER_H_
 
-#include <aws/common/array_list.h>
-#include <aws/common/hash_table.h>
 #include <aws/common/logging.h>
-#include <aws/common/string.h>
-#include <aws/common/task_scheduler.h>
-#include <aws/io/event_loop.h>
-#include <aws/iotdevice/exports.h>
+#include <aws/iotdevice/iotdevice.h>
 
-#include <net/if.h>
+struct aws_array_list;
+struct aws_hash_table;
+struct aws_logger;
+struct aws_string;
+struct aws_task;
+struct aws_event_loop;
 
-#define AWS_C_IOTDEVICE_PACKAGE_ID 11
+enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON, AWS_IDDRF_CBOR };
 
-enum aws_iotdevice_defender_report_format { JSON, SHORT_JSON, CBOR };
-
-enum aws_iotdevice_error {
-    AWS_ERROR_IOTDEVICE_INVALID_RESERVED_BITS = AWS_ERROR_ENUM_BEGIN_RANGE(AWS_C_IOTDEVICE_PACKAGE_ID),
-    AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_REPORT_INTERVAL,
-    AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT,
-
-    AWS_ERROR_END_IOTDEVICE_RANGE = AWS_ERROR_ENUM_END_RANGE(AWS_C_IOTDEVICE_PACKAGE_ID),
-};
-
-enum aws_iotdevice_log_subject {
-    AWS_LS_IOTDEVICE_GENERAL = AWS_LOG_SUBJECT_BEGIN_RANGE(AWS_C_IOTDEVICE_PACKAGE_ID),
-    AWS_LS_IOTDEVICE_DEFENDER
-};
-
-struct aws_iotdevice_defender_report_task_config {
-    struct aws_event_loop *event_loop; /* event loop to schedule task on continuously */
-    unsigned int report_format;        /* only JSON supported for now */
-    uint64_t initial_report_id;        /* Initial report_id value for uniqueness, monotonically increasing */
-    uint64_t task_period_ns;           /* how frequently do we send out a report. Service limit is once every 5m */
-    uint64_t netconn_sample_period_ns; /* how frequently we sample for established connections and listening ports */
-};
+struct aws_iotdevice_defender_v1_task;
+struct aws_iotdevice_defender_report_task_config;
 
 AWS_EXTERN_C_BEGIN
 
@@ -58,8 +39,7 @@ void aws_iotdevice_library_clean_up(void);
  * Creates a new reporting task for Device Defender metrics
  */
 AWS_IOTDEVICE_API
-int aws_iotdevice_start_defender_v1_task(
-    struct aws_task *defender_task,
+struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     struct aws_allocator *allocator,
     const struct aws_iotdevice_defender_report_task_config *config);
 
@@ -67,6 +47,8 @@ int aws_iotdevice_start_defender_v1_task(
  * Cancels the running task reporting Device Defender metrics
  */
 AWS_IOTDEVICE_API
-int aws_iotdevice_stop_defender_v1_task(struct aws_task *defender_task);
+void aws_iotdevice_stop_defender_v1_task(struct aws_iotdevice_defender_v1_task *defender_task);
 
 AWS_EXTERN_C_END
+
+#endif

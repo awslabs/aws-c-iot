@@ -2,13 +2,24 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+#ifndef _AWS_IOTDEVICE_NETWORK_H_
+#define _AWS_IOTDEVICE_NETWORK_H_
 
-#pragma once
-
-#include <aws/common/byte_buf.h>
 #include <aws/common/hash_table.h>
 
-#include <net/if.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+/* externally defined types */
+struct aws_allocator;
+struct aws_array_list;
+struct aws_byte_buf;
+struct aws_byte_cursor;
+struct aws_hash_element;
+struct aws_string;
+
+/* internally defined types  */
+enum aws_iotdevice_network_connection_state { AWS_IDNCS_ESTABLISHED = 1, AWS_IDNCS_LISTEN = 10 };
 
 struct aws_iotdevice_metric_network_transfer {
     uint64_t bytes_in;
@@ -25,13 +36,7 @@ struct aws_iotdevice_metric_net_connection {
     uint16_t state;
 };
 
-enum aws_iotdevice_network_connection_state { ESTABLISHED = 1, LISTEN = 10 };
-
-struct aws_iotdevice_network_iface {
-    char iface_name[IFNAMSIZ];
-    char ipv4_addr_str[16];
-    struct aws_iotdevice_metric_network_transfer metrics;
-};
+struct aws_iotdevice_network_iface;
 
 struct aws_iotdevice_network_ifconfig {
     /* cstr:IPV4 address -> aws_iotdevice_network_iface:instance */
@@ -39,13 +44,7 @@ struct aws_iotdevice_network_ifconfig {
 };
 
 /* internal candidate */
-struct aws_iotdevice_defender_task_ctx {
-    struct aws_allocator *allocator;
-    struct aws_iotdevice_metric_network_transfer previous_xfer_totals;
-    bool has_previous_xfer;
-    uint64_t reschedule_period;
-    uint64_t report_id;
-};
+struct aws_iotdevice_defender_task_ctx;
 
 /* library internal */
 int sum_iface_transfer_metrics(void *context, struct aws_hash_element *p_element);
@@ -53,19 +52,25 @@ int sum_iface_transfer_metrics(void *context, struct aws_hash_element *p_element
 void get_system_network_total(
     struct aws_iotdevice_metric_network_transfer *total,
     struct aws_iotdevice_network_ifconfig *ifconfig);
+
 int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator);
+
 int read_proc_net_from_file(
     struct aws_byte_buf *out_buf,
     struct aws_allocator *allocator,
     size_t size_hint,
     const char *filename);
+
 int get_net_connections(
     struct aws_array_list *net_conns,
     struct aws_allocator *allocator,
     const struct aws_iotdevice_network_ifconfig *ifconfig,
     const struct aws_byte_cursor *proc_net_data,
     bool is_udp);
+
 void get_network_total_delta(
     struct aws_iotdevice_metric_network_transfer *delta,
     struct aws_iotdevice_metric_network_transfer *prev_total,
     struct aws_iotdevice_metric_network_transfer *curr_total);
+
+#endif

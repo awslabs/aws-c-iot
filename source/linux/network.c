@@ -7,8 +7,8 @@
 
 #include <aws/common/byte_buf.h>
 #include <aws/common/error.h>
+#include <aws/common/hash_table.h>
 #include <aws/common/string.h>
-#include <aws/io/io.h>
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -18,6 +18,23 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+
+#define AWS_IOTDEVICE_IFACE_NAME_SIZE IFNAMESIZ
+
+struct aws_iotdevice_network_iface {
+    char iface_name[IFNAMSIZ];
+    char ipv4_addr_str[16];
+    struct aws_iotdevice_metric_network_transfer metrics;
+};
+
+/* internal candidate */
+struct aws_iotdevice_defender_task_ctx {
+    struct aws_allocator *allocator;
+    struct aws_iotdevice_metric_network_transfer previous_xfer_totals;
+    bool has_previous_xfer;
+    uint64_t reschedule_period;
+    uint64_t report_id;
+};
 
 int s_hashfn_foreach_total_iface_transfer_metrics(void *context, struct aws_hash_element *p_element) {
     AWS_PRECONDITION(context != NULL);
@@ -141,7 +158,7 @@ int get_net_connections(
 
         if (tokens_read == 5) {
             uint16_t state = strtol(state_h, NULL, 16);
-            if (state == ESTABLISHED || state == LISTEN || is_udp) {
+            if (state == AWS_IDNCS_ESTABLISHED || state == AWS_IDNCS_LISTEN || is_udp) {
                 struct aws_iotdevice_metric_net_connection *connection =
                     aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_metric_net_connection));
                 if (connection == NULL) {

@@ -65,6 +65,24 @@ file(GLOB IOT_SRC
         ${AWS_IOT_PRIV_HEADERS}
         )
 
+# Platform specific includes and source
+
+
+if (WIN32)
+    file(GLOB AWS_COMMON_OS_SRC
+        "source/windows/*.c"
+        )
+elseif (APPLE)
+    file(GLOB AWS_COMMON_OS_SRC
+        "source/apple/*.c"
+        )
+elseif (LINUX)
+    file(GLOB AWS_COMMON_OS_SRC
+        "source/linux/*.c"
+        )
+endif()
+
+
 add_library(${PROJECT_NAME} ${IOT_HEADERS} ${IOT_SRC})
 aws_set_common_properties(${PROJECT_NAME})
 aws_prepare_symbol_visibility_args(${PROJECT_NAME} "AWS_IOT")
@@ -112,4 +130,3 @@ include(CTest)
 if (BUILD_TESTING)
     add_subdirectory(tests)
 endif ()
-
