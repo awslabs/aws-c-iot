@@ -31,7 +31,7 @@ struct aws_iotdevice_metric_network_transfer {
 struct aws_iotdevice_metric_net_connection {
     struct aws_string *remote_address;
     uint16_t remote_port;
-    const char *local_interface;
+    struct aws_string *local_interface;
     uint16_t local_port;
     uint16_t state;
 };

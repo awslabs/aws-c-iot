@@ -27,15 +27,6 @@ struct aws_iotdevice_network_iface {
     struct aws_iotdevice_metric_network_transfer metrics;
 };
 
-/* internal candidate */
-struct aws_iotdevice_defender_task_ctx {
-    struct aws_allocator *allocator;
-    struct aws_iotdevice_metric_network_transfer previous_xfer_totals;
-    bool has_previous_xfer;
-    uint64_t reschedule_period;
-    uint64_t report_id;
-};
-
 int s_hashfn_foreach_total_iface_transfer_metrics(void *context, struct aws_hash_element *p_element) {
     AWS_PRECONDITION(context != NULL);
     AWS_PRECONDITION(p_element != NULL);

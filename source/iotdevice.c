@@ -42,8 +42,7 @@ static struct aws_error_info_list s_error_list = {
 
 /* clang-format off */
         static struct aws_log_subject_info s_logging_subjects[] = {
-            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_GENERAL, "iotdevice", "Misc MQTT logging"),
-            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER, "iotdevice-defender", "IoT DeviceDefender")
+            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER_TASK, "iotdevice-defender", "IoT DeviceDefender")
         };
 /* clang-format on */
 

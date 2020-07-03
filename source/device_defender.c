@@ -7,6 +7,7 @@
 #include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/private/network.h>
 
+#include <aws/common/atomics.h>
 #include <aws/common/allocator.h>
 #include <aws/common/clock.h>
 #include <aws/common/hash_table.h>
@@ -31,7 +32,7 @@ struct aws_iotdevice_defender_v1_task {
     size_t proc_net_udp_size_hint;
     struct aws_iotdevice_metric_network_transfer previous_net_xfer;
     bool has_previous_net_xfer;
-    bool task_cancel_requested;
+    struct aws_atomic_var task_canceled_fn; /* aws_iotdevice_defender_v1_task_canceled_fn */
 };
 
 static int s_get_metric_report_json(
@@ -99,7 +100,7 @@ static int s_get_metric_report_json(
             total_established_tcp_conns++;
             struct cJSON *conn = cJSON_CreateObject();
             cJSON_AddItemToArray(est_connections, conn);
-            cJSON_AddStringToObject(conn, "interface", tcp_conn->local_interface);
+            cJSON_AddStringToObject(conn, "interface", aws_string_c_str(tcp_conn->local_interface));
             cJSON_AddNumberToObject(conn, "port", tcp_conn->local_port);
             char remote_addr[22];
             snprintf(remote_addr, 22, "%s:%u", aws_string_c_str(tcp_conn->remote_address), tcp_conn->remote_port);
@@ -108,7 +109,7 @@ static int s_get_metric_report_json(
             total_listening_tcp_ports++;
             struct cJSON *conn = cJSON_CreateObject();
             cJSON_AddItemToArray(tcp_listen_ports, conn);
-            cJSON_AddStringToObject(conn, "interface", tcp_conn->local_interface);
+            cJSON_AddStringToObject(conn, "interface", aws_string_c_str(tcp_conn->local_interface));
             cJSON_AddNumberToObject(conn, "port", tcp_conn->local_port);
         }
     }
@@ -134,7 +135,7 @@ static int s_get_metric_report_json(
         aws_array_list_get_at_ptr(udp_conns, (void **)&udp_conn, udp_index);
         struct cJSON *conn = cJSON_CreateObject();
         cJSON_AddItemToArray(udp_ports, conn);
-        cJSON_AddStringToObject(conn, "interface", udp_conn->local_interface);
+        cJSON_AddStringToObject(conn, "interface", aws_string_c_str(udp_conn->local_interface));
         cJSON_AddNumberToObject(conn, "port", udp_conn->local_port);
     }
     cJSON_AddNumberToObject(listening_udp_ports, "total", (double)total_udp_listeners);
@@ -179,14 +180,26 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     AWS_ZERO_STRUCT(ifconfig);
     struct aws_byte_buf json_report;
     AWS_ZERO_STRUCT(json_report);
+    int return_code = 0;
 
     if (status == AWS_TASK_STATUS_RUN_READY) {
-        if (AWS_OP_SUCCESS != get_network_config_and_transfer(&ifconfig, allocator)) {
-            printf("Failed to retrieve network config\n");
+
+        if (AWS_OP_SUCCESS != (return_code = get_network_config_and_transfer(&ifconfig, allocator))) {
+            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to retrieve network configuration: %s", (void *)defender_task, aws_error_name(return_code));
+                return;
         }
 
-        if (AWS_OP_SUCCESS != read_proc_net_from_file(&net_udp, allocator, 4096, "/proc/net/udp")) {
-            printf("Failed to read net udp\n");
+        if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_tcp, allocator, defender_task->proc_net_tcp_size_hint, "/proc/net/tcp"))) {
+            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to retrieve network configuration: %s", (void *)defender_task, aws_error_name(return_code));
+                return;
+        }
+
+        if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_udp, allocator, defender_task->proc_net_udp_size_hint, "/proc/net/udp"))) {
+            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to retrieve network configuration: %s", (void *)defender_task, aws_error_name(return_code));
+                return;
         }
 
         struct aws_array_list tcp_conns;
@@ -251,7 +264,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
  */
 struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     struct aws_allocator *allocator,
-    const struct aws_iotdevice_defender_report_task_config *config) {
+    const struct aws_iotdevice_defender_report_task_config *config,
+    aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn) {
 
     /* to be freed on task cancellation, maybe within the task itself? */
     struct aws_iotdevice_defender_v1_task *defender_task = (struct aws_iotdevice_defender_v1_task *)aws_mem_calloc(
@@ -270,7 +284,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     defender_task->config = *config;
     defender_task->proc_net_tcp_size_hint = 4096;
     defender_task->proc_net_udp_size_hint = 4096;
-    defender_task->task_cancel_requested = false;
+    aws_atomic_store_ptr(&defender_task->task_canceled_fn, (void *)task_canceled_fn);
 
     aws_task_init(&defender_task->task, s_reporting_task_fn, defender_task, "DeviceDefenderReportTask");
 

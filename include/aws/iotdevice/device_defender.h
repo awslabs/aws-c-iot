@@ -20,6 +20,9 @@ enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON
 struct aws_iotdevice_defender_v1_task;
 struct aws_iotdevice_defender_report_task_config;
 
+/** Called when a connection is closed, right before any resources are deleted */
+typedef void(aws_iotdevice_defender_v1_task_canceled_fn)(void *userdata);
+
 AWS_EXTERN_C_BEGIN
 
 /**
@@ -41,7 +44,8 @@ void aws_iotdevice_library_clean_up(void);
 AWS_IOTDEVICE_API
 struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     struct aws_allocator *allocator,
-    const struct aws_iotdevice_defender_report_task_config *config);
+    const struct aws_iotdevice_defender_report_task_config *config,
+    aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn);
 
 /**
  * Cancels the running task reporting Device Defender metrics
