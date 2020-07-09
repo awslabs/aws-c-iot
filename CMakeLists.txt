@@ -33,6 +33,22 @@ include(AwsSanitizers)
 include(CheckCCompilerFlag)
 include(AwsFindPackage)
 
+# Platform specific includes and source
+
+if (WIN32)
+    file(GLOB AWS_IOT_OS_SRC
+        "source/windows/*.c"
+        )
+elseif (APPLE)
+    file(GLOB AWS_IOT_OS_SRC
+        "source/apple/*.c"
+        )
+elseif (UNIX AND NOT APPLE)
+    file(GLOB AWS_IOT_OS_SRC
+        "source/linux/*.c"
+        )
+endif()
+
 file(GLOB AWS_IOT_HEADERS
         "include/aws/iotdevice/*.h"
         )
@@ -62,26 +78,9 @@ file(GLOB IOT_HEADERS
 file(GLOB IOT_SRC
         ${AWS_IOT_SRC}
         ${AWS_IOT_EXTERNAL_SRC}
+        ${AWS_IOT_OS_SRC}
         ${AWS_IOT_PRIV_HEADERS}
         )
-
-# Platform specific includes and source
-
-
-if (WIN32)
-    file(GLOB AWS_COMMON_OS_SRC
-        "source/windows/*.c"
-        )
-elseif (APPLE)
-    file(GLOB AWS_COMMON_OS_SRC
-        "source/apple/*.c"
-        )
-elseif (LINUX)
-    file(GLOB AWS_COMMON_OS_SRC
-        "source/linux/*.c"
-        )
-endif()
-
 
 add_library(${PROJECT_NAME} ${IOT_HEADERS} ${IOT_SRC})
 aws_set_common_properties(${PROJECT_NAME})

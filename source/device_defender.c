@@ -187,49 +187,55 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     int return_code = 0;
 
     if (status == AWS_TASK_STATUS_RUN_READY) {
+        /* check if a cancelation has been requested the normal way (not from the task scheduler) */
+        aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn = (aws_iotdevice_defender_v1_task_canceled_fn *)aws_atomic_load_ptr(&defender_task->task_canceled_fn);
+        if (!task_canceled_fn) {
+            /* TODO : run cleanups */
+        }
+        else {
+            if (AWS_OP_SUCCESS != (return_code = get_network_config_and_transfer(&ifconfig, allocator))) {
+                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                    "id=%p: Failed to retrieve network configuration: %s", (void *)defender_task, aws_error_name(return_code));
+                    return;
+            }
+            struct aws_iotdevice_metric_network_transfer totals = {
+                .bytes_in = 0, .bytes_out = 0, .packets_in = 0, .packets_out = 0};
+            get_system_network_total(&totals, &ifconfig);
 
-        if (AWS_OP_SUCCESS != (return_code = get_network_config_and_transfer(&ifconfig, allocator))) {
-            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Failed to retrieve network configuration: %s", (void *)defender_task, aws_error_name(return_code));
-                return;
+
+            struct aws_array_list net_conns;
+            AWS_ZERO_STRUCT(net_conns);
+            aws_array_list_init_dynamic(&net_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
+            if (AWS_OP_SUCCESS != (return_code = get_net_connections(&net_conns, allocator, &ifconfig))) {
+                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                    "id=%p: Failed to get network connection data: %s", (void *)defender_task, aws_error_name(return_code));
+                    return;
+            }
+
+            if (defender_task->has_previous_net_xfer) {
+                struct aws_iotdevice_metric_network_transfer delta_xfer;
+                delta_xfer.bytes_in = 0;
+                delta_xfer.bytes_out = 0;
+                delta_xfer.packets_in = 0;
+                delta_xfer.packets_out = 0;
+
+                get_network_total_delta(&delta_xfer, &defender_task->previous_net_xfer, &totals);
+                s_get_metric_report_json(&json_report, &delta_xfer, &net_conns);
+            } else {
+                defender_task->has_previous_net_xfer = true;
+                s_get_metric_report_json(&json_report, NULL, &net_conns);
+            }
+            defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
+            defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
+            defender_task->previous_net_xfer.packets_in = totals.packets_in;
+            defender_task->previous_net_xfer.packets_out = totals.packets_out;
+
+            uint64_t now;
+            aws_event_loop_current_clock_time(defender_task->config.event_loop, &now);
+            aws_event_loop_schedule_task_future(
+                defender_task->config.event_loop, task, now + defender_task->config.task_period_ns);
         }
 
-        struct aws_array_list net_conns;
-        AWS_ZERO_STRUCT(net_conns);
-
-        aws_array_list_init_dynamic(&net_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
-        if (AWS_OP_SUCCESS != (return_code = get_net_connections(&net_conns, allocator, &ifconfig))) {
-            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Failed to get network connection data: %s", (void *)defender_task, aws_error_name(return_code));
-                return;
-        }
-
-        struct aws_iotdevice_metric_network_transfer totals = {
-            .bytes_in = 0, .bytes_out = 0, .packets_in = 0, .packets_out = 0};
-        get_system_network_total(&totals, &ifconfig);
-
-        if (defender_task->has_previous_net_xfer) {
-            struct aws_iotdevice_metric_network_transfer delta_xfer;
-            delta_xfer.bytes_in = 0;
-            delta_xfer.bytes_out = 0;
-            delta_xfer.packets_in = 0;
-            delta_xfer.packets_out = 0;
-
-            get_network_total_delta(&delta_xfer, &defender_task->previous_net_xfer, &totals);
-            s_get_metric_report_json(&json_report, &delta_xfer, &net_conns);
-        } else {
-            defender_task->has_previous_net_xfer = true;
-            /* s_get_metric_report_json(&json_report, NULL, &tcp_conns, &udp_conns); */
-        }
-        defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
-        defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
-        defender_task->previous_net_xfer.packets_in = totals.packets_in;
-        defender_task->previous_net_xfer.packets_out = totals.packets_out;
-
-        uint64_t now;
-        aws_event_loop_current_clock_time(defender_task->config.event_loop, &now);
-        aws_event_loop_schedule_task_future(
-            defender_task->config.event_loop, task, now + defender_task->config.task_period_ns);
     } else if (status == AWS_TASK_STATUS_CANCELED) {
         printf("Task was cancelled!\n");
     } else {
