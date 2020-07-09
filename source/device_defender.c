@@ -28,8 +28,6 @@ struct aws_iotdevice_defender_v1_task {
     struct aws_allocator *allocator;
     struct aws_task task;
     struct aws_iotdevice_defender_report_task_config config;
-    size_t proc_net_tcp_size_hint;
-    size_t proc_net_udp_size_hint;
     struct aws_iotdevice_metric_network_transfer previous_net_xfer;
     bool has_previous_net_xfer;
     struct aws_atomic_var task_canceled_fn; /* aws_iotdevice_defender_v1_task_canceled_fn */
@@ -38,8 +36,7 @@ struct aws_iotdevice_defender_v1_task {
 static int s_get_metric_report_json(
     struct aws_byte_buf *json_out,
     const struct aws_iotdevice_metric_network_transfer *net_xfer,
-    const struct aws_array_list *tcp_conns,
-    const struct aws_array_list *udp_conns) {
+    const struct aws_array_list *net_conns) {
     (void)json_out;
     int return_value = AWS_OP_ERR;
     struct cJSON *root = cJSON_CreateObject();
@@ -90,33 +87,6 @@ static int s_get_metric_report_json(
     }
     cJSON_AddItemToObject(established_tcp_conns, "connections", est_connections);
 
-    int total_listening_tcp_ports = 0;
-    int total_established_tcp_conns = 0;
-    const size_t tcp_conn_sz = aws_array_list_length(tcp_conns);
-    for (size_t tcp_index = 0; tcp_index < tcp_conn_sz; ++tcp_index) {
-        struct aws_iotdevice_metric_net_connection *tcp_conn = NULL;
-        aws_array_list_get_at_ptr(tcp_conns, (void **)&tcp_conn, tcp_index);
-        if (tcp_conn->state == AWS_IDNCS_ESTABLISHED) {
-            total_established_tcp_conns++;
-            struct cJSON *conn = cJSON_CreateObject();
-            cJSON_AddItemToArray(est_connections, conn);
-            cJSON_AddStringToObject(conn, "interface", aws_string_c_str(tcp_conn->local_interface));
-            cJSON_AddNumberToObject(conn, "port", tcp_conn->local_port);
-            char remote_addr[22];
-            snprintf(remote_addr, 22, "%s:%u", aws_string_c_str(tcp_conn->remote_address), tcp_conn->remote_port);
-            cJSON_AddStringToObject(conn, "remote_addr", remote_addr);
-        } else if (tcp_conn->state == AWS_IDNCS_LISTEN) {
-            total_listening_tcp_ports++;
-            struct cJSON *conn = cJSON_CreateObject();
-            cJSON_AddItemToArray(tcp_listen_ports, conn);
-            cJSON_AddStringToObject(conn, "interface", aws_string_c_str(tcp_conn->local_interface));
-            cJSON_AddNumberToObject(conn, "port", tcp_conn->local_port);
-        }
-    }
-
-    cJSON_AddNumberToObject(tcp_connections, "total", total_established_tcp_conns);
-    cJSON_AddNumberToObject(listening_tcp_ports, "total", total_listening_tcp_ports);
-
     struct cJSON *listening_udp_ports = cJSON_CreateObject();
     if (listening_udp_ports == NULL) {
         goto cleanup;
@@ -129,15 +99,48 @@ static int s_get_metric_report_json(
     }
     cJSON_AddItemToObject(listening_udp_ports, "ports", udp_ports);
 
-    const size_t total_udp_listeners = aws_array_list_length(udp_conns);
-    for (size_t udp_index = 0; udp_index < total_udp_listeners; ++udp_index) {
-        struct aws_iotdevice_metric_net_connection *udp_conn = NULL;
-        aws_array_list_get_at_ptr(udp_conns, (void **)&udp_conn, udp_index);
-        struct cJSON *conn = cJSON_CreateObject();
-        cJSON_AddItemToArray(udp_ports, conn);
-        cJSON_AddStringToObject(conn, "interface", aws_string_c_str(udp_conn->local_interface));
-        cJSON_AddNumberToObject(conn, "port", udp_conn->local_port);
+    int total_listening_tcp_ports = 0;
+    int total_established_tcp_conns = 0;
+    int total_udp_listeners = 0;
+    const size_t net_conn_sz = aws_array_list_length(net_conns);
+    for (size_t tcp_index = 0; tcp_index < net_conn_sz; ++tcp_index) {
+        struct aws_iotdevice_metric_net_connection *net_conn = NULL;
+        aws_array_list_get_at_ptr(net_conns, (void **)&net_conn, tcp_index);
+        if (net_conn->state == AWS_IDNCS_ESTABLISHED && net_conn->protocol == AWS_IDNP_TCP) {
+            total_established_tcp_conns++;
+            struct cJSON *conn = cJSON_CreateObject();
+            if (conn == NULL) {
+                goto cleanup;
+            }
+            cJSON_AddItemToArray(est_connections, conn);
+            cJSON_AddStringToObject(conn, "interface", aws_string_c_str(net_conn->local_interface));
+            cJSON_AddNumberToObject(conn, "port", net_conn->local_port);
+            char remote_addr[22];
+            snprintf(remote_addr, 22, "%s:%u", aws_string_c_str(net_conn->remote_address), net_conn->remote_port);
+            cJSON_AddStringToObject(conn, "remote_addr", remote_addr);
+        } else if (net_conn->state == AWS_IDNCS_LISTEN && net_conn->protocol == AWS_IDNP_TCP) {
+            total_listening_tcp_ports++;
+            struct cJSON *conn = cJSON_CreateObject();
+            if (conn == NULL) {
+                goto cleanup;
+            }
+            cJSON_AddItemToArray(tcp_listen_ports, conn);
+            cJSON_AddStringToObject(conn, "interface", aws_string_c_str(net_conn->local_interface));
+            cJSON_AddNumberToObject(conn, "port", net_conn->local_port);
+        } else if (net_conn->state == AWS_IDNCS_LISTEN && net_conn->protocol == AWS_IDNP_UDP) {
+            ++total_udp_listeners;
+            struct cJSON *conn = cJSON_CreateObject();
+            if (conn == NULL) {
+                goto cleanup;
+            }
+            cJSON_AddItemToArray(udp_ports, conn);
+            cJSON_AddStringToObject(conn, "interface", aws_string_c_str(net_conn->local_interface));
+            cJSON_AddNumberToObject(conn, "port", net_conn->local_port);
+        }
     }
+
+    cJSON_AddNumberToObject(tcp_connections, "total", total_established_tcp_conns);
+    cJSON_AddNumberToObject(listening_tcp_ports, "total", total_listening_tcp_ports);
     cJSON_AddNumberToObject(listening_udp_ports, "total", (double)total_udp_listeners);
 
     if (net_xfer != NULL) {
@@ -161,9 +164,13 @@ static int s_get_metric_report_json(
     json_out->buffer = (uint8_t *)json;
     json_out->capacity = json_out->len = strlen(json) * sizeof(char);
 
+
 cleanup:
     if (root) {
         cJSON_Delete(root);
+    }
+    if(return_value != AWS_OP_SUCCESS) {
+        return aws_raise_error(return_value);
     }
     return return_value;
 }
@@ -172,10 +179,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     (void)task;
     struct aws_iotdevice_defender_v1_task *defender_task = (struct aws_iotdevice_defender_v1_task *)userdata;
     struct aws_allocator *allocator = defender_task->allocator;
-    struct aws_byte_buf net_tcp;
-    AWS_ZERO_STRUCT(net_tcp);
-    struct aws_byte_buf net_udp;
-    AWS_ZERO_STRUCT(net_udp);
+
     struct aws_iotdevice_network_ifconfig ifconfig;
     AWS_ZERO_STRUCT(ifconfig);
     struct aws_byte_buf json_report;
@@ -190,31 +194,14 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 return;
         }
 
-        if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_tcp, allocator, defender_task->proc_net_tcp_size_hint, "/proc/net/tcp"))) {
+        struct aws_array_list net_conns;
+        AWS_ZERO_STRUCT(net_conns);
+
+        aws_array_list_init_dynamic(&net_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
+        if (AWS_OP_SUCCESS != (return_code = get_net_connections(&net_conns, allocator, &ifconfig))) {
             AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Failed to retrieve network configuration: %s", (void *)defender_task, aws_error_name(return_code));
+                "id=%p: Failed to get network connection data: %s", (void *)defender_task, aws_error_name(return_code));
                 return;
-        }
-
-        if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_udp, allocator, defender_task->proc_net_udp_size_hint, "/proc/net/udp"))) {
-            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Failed to retrieve network configuration: %s", (void *)defender_task, aws_error_name(return_code));
-                return;
-        }
-
-        struct aws_array_list tcp_conns;
-        AWS_ZERO_STRUCT(tcp_conns);
-        struct aws_array_list udp_conns;
-        AWS_ZERO_STRUCT(udp_conns);
-
-        aws_array_list_init_dynamic(&tcp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
-        struct aws_byte_cursor net_tcp_cursor = aws_byte_cursor_from_buf(&net_tcp);
-        if (AWS_OP_SUCCESS != get_net_connections(&tcp_conns, allocator, &ifconfig, &net_tcp_cursor, false)) {
-        }
-
-        struct aws_byte_cursor net_udp_cursor = aws_byte_cursor_from_buf(&net_udp);
-        aws_array_list_init_dynamic(&udp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
-        if (AWS_OP_SUCCESS != get_net_connections(&udp_conns, allocator, &ifconfig, &net_udp_cursor, true)) {
         }
 
         struct aws_iotdevice_metric_network_transfer totals = {
@@ -229,10 +216,10 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             delta_xfer.packets_out = 0;
 
             get_network_total_delta(&delta_xfer, &defender_task->previous_net_xfer, &totals);
-            s_get_metric_report_json(&json_report, &delta_xfer, &tcp_conns, &udp_conns);
+            s_get_metric_report_json(&json_report, &delta_xfer, &net_conns);
         } else {
             defender_task->has_previous_net_xfer = true;
-            s_get_metric_report_json(&json_report, NULL, &tcp_conns, &udp_conns);
+            /* s_get_metric_report_json(&json_report, NULL, &tcp_conns, &udp_conns); */
         }
         defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
         defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
@@ -250,13 +237,6 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     }
 
     aws_byte_buf_clean_up(&json_report);
-
-    if (net_tcp.allocator) {
-        aws_byte_buf_clean_up(&net_tcp);
-    }
-    if (net_udp.allocator) {
-        aws_byte_buf_clean_up(&net_udp);
-    }
 }
 
 /**
@@ -282,8 +262,6 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     defender_task->previous_net_xfer.packets_out = 0;
     defender_task->has_previous_net_xfer = false;
     defender_task->config = *config;
-    defender_task->proc_net_tcp_size_hint = 4096;
-    defender_task->proc_net_udp_size_hint = 4096;
     aws_atomic_store_ptr(&defender_task->task_canceled_fn, (void *)task_canceled_fn);
 
     aws_task_init(&defender_task->task, s_reporting_task_fn, defender_task, "DeviceDefenderReportTask");

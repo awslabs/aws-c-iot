@@ -4,10 +4,6 @@
  */
 #include <aws/common/error.h>
 
-/* library internal */
-int sum_iface_transfer_metrics(void *context, struct aws_hash_element *p_element) {
-    return AWS_ERROR_UNIMPLEMENTED;
-}
 
 void get_system_network_total(
     struct aws_iotdevice_metric_network_transfer *total,

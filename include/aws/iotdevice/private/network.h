@@ -18,8 +18,10 @@ struct aws_byte_cursor;
 struct aws_hash_element;
 struct aws_string;
 
-/* internally defined types  */
-enum aws_iotdevice_network_connection_state { AWS_IDNCS_ESTABLISHED = 1, AWS_IDNCS_LISTEN = 10 };
+
+enum aws_iotdevice_network_protocol { AWS_IDNP_UKNOWN, AWS_IDNP_TCP, AWS_IDNP_UDP };
+
+enum aws_iotdevice_network_connection_state { AWS_IDNCS_UNKNOWN = 0, AWS_IDNCS_ESTABLISHED = 1, AWS_IDNCS_LISTEN = 10 };
 
 struct aws_iotdevice_metric_network_transfer {
     uint64_t bytes_in;
@@ -34,6 +36,7 @@ struct aws_iotdevice_metric_net_connection {
     struct aws_string *local_interface;
     uint16_t local_port;
     uint16_t state;
+    uint16_t protocol;
 };
 
 struct aws_iotdevice_network_iface;
@@ -55,18 +58,10 @@ void get_system_network_total(
 
 int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator);
 
-int read_proc_net_from_file(
-    struct aws_byte_buf *out_buf,
-    struct aws_allocator *allocator,
-    size_t size_hint,
-    const char *filename);
-
 int get_net_connections(
     struct aws_array_list *net_conns,
     struct aws_allocator *allocator,
-    const struct aws_iotdevice_network_ifconfig *ifconfig,
-    const struct aws_byte_cursor *proc_net_data,
-    bool is_udp);
+    const struct aws_iotdevice_network_ifconfig *ifconfig);
 
 void get_network_total_delta(
     struct aws_iotdevice_metric_network_transfer *delta,
