@@ -4,23 +4,26 @@
  */
 
 #include <aws/iotdevice/private/network.h>
+#include <aws/iotdevice/iotdevice.h>
 
 #include <aws/common/byte_buf.h>
 #include <aws/common/error.h>
 #include <aws/common/hash_table.h>
+#include <aws/common/logging.h>
 #include <aws/common/string.h>
+#include <aws/io/io.h>
 
 #include <arpa/inet.h>
 #include <errno.h>
 #include <ifaddrs.h>
-#include <linux/if.h>
+#include <net/if.h>
 #include <linux/if_link.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#define IFACE_NAME_SIZE     IFNAMESIZ
+#define IFACE_NAME_SIZE     IFNAMSIZ
 #define IPV4_ADDRESS_SIZE   16
 #define PORT_STRING_SIZE    6
 
@@ -110,15 +113,15 @@ int read_proc_net_from_file(
     }
 
     FILE *fp = fopen(filename, "r");
-    int aws_error = 0;
     if (fp) {
         size_t read = fread(out_buf->buffer, 1, out_buf->capacity, fp);
         out_buf->len += read;
         while (read == size_hint) {
-            if (aws_error = aws_byte_buf_reserve_relative(out_buf, size_hint)) {
+            int aws_error = 0;
+            if (AWS_OP_SUCCESS != (aws_error = aws_byte_buf_reserve_relative(out_buf, size_hint))) {
                 aws_secure_zero(out_buf->buffer, out_buf->len);
                 aws_byte_buf_clean_up(out_buf);
-                return aws_raise_error(aws_error));
+                return aws_raise_error(aws_error);
             }
             read = fread(out_buf->buffer + out_buf->len, 1, size_hint, fp);
         }
@@ -136,6 +139,7 @@ int read_proc_net_from_file(
 int get_net_connections_from_proc_buf(
     struct aws_array_list *net_conns,
     struct aws_allocator *allocator,
+    struct aws_byte_cursor *proc_net_data,
     const struct aws_iotdevice_network_ifconfig *ifconfig,
     enum aws_iotdevice_network_protocol protocol) {
     AWS_PRECONDITION(net_conns != NULL);
@@ -198,13 +202,16 @@ int get_net_connections_from_proc_buf(
                 }
 
                 struct aws_iotdevice_network_iface *iface = (struct aws_iotdevice_network_iface *)element->value;
-                connection->local_interface = iface->iface_name;
+                connection->local_interface = aws_string_new_from_c_str(allocator, iface->iface_name);
                 connection->remote_address = aws_string_new_from_c_str(allocator, remote_addr);
                 if (!connection->remote_address) {
                     goto cleanup;
                 }
+                connection->protocol = protocol;
 
-                aws_array_list_push_back(net_conns, connection);
+                if (AWS_OP_SUCCESS != aws_array_list_push_back(net_conns, connection)) {
+                    goto cleanup;
+                }
             }
         } else {
             printf("Bad line in /proc/net/*** file\n");
@@ -212,7 +219,7 @@ int get_net_connections_from_proc_buf(
     }
 
 cleanup:
-    aws_array_list_clean_up(lines);
+    aws_array_list_clean_up(&lines);
 
     return AWS_OP_SUCCESS;
 }
@@ -222,18 +229,23 @@ int get_system_network_config(struct aws_iotdevice_network_ifconfig *ifconfig, s
     AWS_ZERO_STRUCT(net_tcp);
     struct aws_byte_buf net_udp;
     AWS_ZERO_STRUCT(net_udp);
+    int return_code = 0;
 
-    if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_tcp, allocator, proc_net_tcp_size_hint, "/proc/net/tcp"))) {
-        AWS_LOGF_ERROR(v,
-            "id=%p: Failed to retrieve network configuration: %s", (void *)ifconfig, aws_error_name(return_code));
-            return;
-    }
-
-    if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_udp, allocator, proc_net_udp_size_hint, "/proc/net/udp"))) {
+    if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_tcp, allocator, s_proc_net_tcp_size_hint, "/proc/net/tcp"))) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s", (void *)ifconfig, aws_error_name(return_code));
-            return;
+            return return_code;
     }
+    /* hint on read size next go around */
+    s_proc_net_tcp_size_hint = net_tcp.len * PROC_NET_HINT_FACTOR;
+
+    if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp"))) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+            "id=%p: Failed to retrieve network configuration: %s", (void *)ifconfig, aws_error_name(return_code));
+            return return_code;
+    }
+    /* hint on read size next go around */
+    s_proc_net_udp_size_hint = net_udp.len * PROC_NET_HINT_FACTOR;
 
     struct aws_array_list tcp_conns;
     AWS_ZERO_STRUCT(tcp_conns);
@@ -243,17 +255,17 @@ int get_system_network_config(struct aws_iotdevice_network_ifconfig *ifconfig, s
     aws_array_list_init_dynamic(&tcp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
     struct aws_byte_cursor net_tcp_cursor = aws_byte_cursor_from_buf(&net_tcp);
     //
-    if (AWS_OP_SUCCESS != get_net_connections_from_proc_buf(&tcp_conns, allocator, &ifconfig, &net_tcp_cursor, AWS_IDNP_TCP)) {
+    if (AWS_OP_SUCCESS != get_net_connections_from_proc_buf(&tcp_conns, allocator, &net_tcp_cursor, ifconfig, AWS_IDNP_TCP)) {
     }
 
     struct aws_byte_cursor net_udp_cursor = aws_byte_cursor_from_buf(&net_udp);
     aws_array_list_init_dynamic(&udp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
-    if (AWS_OP_SUCCESS != get_net_connections_from_proc_buf(&udp_conns, allocator, &ifconfig, &net_udp_cursor, AWS_IDNP_UDP)) {
+    if (AWS_OP_SUCCESS != get_net_connections_from_proc_buf(&udp_conns, allocator, &net_udp_cursor, ifconfig, AWS_IDNP_UDP)) {
     }
 
     struct aws_iotdevice_metric_network_transfer totals = {
         .bytes_in = 0, .bytes_out = 0, .packets_in = 0, .packets_out = 0};
-    get_system_network_total(&totals, &ifconfig);
+    get_system_network_total(&totals, ifconfig);
 
     if (net_tcp.allocator) {
         aws_byte_buf_clean_up(&net_tcp);
@@ -261,6 +273,8 @@ int get_system_network_config(struct aws_iotdevice_network_ifconfig *ifconfig, s
     if (net_udp.allocator) {
         aws_byte_buf_clean_up(&net_udp);
     }
+
+    return AWS_OP_SUCCESS;
 }
 
 int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
