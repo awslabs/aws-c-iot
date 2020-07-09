@@ -202,7 +202,6 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 .bytes_in = 0, .bytes_out = 0, .packets_in = 0, .packets_out = 0};
             get_system_network_total(&totals, &ifconfig);
 
-
             struct aws_array_list net_conns;
             AWS_ZERO_STRUCT(net_conns);
             aws_array_list_init_dynamic(&net_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
