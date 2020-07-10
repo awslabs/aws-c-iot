@@ -44,9 +44,6 @@ struct aws_iotdevice_network_ifconfig {
     struct aws_hash_table iface_name_to_info;
 };
 
-/* internal candidate */
-struct aws_iotdevice_defender_task_ctx;
-
 void get_system_network_total(
     struct aws_iotdevice_metric_network_transfer *total,
     struct aws_iotdevice_network_ifconfig *ifconfig);
