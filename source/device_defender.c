@@ -22,7 +22,9 @@ struct aws_iotdevice_defender_v1_task {
     struct aws_iotdevice_defender_report_task_config config;
     struct aws_iotdevice_metric_network_transfer previous_net_xfer;
     bool has_previous_net_xfer;
-    struct aws_atomic_var task_canceled_fn; /* pointer type: aws_iotdevice_defender_v1_task_canceled_fn */
+    struct aws_atomic_var task_canceled; /* flag value switches to non-zero when canceled */
+    aws_iotdevice_defender_v1_task_canceled_fn
+        *task_canceled_fn; /* pointer type: aws_iotdevice_defender_v1_task_canceled_fn */
     void *cancelation_userdata;
 };
 
@@ -42,7 +44,7 @@ static int s_get_metric_report_json(
         goto cleanup;
     }
     cJSON_AddItemToObject(root, "header", header);
-    if (NULL == cJSON_AddNumberToObject(header, "report_id", report_id)) {
+    if (NULL == cJSON_AddNumberToObject(header, "report_id", (double)report_id)) {
         goto cleanup;
     }
 
@@ -182,7 +184,6 @@ static int s_get_metric_report_json(
             goto cleanup;
         }
     }
-
     const size_t remaining_capacity = json_out->capacity - json_out->len;
     char *write_start = (char *)json_out->buffer + json_out->len;
     if (!cJSON_PrintPreallocated(root, write_start, remaining_capacity, false)) {
@@ -233,9 +234,9 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         /* check if a cancelation has been requested the normal way (not from the task scheduler) */
         /* note: the actual cancelation logic still happens on AWS_TASK_STATUS_CANCEL and thus the cancelation_fn could
          * theoretically be overwritten by then */
-        aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn =
-            (aws_iotdevice_defender_v1_task_canceled_fn *)aws_atomic_load_ptr(&defender_task->task_canceled_fn);
-        if (!task_canceled_fn) {
+
+        const size_t task_canceled = aws_atomic_load_int(&defender_task->task_canceled);
+        if (task_canceled) {
             AWS_LOGF_TRACE(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
                 "id=%p: DeviceDefender reporting task cancel requested",
@@ -304,14 +305,11 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     } else if (status == AWS_TASK_STATUS_CANCELED) {
         AWS_LOGF_TRACE(
             AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Reporting task canceled, cleaning up", (void *)defender_task);
-        aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn =
-            (aws_iotdevice_defender_v1_task_canceled_fn *)aws_atomic_exchange_ptr(
-                &defender_task->task_canceled_fn, NULL);
         /* totally fine if this function ptr is NULL */
         void *cancel_userdata = defender_task->cancelation_userdata;
         aws_mem_release(allocator, defender_task);
-        if (task_canceled_fn != NULL) {
-            task_canceled_fn(cancel_userdata);
+        if (defender_task->task_canceled_fn != NULL) {
+            defender_task->task_canceled_fn(cancel_userdata);
         }
     } else {
         AWS_LOGF_WARN(
@@ -350,9 +348,9 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     defender_task->previous_net_xfer.packets_out = 0;
     defender_task->has_previous_net_xfer = false;
     defender_task->config = *config;
-    aws_atomic_store_ptr(&defender_task->task_canceled_fn, (void *)task_canceled_fn);
+    aws_atomic_store_int(&defender_task->task_canceled, 0);
+    defender_task->task_canceled_fn = task_canceled_fn;
     defender_task->cancelation_userdata = cancelation_userdata;
-
     aws_task_init(&defender_task->task, s_reporting_task_fn, defender_task, "DeviceDefenderReportTask");
 
     return AWS_OP_SUCCESS;
@@ -363,5 +361,5 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
  */
 void aws_iotdevice_stop_defender_v1_task(struct aws_iotdevice_defender_v1_task *defender_task) {
     /* this will trigger proper callback fn set on creation */
-    aws_event_loop_cancel_task(defender_task->config.event_loop, &defender_task->task);
+    aws_atomic_store_int(&defender_task->task_canceled, 1);
 }

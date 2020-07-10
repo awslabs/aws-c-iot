@@ -6,7 +6,9 @@
 
 #include <aws/iotdevice/private/network.h>
 
-struct aws_iotdevice_network_iface {};
+struct aws_iotdevice_network_iface {
+    int __dummy;
+};
 
 void get_system_network_total(
     struct aws_iotdevice_metric_network_transfer *total,
@@ -26,6 +28,4 @@ int get_net_connections(
 void get_network_total_delta(
     struct aws_iotdevice_metric_network_transfer *delta,
     struct aws_iotdevice_metric_network_transfer *prev_total,
-    struct aws_iotdevice_metric_network_transfer *curr_total) {
-    return AWS_ERROR_UNIMPLEMENTED;
-}
+    struct aws_iotdevice_metric_network_transfer *curr_total) {}
