@@ -186,7 +186,7 @@ static int s_get_metric_report_json(
     }
     const size_t remaining_capacity = json_out->capacity - json_out->len;
     char *write_start = (char *)json_out->buffer + json_out->len;
-    if (!cJSON_PrintPreallocated(root, write_start, remaining_capacity, false)) {
+    if (!cJSON_PrintPreallocated(root, write_start, (int)remaining_capacity, false)) {
         AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Failed to print defender report JSON", (void *)task);
         return_value = AWS_OP_ERR;
     } else {
