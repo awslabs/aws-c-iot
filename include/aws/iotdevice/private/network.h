@@ -18,7 +18,6 @@ struct aws_byte_cursor;
 struct aws_hash_element;
 struct aws_string;
 
-
 enum aws_iotdevice_network_protocol { AWS_IDNP_UKNOWN, AWS_IDNP_TCP, AWS_IDNP_UDP };
 
 enum aws_iotdevice_network_connection_state { AWS_IDNCS_UNKNOWN = 0, AWS_IDNCS_ESTABLISHED = 1, AWS_IDNCS_LISTEN = 10 };
@@ -40,7 +39,6 @@ struct aws_iotdevice_metric_net_connection {
 };
 
 struct aws_iotdevice_network_iface;
-
 struct aws_iotdevice_network_ifconfig {
     /* cstr:IPV4 address -> aws_iotdevice_network_iface:instance */
     struct aws_hash_table iface_name_to_info;
@@ -48,9 +46,6 @@ struct aws_iotdevice_network_ifconfig {
 
 /* internal candidate */
 struct aws_iotdevice_defender_task_ctx;
-
-/* library internal */
-int sum_iface_transfer_metrics(void *context, struct aws_hash_element *p_element);
 
 void get_system_network_total(
     struct aws_iotdevice_metric_network_transfer *total,

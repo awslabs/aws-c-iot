@@ -22,16 +22,17 @@ static void s_cJSONFree(void *ptr) {
  * Library Init
  ******************************************************************************/
 
+/* Incomplete: error code definitions aren't exhaustive by any means and are not used well in the code */
 #define AWS_DEFINE_ERROR_INFO_IOTDEVICE(C, ES) AWS_DEFINE_ERROR_INFO(C, ES, "libaws-c-iotdevice")
 /* clang-format off */
-        static struct aws_error_info s_errors[] = {
-            AWS_DEFINE_ERROR_INFO_IOTDEVICE(
-                AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_REPORT_INTERVAL,
-                "Invalid defender task reporting interval. Must be greater than 5 minutes"),
-            AWS_DEFINE_ERROR_INFO_IOTDEVICE(
-                AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT,
-                "Unknown format value selected for defender reporting task"),
-        };
+static struct aws_error_info s_errors[] = {
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_REPORT_INTERVAL,
+        "Invalid defender task reporting interval. Must be greater than 5 minutes"),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT,
+        "Unknown format value selected for defender reporting task"),
+};
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE
 
@@ -42,7 +43,8 @@ static struct aws_error_info_list s_error_list = {
 
 /* clang-format off */
         static struct aws_log_subject_info s_logging_subjects[] = {
-            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER_TASK, "iotdevice-defender", "IoT DeviceDefender")
+            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER_TASK, "iotdevice-defender", "IoT DeviceDefender"),
+            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_NETWORK_CONFIG, "iotdevice-network", "IoT Device Network")
         };
 /* clang-format on */
 
@@ -58,13 +60,10 @@ static bool s_iotdevice_library_initialized = false;
  * Must be called before using any functionality in aws-c-iot.
  */
 void aws_iotdevice_library_init(struct aws_allocator *allocator) {
-    if (!s_iotdevice_library_initialized) {
+    AWS_PRECONDITION(aws_allocator_is_valid(allocator));
 
-        if (allocator) {
-            s_library_allocator = allocator;
-        } else {
-            s_library_allocator = aws_default_allocator();
-        }
+    if (!s_iotdevice_library_initialized) {
+        s_library_allocator = allocator;
 
         aws_register_error_info(&s_error_list);
         aws_register_log_subject_info_list(&s_logging_subjects_list);

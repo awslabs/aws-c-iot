@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-#include <aws/iotdevice/private/network.h>
 #include <aws/iotdevice/iotdevice.h>
+#include <aws/iotdevice/private/network.h>
 
 #include <aws/common/byte_buf.h>
 #include <aws/common/error.h>
@@ -16,16 +16,16 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <ifaddrs.h>
-#include <net/if.h>
 #include <linux/if_link.h>
+#include <net/if.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#define IFACE_NAME_SIZE     IFNAMSIZ
-#define IPV4_ADDRESS_SIZE   16
-#define PORT_STRING_SIZE    6
+#define IFACE_NAME_SIZE IFNAMSIZ
+#define IPV4_ADDRESS_SIZE 16
+#define PORT_STRING_SIZE 6
 
 static size_t s_proc_net_tcp_size_hint = 4096;
 static size_t s_proc_net_udp_size_hint = 4096;
@@ -56,17 +56,17 @@ int s_hashfn_foreach_total_iface_transfer_metrics(void *context, struct aws_hash
 enum linux_network_connection_state { LINUX_NCS_UNKNOWN = 0, LINUX_NCS_ESTABLISHED = 1, LINUX_NCS_LISTEN = 10 };
 
 static uint16_t map_network_state(uint16_t linux_state) {
-        switch(linux_state) {
-            case LINUX_NCS_LISTEN:
-                return AWS_IDNCS_LISTEN;
-                break;
-            case LINUX_NCS_ESTABLISHED:
-                return AWS_IDNCS_ESTABLISHED;
-                break;
-            default:
-                return AWS_IDNCS_UNKNOWN;
-                break;
-        }
+    switch (linux_state) {
+        case LINUX_NCS_LISTEN:
+            return AWS_IDNCS_LISTEN;
+            break;
+        case LINUX_NCS_ESTABLISHED:
+            return AWS_IDNCS_ESTABLISHED;
+            break;
+        default:
+            return AWS_IDNCS_UNKNOWN;
+            break;
+    }
 }
 
 static void s_hex_addr_to_ip_str(char *ip_out, size_t ip_max_len, const char *hex_addr) {
@@ -81,7 +81,10 @@ static void s_hex_addr_to_ip_str(char *ip_out, size_t ip_max_len, const char *he
 void get_system_network_total(
     struct aws_iotdevice_metric_network_transfer *total,
     struct aws_iotdevice_network_ifconfig *ifconfig) {
-    aws_hash_table_foreach(&ifconfig->iface_name_to_info, s_hashfn_foreach_total_iface_transfer_metrics, (void *)total);
+    int return_code = aws_hash_table_foreach(
+        &ifconfig->iface_name_to_info, s_hashfn_foreach_total_iface_transfer_metrics, (void *)total);
+    if (AWS_OP_SUCCESS != return_code) {
+    }
 }
 
 void get_network_total_delta(
@@ -99,7 +102,7 @@ void get_network_total_delta(
 }
 
 /**
- * This file read is not terribly efficient if not enough bytes are allocated up front
+ * This file read is not terribly efficient if not enough bytes are allocated up front.
  */
 int read_proc_net_from_file(
     struct aws_byte_buf *out_buf,
@@ -107,6 +110,7 @@ int read_proc_net_from_file(
     size_t size_hint,
     const char *filename) {
     AWS_ZERO_STRUCT(*out_buf);
+    int return_value = AWS_OP_ERR;
 
     if (aws_byte_buf_init(out_buf, allocator, size_hint)) {
         return aws_raise_error(aws_last_error());
@@ -119,21 +123,28 @@ int read_proc_net_from_file(
         while (read == size_hint) {
             int aws_error = 0;
             if (AWS_OP_SUCCESS != (aws_error = aws_byte_buf_reserve_relative(out_buf, size_hint))) {
-                aws_secure_zero(out_buf->buffer, out_buf->len);
-                aws_byte_buf_clean_up(out_buf);
-                return aws_raise_error(aws_error);
+                return_value = aws_error;
+                goto cleanup;
             }
+            /* double size hint increase if we need to do it again */
+            size_hint += size_hint;
             read = fread(out_buf->buffer + out_buf->len, 1, size_hint, fp);
         }
         if (ferror(fp)) {
-            return aws_raise_error(AWS_IO_FILE_VALIDATION_FAILURE);
+            return_value = aws_translate_and_raise_io_error(errno);
+            goto cleanup;
         }
-        fclose(fp);
-        return AWS_OP_SUCCESS;
+        return_value = AWS_OP_SUCCESS;
     }
 
-    printf("static: Failed to open file %s with errno %d", filename, errno);
-    return aws_translate_and_raise_io_error(errno);
+cleanup:
+    fclose(fp);
+    if (AWS_OP_SUCCESS != return_value) {
+        aws_byte_buf_clean_up_secure(out_buf);
+        return aws_raise_error(return_value);
+    }
+
+    return return_value;
 }
 
 int get_net_connections_from_proc_buf(
@@ -147,6 +158,7 @@ int get_net_connections_from_proc_buf(
     AWS_PRECONDITION(ifconfig != NULL);
     AWS_PRECONDITION(aws_byte_cursor_is_valid(proc_net_data));
 
+    int return_value = AWS_OP_ERR;
     struct aws_array_list lines;
     AWS_ZERO_STRUCT(lines);
 
@@ -163,9 +175,9 @@ int get_net_connections_from_proc_buf(
         aws_array_list_pop_front(&lines);
 
         char local_addr_h[9];
-        char local_port_h[5];
+        char local_port_h[6];
         char remote_addr_h[9];
-        char remote_port_h[5];
+        char remote_port_h[6];
         char state_h[3];
         int tokens_read = sscanf(
             (const char *)line.ptr,
@@ -182,29 +194,51 @@ int get_net_connections_from_proc_buf(
                 struct aws_iotdevice_metric_net_connection *connection =
                     aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_metric_net_connection));
                 if (connection == NULL) {
-
+                    return_value = AWS_OP_ERR;
+                    AWS_LOGF_ERROR(
+                        AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+                        "id=%p: Could not allocate memory for network connection",
+                        (void *)ifconfig);
                     goto cleanup;
                 }
 
-                char local_addr[16];
-                char remote_addr[16];
-                s_hex_addr_to_ip_str(local_addr, 16, local_addr_h);
-                s_hex_addr_to_ip_str(remote_addr, 16, remote_addr_h);
-                connection->local_port = strtol(local_port_h, NULL, IPV4_ADDRESS_SIZE);
+                char local_addr[IPV4_ADDRESS_SIZE];
+                char remote_addr[IPV4_ADDRESS_SIZE];
+                s_hex_addr_to_ip_str(local_addr, IPV4_ADDRESS_SIZE, local_addr_h);
+                s_hex_addr_to_ip_str(remote_addr, IPV4_ADDRESS_SIZE, remote_addr_h);
+                connection->local_port = strtol(local_port_h, NULL, 16);
                 connection->remote_port = strtol(remote_port_h, NULL, 16);
                 connection->state = map_network_state(strtol(state_h, NULL, 16));
 
                 struct aws_hash_element *element;
-                aws_hash_table_find(&ifconfig->iface_name_to_info, local_addr, &element);
-                if (element == NULL) {
-                    printf("Could not find interface mapping for local address: %s\n", local_addr);
+                int return_code = aws_hash_table_find(&ifconfig->iface_name_to_info, local_addr, &element);
+                if (element == NULL || return_code != AWS_OP_SUCCESS) {
+                    AWS_LOGF_ERROR(
+                        AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+                        "id=%p: Could not retrieve interface mapping for address: %s; {%s}",
+                        (void *)ifconfig,
+                        local_addr,
+                        aws_error_name(return_code));
                     continue;
                 }
 
                 struct aws_iotdevice_network_iface *iface = (struct aws_iotdevice_network_iface *)element->value;
                 connection->local_interface = aws_string_new_from_c_str(allocator, iface->iface_name);
+                if (!connection->local_interface) {
+                    return_value = AWS_OP_ERR;
+                    AWS_LOGF_ERROR(
+                        AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+                        "id=%p: Could not allocate memory for connection local address",
+                        (void *)ifconfig);
+                    goto cleanup;
+                }
                 connection->remote_address = aws_string_new_from_c_str(allocator, remote_addr);
                 if (!connection->remote_address) {
+                    return_value = AWS_OP_ERR;
+                    AWS_LOGF_ERROR(
+                        AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+                        "id=%p: Could not allocate memory for connection remote address",
+                        (void *)ifconfig);
                     goto cleanup;
                 }
                 connection->protocol = protocol;
@@ -214,14 +248,14 @@ int get_net_connections_from_proc_buf(
                 }
             }
         } else {
-            printf("Bad line in /proc/net/*** file\n");
+            AWS_LOGF_WARN(AWS_LS_IOTDEVICE_NETWORK_CONFIG, "id=%p: Bad line in /proc/net/*** file", (void *)ifconfig);
         }
     }
 
 cleanup:
     aws_array_list_clean_up(&lines);
 
-    return AWS_OP_SUCCESS;
+    return return_value;
 }
 
 int get_system_network_config(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
@@ -231,18 +265,26 @@ int get_system_network_config(struct aws_iotdevice_network_ifconfig *ifconfig, s
     AWS_ZERO_STRUCT(net_udp);
     int return_code = 0;
 
-    if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_tcp, allocator, s_proc_net_tcp_size_hint, "/proc/net/tcp"))) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_NETWORK_CONFIG,
-            "id=%p: Failed to retrieve network configuration: %s", (void *)ifconfig, aws_error_name(return_code));
-            return return_code;
+    if (AWS_OP_SUCCESS !=
+        (return_code = read_proc_net_from_file(&net_tcp, allocator, s_proc_net_tcp_size_hint, "/proc/net/tcp"))) {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+            "id=%p: Failed to retrieve network configuration: %s",
+            (void *)ifconfig,
+            aws_error_name(return_code));
+        return return_code;
     }
     /* hint on read size next go around */
     s_proc_net_tcp_size_hint = net_tcp.len * PROC_NET_HINT_FACTOR;
 
-    if (AWS_OP_SUCCESS != (return_code = read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp"))) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_NETWORK_CONFIG,
-            "id=%p: Failed to retrieve network configuration: %s", (void *)ifconfig, aws_error_name(return_code));
-            return return_code;
+    if (AWS_OP_SUCCESS !=
+        (return_code = read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp"))) {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+            "id=%p: Failed to retrieve network configuration: %s",
+            (void *)ifconfig,
+            aws_error_name(return_code));
+        return return_code;
     }
     /* hint on read size next go around */
     s_proc_net_udp_size_hint = net_udp.len * PROC_NET_HINT_FACTOR;
@@ -255,12 +297,14 @@ int get_system_network_config(struct aws_iotdevice_network_ifconfig *ifconfig, s
     aws_array_list_init_dynamic(&tcp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
     struct aws_byte_cursor net_tcp_cursor = aws_byte_cursor_from_buf(&net_tcp);
     //
-    if (AWS_OP_SUCCESS != get_net_connections_from_proc_buf(&tcp_conns, allocator, &net_tcp_cursor, ifconfig, AWS_IDNP_TCP)) {
+    if (AWS_OP_SUCCESS !=
+        get_net_connections_from_proc_buf(&tcp_conns, allocator, &net_tcp_cursor, ifconfig, AWS_IDNP_TCP)) {
     }
 
     struct aws_byte_cursor net_udp_cursor = aws_byte_cursor_from_buf(&net_udp);
     aws_array_list_init_dynamic(&udp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
-    if (AWS_OP_SUCCESS != get_net_connections_from_proc_buf(&udp_conns, allocator, &net_udp_cursor, ifconfig, AWS_IDNP_UDP)) {
+    if (AWS_OP_SUCCESS !=
+        get_net_connections_from_proc_buf(&udp_conns, allocator, &net_udp_cursor, ifconfig, AWS_IDNP_UDP)) {
     }
 
     struct aws_iotdevice_metric_network_transfer totals = {
@@ -293,7 +337,8 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
     int fd = 0;
     struct ifaddrs *address_info = NULL;
     if (getifaddrs(&address_info)) {
-        printf("getifaddrs() failed: %s\n", strerror(errno));
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_NETWORK_CONFIG, "id=%p: getifaddrs() failed: %s", (void *)ifconfig, strerror(errno));
         result = AWS_OP_ERR;
         goto cleanup;
     }
@@ -309,22 +354,29 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
         strncpy(ifr.ifr_name, address->ifa_name, IFNAMSIZ);
         fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (fd == -1) {
-            printf("Couldn't open socket: %s\n", strerror(errno));
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+                "id=%p: socket(AF_INET, SOCK_DGRAM, 0) failed: %s",
+                (void *)ifconfig,
+                strerror(errno));
             result = AWS_OP_ERR;
             goto cleanup;
         }
         if (ioctl(fd, SIOCGIFADDR, &ifr) == -1) {
-            printf("Couldn't get the interface address for %s: %s\n", ifr.ifr_name, strerror(errno));
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+                "id=%p: iotctl(fd, SIOCGIFADDR, ...) failed to get interface address: %s",
+                (void *)ifconfig,
+                strerror(errno));
             goto next_interface;
         }
 
-        iface = aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_network_iface));
-        AWS_ZERO_STRUCT(*iface);
+        iface = aws_mem_calloc(allocator, 1, sizeof(struct aws_iotdevice_network_iface));
 
         if (ifr.ifr_addr.sa_family == AF_INET) {
             inet_ntop(AF_INET, &((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr, iface->ipv4_addr_str, 16);
         }
-        strncpy(iface->iface_name, ifr.ifr_name, IFNAMSIZ);
+        strncpy(iface->iface_name, ifr.ifr_name, IFACE_NAME_SIZE);
 
         if (address->ifa_data) {
             struct rtnl_link_stats *stats = address->ifa_data;
@@ -336,7 +388,12 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
 
         if (AWS_OP_SUCCESS !=
             (result = aws_hash_table_put(&ifconfig->iface_name_to_info, iface->ipv4_addr_str, iface, NULL))) {
-            printf("Error putting entry into map: %d\n", result);
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+                "id=%p: network interface address to interface info add to map failed: %s",
+                (void *)ifconfig,
+                aws_error_name(result));
+            result = AWS_OP_ERR;
             goto cleanup;
         } else {
             result = AWS_OP_SUCCESS;
@@ -347,6 +404,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
         fd = 0;
         address = address->ifa_next;
     } /* while */
+    result = AWS_OP_SUCCESS;
 
 cleanup:
     if (address_info) {

@@ -4,7 +4,6 @@
  */
 #include <aws/common/error.h>
 
-
 void get_system_network_total(
     struct aws_iotdevice_metric_network_transfer *total,
     struct aws_iotdevice_network_ifconfig *ifconfig) {}
