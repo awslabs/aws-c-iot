@@ -24,4 +24,17 @@ enum aws_iotdevice_log_subject {
     AWS_LS_IOTDEVICE_NETWORK_CONFIG,
 };
 
+/**
+ * Initializes internal datastructures used by aws-c-iot.
+ * Must be called before using any functionality in aws-c-iot.
+ */
+AWS_IOTDEVICE_API
+void aws_iotdevice_library_init(struct aws_allocator *allocator);
+
+/**
+ * Shuts down the internal datastructures used by aws-c-iot
+ */
+AWS_IOTDEVICE_API
+void aws_iotdevice_library_clean_up(void);
+
 #endif

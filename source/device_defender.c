@@ -23,9 +23,6 @@ struct aws_iotdevice_defender_v1_task {
     struct aws_iotdevice_metric_network_transfer previous_net_xfer;
     bool has_previous_net_xfer;
     struct aws_atomic_var task_canceled; /* flag value switches to non-zero when canceled */
-    aws_iotdevice_defender_v1_task_canceled_fn
-        *task_canceled_fn; /* pointer type: aws_iotdevice_defender_v1_task_canceled_fn */
-    void *cancelation_userdata;
 };
 
 static int s_get_metric_report_json(
@@ -305,11 +302,11 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     } else if (status == AWS_TASK_STATUS_CANCELED) {
         AWS_LOGF_TRACE(
             AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Reporting task canceled, cleaning up", (void *)defender_task);
-        /* totally fine if this function ptr is NULL */
-        void *cancel_userdata = defender_task->cancelation_userdata;
+        void *cancel_userdata = defender_task->config.cancelation_userdata;
         aws_mem_release(allocator, defender_task);
-        if (defender_task->task_canceled_fn != NULL) {
-            defender_task->task_canceled_fn(cancel_userdata);
+        /* totally fine if this function ptr is NULL */
+        if (defender_task->config.task_canceled_fn != NULL) {
+            defender_task->config.task_canceled_fn(cancel_userdata);
         }
     } else {
         AWS_LOGF_WARN(
@@ -329,9 +326,15 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
  */
 struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     struct aws_allocator *allocator,
-    const struct aws_iotdevice_defender_report_task_config *config,
-    aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn,
-    void *cancelation_userdata) {
+    const struct aws_iotdevice_defender_report_task_config *config) {
+    AWS_PRECONDITION(aws_allocator_is_valid(allocator));
+    AWS_PRECONDITION(config != NULL);
+
+    if (config->report_format == AWS_IDDRF_JSON) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK, "Unsupported DeviceDefender detect report format detected.");
+        aws_raise_error(AWS_ERROR_UNSUPPORTED_OPERATION);
+        return NULL;
+    }
 
     /* to be freed on task cancellation, maybe within the task itself? */
     struct aws_iotdevice_defender_v1_task *defender_task = (struct aws_iotdevice_defender_v1_task *)aws_mem_calloc(
@@ -349,8 +352,6 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     defender_task->has_previous_net_xfer = false;
     defender_task->config = *config;
     aws_atomic_store_int(&defender_task->task_canceled, 0);
-    defender_task->task_canceled_fn = task_canceled_fn;
-    defender_task->cancelation_userdata = cancelation_userdata;
     aws_task_init(&defender_task->task, s_reporting_task_fn, defender_task, "DeviceDefenderReportTask");
 
     return AWS_OP_SUCCESS;

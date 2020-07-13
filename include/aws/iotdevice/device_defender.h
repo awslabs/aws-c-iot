@@ -16,37 +16,26 @@ struct aws_task;
 struct aws_event_loop;
 struct aws_mqtt_client_connection;
 
-enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON, AWS_IDDRF_CBOR };
-
-struct aws_iotdevice_defender_v1_task;
-
-struct aws_iotdevice_defender_report_task_config {
-    struct aws_mqtt_client_connection *connection; /* mqtt connection to use to send report messages */
-    struct aws_event_loop *event_loop;             /* event loop to schedule task on continuously */
-    unsigned int report_format;                    /* only JSON supported for now */
-    uint64_t task_period_ns;           /* how frequently do we send out a report. Service limit is once every 5m */
-    uint64_t netconn_sample_period_ns; /* how frequently we sample for established connections and listening ports */
-};
-
 /**
  * Called when a connection is closed, right before any resources are deleted
  **/
 typedef void(aws_iotdevice_defender_v1_task_canceled_fn)(void *userdata);
 
+enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON, AWS_IDDRF_CBOR };
+
+struct aws_iotdevice_defender_v1_task;
+
+struct aws_iotdevice_defender_report_task_config {
+    struct aws_mqtt_client_connection *connection;           /* mqtt connection to use to send report messages */
+    struct aws_event_loop *event_loop;                       /* event loop to schedule task on continuously */
+    enum aws_iotdevice_defender_report_format report_format; /* only JSON supported for now */
+    uint64_t task_period_ns;           /* how frequently do we send out a report. Service limit is once every 5m */
+    uint64_t netconn_sample_period_ns; /* how frequently we sample for established connections and listening ports */
+    aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn;
+    void *cancelation_userdata;
+};
+
 AWS_EXTERN_C_BEGIN
-
-/**
- * Initializes internal datastructures used by aws-c-iot.
- * Must be called before using any functionality in aws-c-iot.
- */
-AWS_IOTDEVICE_API
-void aws_iotdevice_library_init(struct aws_allocator *allocator);
-
-/**
- * Shuts down the internal datastructures used by aws-c-iot
- */
-AWS_IOTDEVICE_API
-void aws_iotdevice_library_clean_up(void);
 
 /**
  * Creates a new reporting task for Device Defender metrics
@@ -54,9 +43,7 @@ void aws_iotdevice_library_clean_up(void);
 AWS_IOTDEVICE_API
 struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
     struct aws_allocator *allocator,
-    const struct aws_iotdevice_defender_report_task_config *config,
-    aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn,
-    void *cancelation_userdata);
+    const struct aws_iotdevice_defender_report_task_config *config);
 
 /**
  * Cancels the running task reporting Device Defender metrics
