@@ -14,6 +14,9 @@
 #include <aws/io/socket_channel_handler.h>
 #include <aws/io/tls_channel_handler.h>
 
+#include <aws/iotdevice/iotdevice.h>
+#include <aws/iotdevice/device_defender.h>
+
 #include <aws/common/condition_variable.h>
 #include <aws/common/device_random.h>
 #include <aws/common/mutex.h>
@@ -32,16 +35,9 @@
 #    include <unistd.h>
 #endif
 
-const char s_client_id_prefix[] = "sdk-c-v2-";
-AWS_STATIC_STRING_FROM_LITERAL(s_subscribe_topic, "sdk/test/c");
+struct aws_iotdevice_defender_v1_task *defender_task = NULL;
 
-enum { PUBLISHES = 20 };
-
-enum { PAYLOAD_LEN = 200 };
-static uint8_t s_payload[PAYLOAD_LEN];
-
-static uint8_t s_will_payload[] = "The client has gone offline!";
-enum { WILL_PAYLOAD_LEN = sizeof(s_will_payload) };
+const char s_client_id_prefix[] = "c-defender-agent-reference";
 
 struct connection_args {
     struct aws_allocator *allocator;
@@ -51,54 +47,8 @@ struct connection_args {
 
     struct aws_mqtt_client_connection *connection;
 
-    size_t pubacks_gotten;
-    size_t packets_gotten;
+    struct aws_iotdevice_defender_report_task_config task_config;
 };
-
-static void s_on_puback(
-    struct aws_mqtt_client_connection *connection,
-    uint16_t packet_id,
-    int error_code,
-    void *userdata) {
-
-    (void)connection;
-    (void)packet_id;
-    (void)error_code;
-
-    AWS_FATAL_ASSERT(error_code == AWS_ERROR_SUCCESS);
-
-    struct connection_args *args = userdata;
-    ++args->pubacks_gotten;
-}
-
-static void s_on_packet_received(
-    struct aws_mqtt_client_connection *connection,
-    const struct aws_byte_cursor *topic,
-    const struct aws_byte_cursor *payload,
-    void *userdata) {
-
-    (void)connection;
-    (void)topic;
-    (void)payload;
-
-    AWS_FATAL_ASSERT(payload->len == PAYLOAD_LEN);
-    AWS_FATAL_ASSERT(0 == memcmp(payload->ptr, s_payload, PAYLOAD_LEN));
-
-    struct connection_args *args = userdata;
-    ++args->packets_gotten;
-
-    if (args->packets_gotten == PUBLISHES) {
-        aws_mutex_lock(args->mutex);
-        aws_condition_variable_notify_one(args->condition_variable);
-        aws_mutex_unlock(args->mutex);
-    }
-}
-
-static bool s_all_packets_received_cond(void *userdata) {
-
-    struct connection_args *args = userdata;
-    return args->packets_gotten == PUBLISHES;
-}
 
 static void s_mqtt_on_connection_complete(
     struct aws_mqtt_client_connection *connection,
@@ -111,40 +61,16 @@ static void s_mqtt_on_connection_complete(
     (void)error_code;
     (void)return_code;
     (void)session_present;
+    struct connection_args *connection_args = (struct connection_args *)userdata;
 
     AWS_FATAL_ASSERT(error_code == AWS_ERROR_SUCCESS);
     AWS_FATAL_ASSERT(return_code == AWS_MQTT_CONNECT_ACCEPTED);
     AWS_FATAL_ASSERT(session_present == false);
 
-    struct connection_args *args = userdata;
+    printf("Client connected...");
 
-    aws_mutex_lock(args->mutex);
-    aws_condition_variable_notify_one(args->condition_variable);
-    aws_mutex_unlock(args->mutex);
-}
-
-static void s_mqtt_on_suback(
-    struct aws_mqtt_client_connection *connection,
-    uint16_t packet_id,
-    const struct aws_byte_cursor *topic,
-    enum aws_mqtt_qos qos,
-    int error_code,
-    void *userdata) {
-
-    (void)connection;
-    (void)packet_id;
-    (void)topic;
-    (void)qos;
-    (void)error_code;
-
-    AWS_FATAL_ASSERT(error_code == AWS_ERROR_SUCCESS);
-    AWS_FATAL_ASSERT(qos != AWS_MQTT_QOS_FAILURE);
-
-    struct connection_args *args = userdata;
-
-    aws_mutex_lock(args->mutex);
-    aws_condition_variable_notify_one(args->condition_variable);
-    aws_mutex_unlock(args->mutex);
+    defender_task = aws_iotdevice_defender_v1_run_task(connection_args->allocator, &connection_args->task_config);
+    AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
 static void s_on_connection_interrupted(struct aws_mqtt_client_connection *connection, int error_code, void *userdata) {
@@ -198,9 +124,7 @@ static void s_on_connection_resumed(
 }
 
 static void s_mqtt_on_disconnect(struct aws_mqtt_client_connection *connection, void *userdata) {
-
     (void)connection;
-
     struct connection_args *args = userdata;
 
     aws_mqtt_client_connection_destroy(args->connection);
@@ -237,6 +161,7 @@ int main(int argc, char **argv) {
     args.condition_variable = &condition_variable;
 
     aws_mqtt_library_init(args.allocator);
+    aws_iotdevice_library_init(args.allocator);
 
     struct aws_logger_standard_options logger_options = {
         .level = AWS_LL_TRACE,
@@ -246,12 +171,6 @@ int main(int argc, char **argv) {
     struct aws_logger logger;
     aws_logger_init_standard(&logger, args.allocator, &logger_options);
     aws_logger_set(&logger);
-
-    /* Populate the payload */
-    struct aws_byte_buf payload_buf = aws_byte_buf_from_empty_array(s_payload, PAYLOAD_LEN);
-    aws_device_random_buffer(&payload_buf);
-
-    struct aws_byte_cursor subscribe_topic_cur = aws_byte_cursor_from_string(s_subscribe_topic);
 
     struct aws_event_loop_group elg;
     aws_event_loop_group_default_init(&elg, args.allocator, 1);
@@ -293,9 +212,6 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_mqtt_client_connection_set_connection_interruption_handlers(
         args.connection, s_on_connection_interrupted, NULL, s_on_connection_resumed, NULL));
 
-    struct aws_byte_cursor will_cur = aws_byte_cursor_from_array(s_will_payload, WILL_PAYLOAD_LEN);
-    aws_mqtt_client_connection_set_will(args.connection, &subscribe_topic_cur, 1, false, &will_cur);
-
     /* Generate a random clientid */
     char client_id[128];
     struct aws_byte_buf client_id_buf = aws_byte_buf_from_empty_array(client_id, AWS_ARRAY_SIZE(client_id));
@@ -308,6 +224,18 @@ int main(int argc, char **argv) {
 
     struct aws_byte_cursor client_id_cur = aws_byte_cursor_from_buf(&client_id_buf);
 
+    struct aws_iotdevice_defender_report_task_config task_config = {
+        .cancelation_userdata = NULL,
+        .task_canceled_fn = NULL,
+        .connection = args.connection,
+        .event_loop = aws_event_loop_group_get_next_loop(&elg),
+        .netconn_sample_period_ns = 5ul * 60ul * 1000000000ul,
+        .report_format = AWS_IDDRF_JSON,
+        .thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"),    /* TODO: make cli arg so policies can work */
+        .task_period_ns = 5ul * 60ul * 1000000000ul
+    };
+    args.task_config = task_config;
+
     struct aws_mqtt_connection_options conn_options = {
         .host_name = host_name_cur,
         .port = 8883,
@@ -318,60 +246,17 @@ int main(int argc, char **argv) {
         .ping_timeout_ms = 0,
         .on_connection_complete = s_mqtt_on_connection_complete,
         .user_data = &args,
-        .clean_session = true,
+        .clean_session = true
     };
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
-
     aws_tls_connection_options_clean_up(&tls_con_opt);
 
     aws_mutex_lock(&mutex);
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     aws_mutex_unlock(&mutex);
 
-    aws_mqtt_client_connection_subscribe(
-        args.connection,
-        &subscribe_topic_cur,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
-        &s_on_packet_received,
-        &args,
-        NULL,
-        s_mqtt_on_suback,
-        &args);
-
-    aws_mutex_lock(&mutex);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-    aws_mutex_unlock(&mutex);
-
-    struct aws_byte_cursor payload_cur = aws_byte_cursor_from_buf(&payload_buf);
-
-    for (int i = 0; i < PUBLISHES; ++i) {
-        aws_mqtt_client_connection_publish(
-            args.connection,
-            &subscribe_topic_cur,
-            AWS_MQTT_QOS_AT_LEAST_ONCE,
-            false,
-            &payload_cur,
-            &s_on_puback,
-            &args);
-
-        /* Keep the service endpoint from throttling the connection */
-        if (i != 0 && i % 100 == 0) {
-            sleep(1);
-        }
-    }
-
-    aws_mutex_lock(&mutex);
-    ASSERT_SUCCESS(aws_condition_variable_wait_pred(&condition_variable, &mutex, &s_all_packets_received_cond, &args));
-    aws_mutex_unlock(&mutex);
-
-    ASSERT_UINT_EQUALS(PUBLISHES, args.packets_gotten);
-
     aws_mqtt_client_connection_disconnect(args.connection, s_mqtt_on_disconnect, &args);
-
-    aws_mutex_lock(&mutex);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-    aws_mutex_unlock(&mutex);
 
     aws_mqtt_client_clean_up(&client);
 
@@ -384,6 +269,7 @@ int main(int argc, char **argv) {
 
     aws_logger_clean_up(&logger);
 
+    aws_iotdevice_library_clean_up();
     aws_mqtt_library_clean_up();
 
     ASSERT_UINT_EQUALS(0, aws_mem_tracer_count(allocator));

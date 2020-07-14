@@ -158,7 +158,7 @@ int get_net_connections_from_proc_buf(
     AWS_PRECONDITION(ifconfig != NULL);
     AWS_PRECONDITION(aws_byte_cursor_is_valid(proc_net_data));
 
-    int return_value = AWS_OP_ERR;
+    int return_value = AWS_OP_SUCCESS;
     struct aws_array_list lines;
     AWS_ZERO_STRUCT(lines);
 
@@ -213,12 +213,12 @@ int get_net_connections_from_proc_buf(
                 struct aws_hash_element *element;
                 int return_code = aws_hash_table_find(&ifconfig->iface_name_to_info, local_addr, &element);
                 if (element == NULL || return_code != AWS_OP_SUCCESS) {
-                    AWS_LOGF_ERROR(
+                    /* TODO: element == NULL seems to be the failure mode. When might return code matter? Log it? */
+                    AWS_LOGF_WARN(
                         AWS_LS_IOTDEVICE_NETWORK_CONFIG,
-                        "id=%p: Could not retrieve interface mapping for address: %s; {%s}",
+                        "id=%p: Could not retrieve interface mapping for address: %s",
                         (void *)ifconfig,
-                        local_addr,
-                        aws_error_name(return_code));
+                        local_addr);
                     continue;
                 }
 
@@ -258,59 +258,59 @@ cleanup:
     return return_value;
 }
 
-int get_system_network_config(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
+int get_network_connections(struct aws_array_list *net_conns, struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
     struct aws_byte_buf net_tcp;
     AWS_ZERO_STRUCT(net_tcp);
     struct aws_byte_buf net_udp;
     AWS_ZERO_STRUCT(net_udp);
-    int return_code = 0;
+    int return_code = AWS_OP_ERR;
 
-    if (AWS_OP_SUCCESS !=
-        (return_code = read_proc_net_from_file(&net_tcp, allocator, s_proc_net_tcp_size_hint, "/proc/net/tcp"))) {
+    if (AWS_OP_SUCCESS != read_proc_net_from_file(&net_tcp, allocator, s_proc_net_tcp_size_hint, "/proc/net/tcp")) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s",
             (void *)ifconfig,
-            aws_error_name(return_code));
-        return return_code;
+            aws_error_name(aws_last_error()));
+        return_code = AWS_OP_ERR;
+        goto cleanup;
     }
     /* hint on read size next go around */
     s_proc_net_tcp_size_hint = net_tcp.len * PROC_NET_HINT_FACTOR;
 
-    if (AWS_OP_SUCCESS !=
-        (return_code = read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp"))) {
+    if (AWS_OP_SUCCESS != read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp")) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s",
             (void *)ifconfig,
-            aws_error_name(return_code));
-        return return_code;
+            aws_error_name(aws_last_error()));
+        return_code = AWS_OP_ERR;
+        goto cleanup;
     }
     /* hint on read size next go around */
     s_proc_net_udp_size_hint = net_udp.len * PROC_NET_HINT_FACTOR;
 
-    struct aws_array_list tcp_conns;
-    AWS_ZERO_STRUCT(tcp_conns);
-    struct aws_array_list udp_conns;
-    AWS_ZERO_STRUCT(udp_conns);
-
-    aws_array_list_init_dynamic(&tcp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
     struct aws_byte_cursor net_tcp_cursor = aws_byte_cursor_from_buf(&net_tcp);
-    //
     if (AWS_OP_SUCCESS !=
-        get_net_connections_from_proc_buf(&tcp_conns, allocator, &net_tcp_cursor, ifconfig, AWS_IDNP_TCP)) {
+        get_net_connections_from_proc_buf(net_conns, allocator, &net_tcp_cursor, ifconfig, AWS_IDNP_TCP)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+            "id=%p: Failed to parse network connections from /proc/net/tcp",
+            (void *)ifconfig);
+            /* intentionally not considered an error right now */
     }
 
     struct aws_byte_cursor net_udp_cursor = aws_byte_cursor_from_buf(&net_udp);
-    aws_array_list_init_dynamic(&udp_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
     if (AWS_OP_SUCCESS !=
-        get_net_connections_from_proc_buf(&udp_conns, allocator, &net_udp_cursor, ifconfig, AWS_IDNP_UDP)) {
+        get_net_connections_from_proc_buf(net_conns, allocator, &net_udp_cursor, ifconfig, AWS_IDNP_UDP)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_NETWORK_CONFIG,
+            "id=%p: Failed to parse network connections from /proc/net/udp",
+            (void *)ifconfig);
+            /* intentionally not considered an error right now */
     }
+    return_code = AWS_OP_SUCCESS;
 
-    struct aws_iotdevice_metric_network_transfer totals = {
-        .bytes_in = 0, .bytes_out = 0, .packets_in = 0, .packets_out = 0};
-    get_system_network_total(&totals, ifconfig);
-
+cleanup:
     if (net_tcp.allocator) {
         aws_byte_buf_clean_up(&net_tcp);
     }
@@ -318,7 +318,7 @@ int get_system_network_config(struct aws_iotdevice_network_ifconfig *ifconfig, s
         aws_byte_buf_clean_up(&net_udp);
     }
 
-    return AWS_OP_SUCCESS;
+    return return_code;
 }
 
 int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
@@ -363,7 +363,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
             goto cleanup;
         }
         if (ioctl(fd, SIOCGIFADDR, &ifr) == -1) {
-            AWS_LOGF_ERROR(
+            AWS_LOGF_WARN(
                 AWS_LS_IOTDEVICE_NETWORK_CONFIG,
                 "id=%p: iotctl(fd, SIOCGIFADDR, ...) failed to get interface address: %s",
                 (void *)ifconfig,
@@ -395,10 +395,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
                 aws_error_name(result));
             result = AWS_OP_ERR;
             goto cleanup;
-        } else {
-            result = AWS_OP_SUCCESS;
         }
-
     next_interface:
         close(fd);
         fd = 0;

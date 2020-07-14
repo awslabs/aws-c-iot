@@ -5,7 +5,7 @@
 #ifndef _AWS_IOTDEVICE_DEFENDER_H_
 #define _AWS_IOTDEVICE_DEFENDER_H_
 
-#include <aws/common/logging.h>
+#include <aws/common/byte_buf.h>
 #include <aws/iotdevice/iotdevice.h>
 
 struct aws_array_list;
@@ -26,11 +26,13 @@ enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON
 struct aws_iotdevice_defender_v1_task;
 
 struct aws_iotdevice_defender_report_task_config {
-    struct aws_mqtt_client_connection *connection;           /* mqtt connection to use to send report messages */
-    struct aws_event_loop *event_loop;                       /* event loop to schedule task on continuously */
+    struct aws_mqtt_client_connection *connection; /* mqtt connection to use to send report messages */
+    struct aws_byte_cursor thing_name;             /* Thing name for which to publish reports for. Decided topic name */
+    struct aws_event_loop *event_loop;             /* event loop to schedule task on continuously */
     enum aws_iotdevice_defender_report_format report_format; /* only JSON supported for now */
     uint64_t task_period_ns;           /* how frequently do we send out a report. Service limit is once every 5m */
-    uint64_t netconn_sample_period_ns; /* how frequently we sample for established connections and listening ports */
+    uint64_t netconn_sample_period_ns; /* how frequently we sample for established connections and listening ports,
+                                          unused currently but necessary to sample substantially more frequently */
     aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn;
     void *cancelation_userdata;
 };
