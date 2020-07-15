@@ -42,20 +42,26 @@ static void s_mqtt_on_suback(
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Suback callback error with packet id: %d; topic " PRInSTR "; error: %s",
-            userdata, packet_id, AWS_BYTE_CURSOR_PRI(*topic), aws_error_name(error_code));
+            userdata,
+            packet_id,
+            AWS_BYTE_CURSOR_PRI(*topic),
+            aws_error_name(error_code));
     } else {
         AWS_LOGF_TRACE(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Suback callback succeeded with packet id: %d; topic " PRInSTR,
-            userdata, packet_id, AWS_BYTE_CURSOR_PRI(*topic));
+            userdata,
+            packet_id,
+            AWS_BYTE_CURSOR_PRI(*topic));
     }
-
 
     if (qos == AWS_MQTT_QOS_FAILURE) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Suback packet error response for packet id: %d; topic " PRInSTR,
-            userdata, packet_id, AWS_BYTE_CURSOR_PRI(*topic));
+            userdata,
+            packet_id,
+            AWS_BYTE_CURSOR_PRI(*topic));
     }
 }
 
@@ -71,7 +77,9 @@ static void s_on_report_puback(
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Publish packet %d failed with error: %s",
-            userdata, packet_id, aws_error_name(error_code));
+            userdata,
+            packet_id,
+            aws_error_name(error_code));
     }
 }
 
@@ -85,7 +93,8 @@ static void s_on_report_response_rejected(
     AWS_LOGF_ERROR(
         AWS_LS_IOTDEVICE_DEFENDER_TASK,
         "id=%p: Report rejected from topic: " PRInSTR,
-        userdata, AWS_BYTE_CURSOR_PRI(*topic));
+        userdata,
+        AWS_BYTE_CURSOR_PRI(*topic));
 
     printf("Rejection payload: " PRInSTR, AWS_BYTE_CURSOR_PRI(*payload));
 }
@@ -100,7 +109,8 @@ static void s_on_report_response_accepted(
     AWS_LOGF_TRACE(
         AWS_LS_IOTDEVICE_DEFENDER_TASK,
         "id=%p: Report accepted on topic: " PRInSTR,
-        userdata, AWS_BYTE_CURSOR_PRI(*topic));
+        userdata,
+        AWS_BYTE_CURSOR_PRI(*topic));
 }
 
 static int s_get_metric_report_json(
@@ -248,13 +258,16 @@ static int s_get_metric_report_json(
     if (NULL == cJSON_AddNumberToObject(network_stats, "bytes_in", net_xfer != NULL ? (double)net_xfer->bytes_in : 0)) {
         goto cleanup;
     }
-    if (NULL == cJSON_AddNumberToObject(network_stats, "bytes_out", net_xfer != NULL ? (double)net_xfer->bytes_out : 0)) {
+    if (NULL ==
+        cJSON_AddNumberToObject(network_stats, "bytes_out", net_xfer != NULL ? (double)net_xfer->bytes_out : 0)) {
         goto cleanup;
     }
-    if (NULL == cJSON_AddNumberToObject(network_stats, "packets_in", net_xfer != NULL ? (double)net_xfer->packets_in : 0)) {
+    if (NULL ==
+        cJSON_AddNumberToObject(network_stats, "packets_in", net_xfer != NULL ? (double)net_xfer->packets_in : 0)) {
         goto cleanup;
     }
-    if (NULL == cJSON_AddNumberToObject(network_stats, "packets_out", net_xfer != NULL ? (double)net_xfer->packets_out : 0)) {
+    if (NULL ==
+        cJSON_AddNumberToObject(network_stats, "packets_out", net_xfer != NULL ? (double)net_xfer->packets_out : 0)) {
         goto cleanup;
     }
 
@@ -363,8 +376,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             } else {
                 defender_task->has_previous_net_xfer = true;
             }
-            if (AWS_OP_SUCCESS != s_get_metric_report_json(&json_report, defender_task, report_id, ptr_delta_xfer, &net_conns)) {
-
+            if (AWS_OP_SUCCESS !=
+                s_get_metric_report_json(&json_report, defender_task, report_id, ptr_delta_xfer, &net_conns)) {
             }
 
             defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
@@ -375,22 +388,34 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             struct aws_byte_cursor report_topic = aws_byte_cursor_from_buf(&defender_task->report_topic_name);
             struct aws_byte_cursor report = aws_byte_cursor_from_buf(&json_report);
 
-            AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Full report: " PRInSTR, (void *)defender_task, AWS_BYTE_CURSOR_PRI(report));
+            AWS_LOGF_TRACE(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Full report: " PRInSTR,
+                (void *)defender_task,
+                AWS_BYTE_CURSOR_PRI(report));
 
-            uint16_t report_packet_id = aws_mqtt_client_connection_publish(defender_task->config.connection,
-                &report_topic, AWS_MQTT_QOS_AT_LEAST_ONCE, false, &report, s_on_report_puback, defender_task);
+            uint16_t report_packet_id = aws_mqtt_client_connection_publish(
+                defender_task->config.connection,
+                &report_topic,
+                AWS_MQTT_QOS_AT_LEAST_ONCE,
+                false,
+                &report,
+                s_on_report_puback,
+                defender_task);
 
             if (report_packet_id != 0) {
                 AWS_LOGF_TRACE(
                     AWS_LS_IOTDEVICE_DEFENDER_TASK,
                     "id=%p: Report packet_id %d published on topic " PRInSTR,
-                    (void *)defender_task, report_packet_id, AWS_BYTE_CURSOR_PRI(report_topic));
+                    (void *)defender_task,
+                    report_packet_id,
+                    AWS_BYTE_CURSOR_PRI(report_topic));
             } else {
                 AWS_LOGF_ERROR(
                     AWS_LS_IOTDEVICE_DEFENDER_TASK,
                     "id=%p: Report failed to publish on topic " PRInSTR,
-                    (void *)defender_task, AWS_BYTE_CURSOR_PRI(report_topic));
+                    (void *)defender_task,
+                    AWS_BYTE_CURSOR_PRI(report_topic));
             }
 
             aws_array_list_clean_up(&net_conns);
@@ -406,11 +431,9 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
 
         /* intentionally dropping response handling and packet IDs */
         struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_buf(&defender_task->report_accepted_topic_name);
-        aws_mqtt_client_connection_unsubscribe(defender_task->config.connection,
-            &accepted_topic, NULL, NULL);
+        aws_mqtt_client_connection_unsubscribe(defender_task->config.connection, &accepted_topic, NULL, NULL);
         struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_buf(&defender_task->report_rejected_topic_name);
-        aws_mqtt_client_connection_unsubscribe(defender_task->config.connection,
-            &rejected_topic, NULL, NULL);
+        aws_mqtt_client_connection_unsubscribe(defender_task->config.connection, &rejected_topic, NULL, NULL);
 
         void *cancel_userdata = defender_task->config.cancelation_userdata;
         aws_mem_release(allocator, defender_task);
@@ -502,7 +525,8 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
         defender_task->report_accepted_topic_name.capacity,
         accepted_topic_base,
         (char *)defender_task->config.thing_name.ptr);
-    defender_task->report_accepted_topic_name.len = strlen((const char *)defender_task->report_accepted_topic_name.buffer);
+    defender_task->report_accepted_topic_name.len =
+        strlen((const char *)defender_task->report_accepted_topic_name.buffer);
 
     if (AWS_OP_SUCCESS !=
         aws_byte_buf_init(
@@ -517,7 +541,8 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
         defender_task->report_rejected_topic_name.capacity,
         rejected_topic_base,
         (char *)defender_task->config.thing_name.ptr);
-    defender_task->report_rejected_topic_name.len = strlen((const char *)defender_task->report_rejected_topic_name.buffer);
+    defender_task->report_rejected_topic_name.len =
+        strlen((const char *)defender_task->report_rejected_topic_name.buffer);
 
     const struct aws_byte_cursor accepted_cursor = aws_byte_cursor_from_buf(&defender_task->report_accepted_topic_name);
     uint16_t sub_accepted_packet_id = aws_mqtt_client_connection_subscribe(
@@ -531,13 +556,17 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
         defender_task);
     if (sub_accepted_packet_id != 0) {
         AWS_LOGF_TRACE(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: subscription packet_id [%d] for accepted topic " PRInSTR, (void *)defender_task, sub_accepted_packet_id,
-                AWS_BYTE_BUF_PRI(defender_task->report_accepted_topic_name));
-    }
-    else {
+            AWS_LS_IOTDEVICE_DEFENDER_TASK,
+            "id=%p: subscription packet_id [%d] for accepted topic " PRInSTR,
+            (void *)defender_task,
+            sub_accepted_packet_id,
+            AWS_BYTE_BUF_PRI(defender_task->report_accepted_topic_name));
+    } else {
         /* log error, but subscription not necessary to publish messages */
         AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Failed to send subscription packet for topic: " PRInSTR, (void *)defender_task,
+            AWS_LS_IOTDEVICE_DEFENDER_TASK,
+            "id=%p: Failed to send subscription packet for topic: " PRInSTR,
+            (void *)defender_task,
             AWS_BYTE_BUF_PRI(defender_task->report_accepted_topic_name));
     }
 
@@ -554,13 +583,17 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
 
     if (sub_accepted_packet_id != 0) {
         AWS_LOGF_TRACE(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: subscription packet_id [%d] for rejected topic " PRInSTR, (void *)defender_task, sub_rejected_packet_id,
-                AWS_BYTE_BUF_PRI(defender_task->report_rejected_topic_name));
-    }
-    else {
+            AWS_LS_IOTDEVICE_DEFENDER_TASK,
+            "id=%p: subscription packet_id [%d] for rejected topic " PRInSTR,
+            (void *)defender_task,
+            sub_rejected_packet_id,
+            AWS_BYTE_BUF_PRI(defender_task->report_rejected_topic_name));
+    } else {
         /* log error, but subscription not necessary to publish messages */
         AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Failed to send subscription packet for rejected topic: " PRInSTR, (void *)defender_task,
+            AWS_LS_IOTDEVICE_DEFENDER_TASK,
+            "id=%p: Failed to send subscription packet for rejected topic: " PRInSTR,
+            (void *)defender_task,
             AWS_BYTE_BUF_PRI(defender_task->report_rejected_topic_name));
     }
 

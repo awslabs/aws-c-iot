@@ -258,7 +258,10 @@ cleanup:
     return return_value;
 }
 
-int get_network_connections(struct aws_array_list *net_conns, struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
+int get_network_connections(
+    struct aws_array_list *net_conns,
+    struct aws_iotdevice_network_ifconfig *ifconfig,
+    struct aws_allocator *allocator) {
     struct aws_byte_buf net_tcp;
     AWS_ZERO_STRUCT(net_tcp);
     struct aws_byte_buf net_udp;
@@ -296,7 +299,7 @@ int get_network_connections(struct aws_array_list *net_conns, struct aws_iotdevi
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to parse network connections from /proc/net/tcp",
             (void *)ifconfig);
-            /* intentionally not considered an error right now */
+        /* intentionally not considered an error right now */
     }
 
     struct aws_byte_cursor net_udp_cursor = aws_byte_cursor_from_buf(&net_udp);
@@ -306,7 +309,7 @@ int get_network_connections(struct aws_array_list *net_conns, struct aws_iotdevi
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to parse network connections from /proc/net/udp",
             (void *)ifconfig);
-            /* intentionally not considered an error right now */
+        /* intentionally not considered an error right now */
     }
     return_code = AWS_OP_SUCCESS;
 
