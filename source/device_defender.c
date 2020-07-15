@@ -463,6 +463,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
     AWS_PRECONDITION(aws_allocator_is_valid(allocator));
     AWS_PRECONDITION(config != NULL);
     bool failure = false;
+    struct aws_iotdevice_defender_v1_task *defender_task = NULL;
 
     if (config->report_format != AWS_IDDRF_JSON) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK, "Unsupported DeviceDefender detect report format detected.");
@@ -474,7 +475,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
     /* to be freed on task cancellation, maybe within the task itself? */
     /* struct aws_iotdevice_defender_v1_task *defender_task = (struct aws_iotdevice_defender_v1_task *)aws_mem_calloc(
         allocator, 1, sizeof(struct aws_iotdevice_defender_v1_task)); */
-    struct aws_iotdevice_defender_v1_task *defender_task = (struct aws_iotdevice_defender_v1_task *)aws_mem_acquire(
+    defender_task = (struct aws_iotdevice_defender_v1_task *)aws_mem_acquire(
         allocator, sizeof(struct aws_iotdevice_defender_v1_task));
     AWS_ZERO_STRUCT(*defender_task);
     if (defender_task == NULL) {
@@ -599,7 +600,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
 
     aws_task_init(&defender_task->task, s_reporting_task_fn, defender_task, "DeviceDefenderReportTask");
 cleanup:
-    if (failure) {
+    if (failure && defender_task != NULL) {
         aws_mem_release(allocator, defender_task);
         defender_task = NULL;
     }
