@@ -324,7 +324,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
 /**
  * Creates a new reporting task for Device Defender metrics
  */
-struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
+struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
     struct aws_allocator *allocator,
     const struct aws_iotdevice_defender_report_task_config *config) {
     AWS_PRECONDITION(aws_allocator_is_valid(allocator));
@@ -360,7 +360,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
 /**
  * Cancels the running task reporting Device Defender metrics
  */
-void aws_iotdevice_stop_defender_v1_task(struct aws_iotdevice_defender_v1_task *defender_task) {
+void aws_iotdevice_defender_v1_stop_task(struct aws_iotdevice_defender_v1_task *defender_task) {
     /* this will trigger proper callback fn set on creation */
     aws_atomic_store_int(&defender_task->task_canceled, 1);
 }

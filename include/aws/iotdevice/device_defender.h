@@ -41,7 +41,7 @@ AWS_EXTERN_C_BEGIN
  * Creates a new reporting task for Device Defender metrics
  */
 AWS_IOTDEVICE_API
-struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
+struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
     struct aws_allocator *allocator,
     const struct aws_iotdevice_defender_report_task_config *config);
 
@@ -49,7 +49,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_run_v1_task(
  * Cancels the running task reporting Device Defender metrics
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_stop_defender_v1_task(struct aws_iotdevice_defender_v1_task *defender_task);
+void aws_iotdevice_defender_v1_stop_task(struct aws_iotdevice_defender_v1_task *defender_task);
 
 AWS_EXTERN_C_END
 
