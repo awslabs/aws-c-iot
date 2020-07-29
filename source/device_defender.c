@@ -239,7 +239,7 @@ static int s_get_metric_report_json(
         }
     }
 
-    if (NULL == cJSON_AddNumberToObject(tcp_connections, "total", total_established_tcp_conns)) {
+    if (NULL == cJSON_AddNumberToObject(established_tcp_conns, "total", total_established_tcp_conns)) {
         goto cleanup;
     }
     if (NULL == cJSON_AddNumberToObject(listening_tcp_ports, "total", total_listening_tcp_ports)) {
