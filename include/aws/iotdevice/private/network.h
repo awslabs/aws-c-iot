@@ -18,9 +18,9 @@ struct aws_byte_cursor;
 struct aws_hash_element;
 struct aws_string;
 
-enum aws_iotdevice_network_protocol { AWS_IDNP_UKNOWN, AWS_IDNP_TCP, AWS_IDNP_UDP };
+enum aws_iotdevice_network_protocol { AWS_IDNP_UKNOWN, AWS_IDNP_TCP, AWS_IDNP_UDP, };
 
-enum aws_iotdevice_network_connection_state { AWS_IDNCS_UNKNOWN = 0, AWS_IDNCS_ESTABLISHED = 1, AWS_IDNCS_LISTEN = 10 };
+enum aws_iotdevice_network_connection_state { AWS_IDNCS_UNKNOWN = 0, AWS_IDNCS_ESTABLISHED = 1, AWS_IDNCS_LISTEN = 10, };
 
 struct aws_iotdevice_metric_network_transfer {
     uint64_t bytes_in;

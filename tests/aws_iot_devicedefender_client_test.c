@@ -116,10 +116,7 @@ static void s_on_connection_resumed(
     if (!session_present) {
         printf("RESUBSCRIBING...");
         uint16_t packet_id = aws_mqtt_resubscribe_existing_topics(connection, s_on_resubscribed, NULL);
-        if (!packet_id) {
-            AWS_FATAL_ASSERT(aws_last_error() == AWS_ERROR_MQTT_NO_TOPICS_FOR_RESUBSCRIBE);
-            printf("No topics to resubscribe to.");
-        }
+        AWS_FATAL_ASSERT(packet_id);
     }
 }
 
@@ -176,7 +173,7 @@ int main(int argc, char **argv) {
     aws_event_loop_group_default_init(&elg, args.allocator, 1);
 
     struct aws_host_resolver resolver;
-    ASSERT_SUCCESS(aws_host_resolver_init_default(&resolver, args.allocator, 8, &elg));
+    ASSERT_SUCCESS(aws_host_resolver_init_default(&resolver, args.allocator, 8, &elg),);
 
     struct aws_client_bootstrap_options bootstrap_options = {
         .event_loop_group = &elg,
@@ -185,12 +182,12 @@ int main(int argc, char **argv) {
     struct aws_client_bootstrap *bootstrap = aws_client_bootstrap_new(args.allocator, &bootstrap_options);
 
     struct aws_tls_ctx_options tls_ctx_opt;
-    ASSERT_SUCCESS(aws_tls_ctx_options_init_client_mtls_from_path(&tls_ctx_opt, args.allocator, cert, private_key));
-    ASSERT_SUCCESS(aws_tls_ctx_options_set_alpn_list(&tls_ctx_opt, "x-amzn-mqtt-ca"));
-    ASSERT_SUCCESS(aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, root_ca));
+    ASSERT_SUCCESS(aws_tls_ctx_options_init_client_mtls_from_path(&tls_ctx_opt, args.allocator, cert, private_key),);
+    ASSERT_SUCCESS(aws_tls_ctx_options_set_alpn_list(&tls_ctx_opt, "x-amzn-mqtt-ca"),);
+    ASSERT_SUCCESS(aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, root_ca),);
 
     struct aws_tls_ctx *tls_ctx = aws_tls_client_ctx_new(args.allocator, &tls_ctx_opt);
-    ASSERT_NOT_NULL(tls_ctx);
+    ASSERT_NOT_NULL(tls_ctx,);
 
     aws_tls_ctx_options_clean_up(&tls_ctx_opt);
 
@@ -210,7 +207,7 @@ int main(int argc, char **argv) {
     args.connection = aws_mqtt_client_connection_new(&client);
 
     ASSERT_SUCCESS(aws_mqtt_client_connection_set_connection_interruption_handlers(
-        args.connection, s_on_connection_interrupted, NULL, s_on_connection_resumed, NULL));
+        args.connection, s_on_connection_interrupted, NULL, s_on_connection_resumed, NULL),);
 
     /* Generate a random clientid */
     char client_id[128];
@@ -251,7 +248,7 @@ int main(int argc, char **argv) {
     aws_tls_connection_options_clean_up(&tls_con_opt);
 
     aws_mutex_lock(&mutex);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
+    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex),);
     aws_mutex_unlock(&mutex);
 
     aws_mqtt_client_connection_disconnect(args.connection, s_mqtt_on_disconnect, &args);
@@ -270,9 +267,9 @@ int main(int argc, char **argv) {
     aws_iotdevice_library_clean_up();
     aws_mqtt_library_clean_up();
 
-    ASSERT_UINT_EQUALS(0, aws_mem_tracer_count(allocator));
+    ASSERT_UINT_EQUALS(0, aws_mem_tracer_count(allocator),);
     allocator = aws_mem_tracer_destroy(allocator);
-    ASSERT_NOT_NULL(allocator);
+    ASSERT_NOT_NULL(allocator,);
 
     return AWS_OP_SUCCESS;
 }
