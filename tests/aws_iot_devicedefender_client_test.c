@@ -124,7 +124,7 @@ static void s_mqtt_on_disconnect(struct aws_mqtt_client_connection *connection, 
     (void)connection;
     struct connection_args *args = userdata;
 
-    aws_mqtt_client_connection_destroy(args->connection);
+    aws_mqtt_client_connection_release(args->connection);
     args->connection = NULL;
 
     aws_mutex_lock(args->mutex);
@@ -169,25 +169,23 @@ int main(int argc, char **argv) {
     aws_logger_init_standard(&logger, args.allocator, &logger_options);
     aws_logger_set(&logger);
 
-    struct aws_event_loop_group elg;
-    aws_event_loop_group_default_init(&elg, args.allocator, 1);
+    struct aws_event_loop_group *elg = aws_event_loop_group_new_default(args.allocator, 1, NULL);
 
-    struct aws_host_resolver resolver;
-    ASSERT_SUCCESS(aws_host_resolver_init_default(&resolver, args.allocator, 8, &elg),);
+    struct aws_host_resolver *resolver = aws_host_resolver_new_default(args.allocator, 8, elg, NULL);
 
     struct aws_client_bootstrap_options bootstrap_options = {
-        .event_loop_group = &elg,
-        .host_resolver = &resolver,
+        .event_loop_group = elg,
+        .host_resolver = resolver,
     };
     struct aws_client_bootstrap *bootstrap = aws_client_bootstrap_new(args.allocator, &bootstrap_options);
 
     struct aws_tls_ctx_options tls_ctx_opt;
-    ASSERT_SUCCESS(aws_tls_ctx_options_init_client_mtls_from_path(&tls_ctx_opt, args.allocator, cert, private_key),);
-    ASSERT_SUCCESS(aws_tls_ctx_options_set_alpn_list(&tls_ctx_opt, "x-amzn-mqtt-ca"),);
-    ASSERT_SUCCESS(aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, root_ca),);
+    ASSERT_SUCCESS(aws_tls_ctx_options_init_client_mtls_from_path(&tls_ctx_opt, args.allocator, cert, private_key));
+    ASSERT_SUCCESS(aws_tls_ctx_options_set_alpn_list(&tls_ctx_opt, "x-amzn-mqtt-ca"));
+    ASSERT_SUCCESS(aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, root_ca));
 
     struct aws_tls_ctx *tls_ctx = aws_tls_client_ctx_new(args.allocator, &tls_ctx_opt);
-    ASSERT_NOT_NULL(tls_ctx,);
+    ASSERT_NOT_NULL(tls_ctx);
 
     aws_tls_ctx_options_clean_up(&tls_ctx_opt);
 
@@ -200,14 +198,13 @@ int main(int argc, char **argv) {
     socket_options.type = AWS_SOCKET_STREAM;
     socket_options.domain = AWS_SOCKET_IPV6;
 
-    struct aws_mqtt_client client;
-    aws_mqtt_client_init(&client, args.allocator, bootstrap);
+    struct aws_mqtt_client *client = aws_mqtt_client_new(args.allocator, bootstrap);
 
     struct aws_byte_cursor host_name_cur = aws_byte_cursor_from_c_str(endpoint);
-    args.connection = aws_mqtt_client_connection_new(&client);
+    args.connection = aws_mqtt_client_connection_new(client);
 
     ASSERT_SUCCESS(aws_mqtt_client_connection_set_connection_interruption_handlers(
-        args.connection, s_on_connection_interrupted, NULL, s_on_connection_resumed, NULL),);
+        args.connection, s_on_connection_interrupted, NULL, s_on_connection_resumed, NULL));
 
     /* Generate a random clientid */
     char client_id[128];
@@ -225,7 +222,7 @@ int main(int argc, char **argv) {
         .cancelation_userdata = NULL,
         .task_canceled_fn = NULL,
         .connection = args.connection,
-        .event_loop = aws_event_loop_group_get_next_loop(&elg),
+        .event_loop = aws_event_loop_group_get_next_loop(elg),
         .netconn_sample_period_ns = 5ul * 60ul * 1000000000ul,
         .report_format = AWS_IDDRF_JSON,
         .thing_name =
@@ -233,43 +230,44 @@ int main(int argc, char **argv) {
         .task_period_ns = 5ul * 60ul * 1000000000ul};
     args.task_config = task_config;
 
-    struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
-                                                       .port = 8883,
-                                                       .socket_options = &socket_options,
-                                                       .tls_options = &tls_con_opt,
-                                                       .client_id = client_id_cur,
-                                                       .keep_alive_time_secs = 0,
-                                                       .ping_timeout_ms = 0,
-                                                       .on_connection_complete = s_mqtt_on_connection_complete,
-                                                       .user_data = &args,
-                                                       .clean_session = true};
+    struct aws_mqtt_connection_options conn_options = {
+        .host_name = host_name_cur,
+        .port = 8883,
+        .socket_options = &socket_options,
+        .tls_options = &tls_con_opt,
+        .client_id = client_id_cur,
+        .keep_alive_time_secs = 0,
+        .ping_timeout_ms = 0,
+        .on_connection_complete = s_mqtt_on_connection_complete,
+        .user_data = &args,
+        .clean_session = true};
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);
 
     aws_mutex_lock(&mutex);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex),);
+    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     aws_mutex_unlock(&mutex);
 
     aws_mqtt_client_connection_disconnect(args.connection, s_mqtt_on_disconnect, &args);
 
-    aws_mqtt_client_clean_up(&client);
+    aws_mqtt_client_release(client);
 
     aws_client_bootstrap_release(bootstrap);
 
-    aws_host_resolver_clean_up(&resolver);
-    aws_event_loop_group_clean_up(&elg);
+    aws_host_resolver_release(resolver);
+    aws_event_loop_group_release(elg);
 
-    aws_tls_ctx_destroy(tls_ctx);
+    aws_tls_ctx_release(tls_ctx);
 
     aws_logger_clean_up(&logger);
 
     aws_iotdevice_library_clean_up();
     aws_mqtt_library_clean_up();
 
-    ASSERT_UINT_EQUALS(0, aws_mem_tracer_count(allocator),);
+    ASSERT_UINT_EQUALS(0, aws_mem_tracer_count(allocator));
     allocator = aws_mem_tracer_destroy(allocator);
-    ASSERT_NOT_NULL(allocator,);
+    ASSERT_NOT_NULL(allocator);
 
     return AWS_OP_SUCCESS;
 }

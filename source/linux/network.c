@@ -192,7 +192,7 @@ int get_net_connections_from_proc_buf(
             uint16_t state = strtol(state_h, NULL, 16);
             if (state == LINUX_NCS_ESTABLISHED || state == LINUX_NCS_LISTEN) {
                 struct aws_iotdevice_metric_net_connection *connection =
-                    aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_metric_net_connection));
+                    aws_mem_calloc(allocator, 1, sizeof(struct aws_iotdevice_metric_net_connection));
                 if (connection == NULL) {
                     return_value = AWS_OP_ERR;
                     AWS_LOGF_ERROR(
@@ -268,7 +268,7 @@ int get_network_connections(
     AWS_ZERO_STRUCT(net_udp);
     int return_code = AWS_OP_ERR;
 
-    if (AWS_OP_SUCCESS != read_proc_net_from_file(&net_tcp, allocator, s_proc_net_tcp_size_hint, "/proc/net/tcp")) {
+    if (read_proc_net_from_file(&net_tcp, allocator, s_proc_net_tcp_size_hint, "/proc/net/tcp")) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s",
@@ -280,7 +280,7 @@ int get_network_connections(
     /* hint on read size next go around */
     s_proc_net_tcp_size_hint = net_tcp.len * PROC_NET_HINT_FACTOR;
 
-    if (AWS_OP_SUCCESS != read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp")) {
+    if (read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp")) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s",
@@ -293,8 +293,7 @@ int get_network_connections(
     s_proc_net_udp_size_hint = net_udp.len * PROC_NET_HINT_FACTOR;
 
     struct aws_byte_cursor net_tcp_cursor = aws_byte_cursor_from_buf(&net_tcp);
-    if (AWS_OP_SUCCESS !=
-        get_net_connections_from_proc_buf(net_conns, allocator, &net_tcp_cursor, ifconfig, AWS_IDNP_TCP)) {
+    if (get_net_connections_from_proc_buf(net_conns, allocator, &net_tcp_cursor, ifconfig, AWS_IDNP_TCP)) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to parse network connections from /proc/net/tcp",
@@ -303,8 +302,7 @@ int get_network_connections(
     }
 
     struct aws_byte_cursor net_udp_cursor = aws_byte_cursor_from_buf(&net_udp);
-    if (AWS_OP_SUCCESS !=
-        get_net_connections_from_proc_buf(net_conns, allocator, &net_udp_cursor, ifconfig, AWS_IDNP_UDP)) {
+    if (get_net_connections_from_proc_buf(net_conns, allocator, &net_udp_cursor, ifconfig, AWS_IDNP_UDP)) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to parse network connections from /proc/net/udp",
@@ -325,14 +323,14 @@ cleanup:
 }
 
 int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
-    if (AWS_OP_SUCCESS != aws_hash_table_init(
-                              &ifconfig->iface_name_to_info,
-                              allocator,
-                              sizeof(struct aws_iotdevice_network_iface),
-                              aws_hash_c_string,
-                              aws_hash_callback_c_str_eq,
-                              NULL,
-                              NULL)) {
+    if (aws_hash_table_init(
+            &ifconfig->iface_name_to_info,
+            allocator,
+            sizeof(struct aws_iotdevice_network_iface),
+            aws_hash_c_string,
+            aws_hash_callback_c_str_eq,
+            NULL,
+            NULL)) {
         return AWS_OP_ERR;
     }
     int result = AWS_OP_ERR;
@@ -389,8 +387,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
             iface->metrics.packets_out = stats->tx_packets;
         }
 
-        if (AWS_OP_SUCCESS !=
-            (result = aws_hash_table_put(&ifconfig->iface_name_to_info, iface->ipv4_addr_str, iface, NULL))) {
+        if ((result = aws_hash_table_put(&ifconfig->iface_name_to_info, iface->ipv4_addr_str, iface, NULL))) {
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_NETWORK_CONFIG,
                 "id=%p: network interface address to interface info add to map failed: %s",

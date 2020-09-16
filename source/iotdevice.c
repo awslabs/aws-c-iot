@@ -85,6 +85,9 @@ void aws_iotdevice_library_clean_up(void) {
     if (s_iotdevice_library_initialized) {
         s_library_allocator = NULL;
 
+        aws_unregister_error_info(&s_error_list);
+        aws_unregister_log_subject_info_list(&s_logging_subjects_list);
+
         s_iotdevice_library_initialized = false;
     }
 }

@@ -9,7 +9,6 @@
 
 #include <aws/common/allocator.h>
 #include <aws/common/atomics.h>
-#include <aws/common/byte_buf.h>
 #include <aws/common/clock.h>
 #include <aws/common/hash_table.h>
 #include <aws/common/logging.h>
@@ -47,7 +46,7 @@ static void s_mqtt_on_suback(
             AWS_BYTE_CURSOR_PRI(*topic),
             aws_error_name(error_code));
     } else {
-        AWS_LOGF_TRACE(
+        AWS_LOGF_DEBUG(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Suback callback succeeded with packet id: %d; topic " PRInSTR,
             userdata,
@@ -92,11 +91,10 @@ static void s_on_report_response_rejected(
     (void)payload;
     AWS_LOGF_ERROR(
         AWS_LS_IOTDEVICE_DEFENDER_TASK,
-        "id=%p: Report rejected from topic: " PRInSTR,
+        "id=%p: Report rejected from topic: " PRInSTR "\nRejection payload: " PRInSTR,
         userdata,
-        AWS_BYTE_CURSOR_PRI(*topic));
-
-    printf("Rejection payload: " PRInSTR, AWS_BYTE_CURSOR_PRI(*payload));
+        AWS_BYTE_CURSOR_PRI(*topic),
+        AWS_BYTE_CURSOR_PRI(*payload));
 }
 
 static void s_on_report_response_accepted(
@@ -106,7 +104,7 @@ static void s_on_report_response_accepted(
     void *userdata) {
     (void)connection;
     (void)payload;
-    AWS_LOGF_TRACE(
+    AWS_LOGF_DEBUG(
         AWS_LS_IOTDEVICE_DEFENDER_TASK,
         "id=%p: Report accepted on topic: " PRInSTR,
         userdata,
@@ -275,18 +273,18 @@ static int s_get_metric_report_json(
     char *write_start = (char *)json_out->buffer + json_out->len;
     if (!cJSON_PrintPreallocated(root, write_start, (int)remaining_capacity, false)) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Failed to print defender report JSON", (void *)task);
-        return_value = AWS_OP_ERR;
-    } else {
-        return_value = AWS_OP_SUCCESS;
-        json_out->len += strlen(write_start);
+        goto cleanup;
     }
+
+    return_value = AWS_OP_SUCCESS;
+    json_out->len += strlen(write_start);
 
 cleanup:
     if (root) {
         cJSON_Delete(root);
     }
     if (return_value != AWS_OP_SUCCESS) {
-        return aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
+        aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
     }
     return return_value;
 }
@@ -306,7 +304,7 @@ static uint64_t s_defender_report_id_epoch_time_ms(struct aws_iotdevice_defender
             aws_error_name(return_code));
         return 0;
     }
-    return now / 1000000; /* convert nanoseconds to millis */
+    return aws_timestamp_convert(now, AWS_TIMESTAMP_NANOS, AWS_TIMESTAMP_MILLIS, NULL);
 }
 
 static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_task_status status) {
@@ -364,6 +362,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             json_report = aws_byte_buf_from_empty_array(json_buffer_space, 262144);
             struct aws_iotdevice_metric_network_transfer *ptr_delta_xfer = NULL;
             struct aws_iotdevice_metric_network_transfer delta_xfer;
+            AWS_ZERO_STRUCT(delta_xfer);
+
             if (defender_task->has_previous_net_xfer) {
                 delta_xfer.bytes_in = 0;
                 delta_xfer.bytes_out = 0;
@@ -404,7 +404,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 defender_task);
 
             if (report_packet_id != 0) {
-                AWS_LOGF_TRACE(
+                AWS_LOGF_DEBUG(
                     AWS_LS_IOTDEVICE_DEFENDER_TASK,
                     "id=%p: Report packet_id %d published on topic " PRInSTR,
                     (void *)defender_task,
@@ -467,7 +467,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
 
     if (config->report_format != AWS_IDDRF_JSON) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK, "Unsupported DeviceDefender detect report format detected.");
-        aws_raise_error(AWS_ERROR_UNSUPPORTED_OPERATION);
+        aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT);
         failure = true;
         goto cleanup;
     }
@@ -600,9 +600,11 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
 
     aws_task_init(&defender_task->task, s_reporting_task_fn, defender_task, "DeviceDefenderReportTask");
 cleanup:
-    if (failure && defender_task != NULL) {
-        aws_mem_release(allocator, defender_task);
-        defender_task = NULL;
+    if (failure) {
+        if (defender_task != NULL) {
+            aws_mem_release(allocator, defender_task);
+        }
+        return NULL;
     }
 
     AWS_LOGF_TRACE(
