@@ -41,7 +41,7 @@ static void s_on_websocket_setup(
     s_active_websocket = websocket;
     connection_ctx->on_connection_complete(s_active_stream_id);
 
-    aws_mem_release(connection_ctx->allocator, (void*)connection_ctx);
+    aws_mem_release(connection_ctx->allocator, (void *)connection_ctx);
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
@@ -50,7 +50,7 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     UNUSED(user_data);
 }
 
-static const char* s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy_mode local_proxy_mode) {
+static const char *s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy_mode local_proxy_mode) {
     if (local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
         return "source";
     } else {
@@ -58,15 +58,18 @@ static const char* s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy
     }
 }
 
-static struct aws_http_message *s_new_handshake_request(const struct aws_secure_tunneling_connection_config *connection_config) {
+static struct aws_http_message *s_new_handshake_request(
+    const struct aws_secure_tunneling_connection_config *connection_config) {
     struct aws_byte_buf path;
     aws_byte_buf_init(&path, connection_config->allocator, 50);
-    snprintf((char*)path.buffer, path.capacity, "/tunnel?local-proxy-mode=%s", s_get_proxy_mode_string(connection_config->local_proxy_mode));
+    snprintf(
+        (char *)path.buffer,
+        path.capacity,
+        "/tunnel?local-proxy-mode=%s",
+        s_get_proxy_mode_string(connection_config->local_proxy_mode));
 
     struct aws_http_message *handshake_request = aws_http_message_new_websocket_handshake_request(
-        connection_config->allocator,
-        aws_byte_cursor_from_buf(&path),
-        connection_config->endpoint_host);
+        connection_config->allocator, aws_byte_cursor_from_buf(&path), connection_config->endpoint_host);
 
     aws_byte_buf_clean_up(&path);
 
@@ -98,7 +101,8 @@ static void s_init_websocket_client_connection_options(
     websocket_options->handshake_request = s_new_handshake_request(connection_config);
     websocket_options->initial_window_size = AWS_WEBSOCKET_MAX_PAYLOAD_LENGTH; /* TODO: followup */
 
-    struct aws_secure_tunneling_connection_ctx *connection_ctx = aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunneling_connection_ctx));
+    struct aws_secure_tunneling_connection_ctx *connection_ctx =
+        aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunneling_connection_ctx));
     connection_ctx->allocator = connection_config->allocator;
     connection_ctx->handshake_request = websocket_options->handshake_request;
     connection_ctx->on_connection_complete = connection_config->on_connection_complete;
