@@ -10,6 +10,12 @@
 static int32_t s_active_stream_id = -1;
 static struct aws_websocket *s_active_websocket = NULL;
 
+struct aws_secure_tunneling_connection_ctx {
+    struct aws_allocator *allocator;
+    struct aws_http_message *handshake_request;
+    aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
+};
+
 static void s_on_websocket_setup(
     struct aws_websocket *websocket,
     int error_code,
@@ -24,12 +30,14 @@ static void s_on_websocket_setup(
     UNUSED(handshake_response_header_array);
     UNUSED(num_handshake_response_headers);
 
-    /* TODO: Safe to free handshake_request here */
+    const struct aws_secure_tunneling_connection_ctx *connection_ctx = user_data;
+    aws_http_message_release(connection_ctx->handshake_request);
 
     s_active_stream_id++;
     s_active_websocket = websocket;
-    const struct aws_secure_tunneling_connection_config *connection_config = user_data;
-    connection_config->on_connection_complete(s_active_stream_id);
+    connection_ctx->on_connection_complete(s_active_stream_id);
+
+    aws_mem_release(connection_ctx->allocator, (void*)connection_ctx);
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
@@ -73,7 +81,6 @@ static struct aws_http_message *s_new_handshake_request(const struct aws_secure_
     }
 
     return handshake_request;
-    /* TODO: free handshake_request */
 }
 
 static void s_init_websocket_client_connection_options(
@@ -86,7 +93,13 @@ static void s_init_websocket_client_connection_options(
     websocket_options->host = connection_config->endpoint_host;
     websocket_options->handshake_request = s_new_handshake_request(connection_config);
     websocket_options->initial_window_size = AWS_WEBSOCKET_MAX_PAYLOAD_LENGTH; /* TODO: followup */
-    websocket_options->user_data = (struct aws_secure_tunneling_connection_config*) connection_config;
+
+    struct aws_secure_tunneling_connection_ctx *connection_ctx = aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunneling_connection_ctx));
+    connection_ctx->allocator = connection_config->allocator;
+    connection_ctx->handshake_request = websocket_options->handshake_request;
+    connection_ctx->on_connection_complete = connection_config->on_connection_complete;
+    websocket_options->user_data = connection_ctx;
+
     websocket_options->on_connection_setup = s_on_websocket_setup;
     websocket_options->on_connection_shutdown = s_on_websocket_shutdown;
     // websocket_options->on_incoming_frame_begin
