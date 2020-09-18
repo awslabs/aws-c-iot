@@ -3,6 +3,9 @@
 
 #include <aws/common/byte_buf.h>
 
+/* TODO: Add to exports.h */
+#define AWS_SECURE_TUNNELING_API
+
 enum aws_secure_tunneling_local_proxy_mode {
     AWS_SECURE_TUNNELING_SOURCE_MODE,
     AWS_SECURE_TUNNELING_DESTINATION_MODE
@@ -16,9 +19,11 @@ typedef void(aws_secure_tunneling_on_close_fn)(int32_t stream_id, int32_t close_
 
 struct aws_secure_tunneling_connection_config {
     struct aws_allocator *allocator;
+    struct aws_client_bootstrap *bootstrap;
+    struct aws_socket_options *socket_options;
 
     struct aws_byte_cursor access_token;
-    enum aws_secure_tunneling_local_proxy_mode mode;
+    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
     struct aws_byte_cursor endpoint_host;
 
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
@@ -28,10 +33,16 @@ struct aws_secure_tunneling_connection_config {
     aws_secure_tunneling_on_close_fn *on_close;
 };
 
-int aws_secure_tunneling_connect(const struct aws_secure_tunneling_connection_config *config);
+AWS_SECURE_TUNNELING_API
+int aws_secure_tunneling_connect(const struct aws_secure_tunneling_connection_config *connection_config);
+
+AWS_SECURE_TUNNELING_API
+int aws_secure_tunneling_close(int32_t stream_id);
+
+/*
 int aws_secure_tunneling_send_data(int32_t stream_id, const struct aws_byte_buf* data);
 int aws_secure_tunneling_send_stream_start(int32_t stream_id);
 int aws_secure_tunneling_send_stream_reset(int32_t stream_id);
-int aws_secure_tunneling_close(int32_t stream_id);
+*/
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_H */
