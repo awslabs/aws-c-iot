@@ -30,6 +30,10 @@ static void s_on_websocket_setup(
     UNUSED(handshake_response_header_array);
     UNUSED(num_handshake_response_headers);
 
+    /* TODO: Handle error
+     * https://github.com/aws-samples/aws-iot-securetunneling-localproxy/blob/master/WebsocketProtocolGuide.md#handshake-error-responses
+     */
+
     const struct aws_secure_tunneling_connection_ctx *connection_ctx = user_data;
     aws_http_message_release(connection_ctx->handshake_request);
 
