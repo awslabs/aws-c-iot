@@ -6,7 +6,9 @@
 /* TODO: Remove me */
 #define UNUSED(x) (void)(x)
 
+/* Only one active secure tunnel is supported */
 static int32_t s_active_stream_id = -1;
+static struct aws_websocket *s_active_websocket = NULL;
 
 static void s_on_websocket_setup(
     struct aws_websocket *websocket,
@@ -25,6 +27,7 @@ static void s_on_websocket_setup(
     /* TODO: Safe to free handshake_request here */
 
     s_active_stream_id++;
+    s_active_websocket = websocket;
     const struct aws_secure_tunneling_connection_config *connection_config = user_data;
     connection_config->on_connection_complete(s_active_stream_id);
 }
@@ -111,8 +114,8 @@ int aws_secure_tunneling_close(int32_t stream_id) {
         return AWS_OP_ERR;
     }
 
-    /* TODO: close the websocket */
-
     s_active_stream_id = -1;
+    aws_websocket_release(s_active_websocket);
+    s_active_websocket = NULL;
     return AWS_OP_SUCCESS;
 }
