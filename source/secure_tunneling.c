@@ -3,6 +3,8 @@
 #include <aws/http/request_response.h>
 #include <aws/http/websocket.h>
 
+#define MAX_WEBSOCKET_PAYLOAD 131076
+
 /* TODO: Remove me */
 #define UNUSED(x) (void)(x)
 
@@ -99,7 +101,7 @@ static void s_init_websocket_client_connection_options(
     websocket_options->socket_options = connection_config->socket_options;
     websocket_options->host = connection_config->endpoint_host;
     websocket_options->handshake_request = s_new_handshake_request(connection_config);
-    websocket_options->initial_window_size = AWS_WEBSOCKET_MAX_PAYLOAD_LENGTH; /* TODO: followup */
+    websocket_options->initial_window_size = MAX_WEBSOCKET_PAYLOAD; /* TODO: followup */
 
     struct aws_secure_tunneling_connection_ctx *connection_ctx =
         aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunneling_connection_ctx));
