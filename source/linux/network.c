@@ -180,7 +180,7 @@ int get_net_connections_from_proc_buf(
     aws_array_list_pop_back(&lines);
 
     struct aws_byte_cursor line;
-    struct aws_iotdevice_metric_net_connection *connection;
+    struct aws_iotdevice_metric_net_connection *connection = NULL;
     while (AWS_OP_SUCCESS == aws_array_list_front(&lines, &line)) {
         aws_array_list_pop_front(&lines);
 
@@ -269,7 +269,7 @@ int get_net_connections_from_proc_buf(
 
 cleanup:
 
-    if (connection) {
+    if (connection != NULL) {
         aws_string_destroy(connection->local_interface);
         aws_string_destroy(connection->remote_address);
         aws_mem_release(allocator, connection);
