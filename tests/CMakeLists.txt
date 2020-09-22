@@ -2,14 +2,10 @@ include(CTest)
 include(AwsTestHarness)
 enable_testing()
 
-# set(TEST_SRC metrics_tests.c)
-# file(GLOB TESTS ${TEST_SRC})
-
 file(GLOB TEST_HDRS "mqtt_mock_server_handler.h")
 set(TEST_SRC metrics_tests.c mqtt_mock_server_handler.c)
 file(GLOB TESTS ${TEST_HDRS} ${TEST_SRC})
 
-add_test_case(dummy_test)
 add_test_case(devicedefender_task_unsupported_report_format)
 add_test_case(devicedefender_task_success)
 

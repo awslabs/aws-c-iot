@@ -372,29 +372,38 @@ static int validate_devicedefender_record(const char *value) {
     cJSON *report = cJSON_Parse(value);
     ASSERT_NOT_NULL(report);
 
-    ASSERT_TRUE(cJSON_HasObjectItem(report, "header"));
-    ASSERT_TRUE(cJSON_HasObjectItem(report, "metrics"));
+    cJSON *header = cJSON_GetObjectItemCaseSensitive(report, "header");
+    ASSERT_TRUE(cJSON_IsObject(header));
+    cJSON *id = cJSON_GetObjectItem(header, "report_id");
+    ASSERT_TRUE(cJSON_IsNumber(id));
+    ASSERT_TRUE(id->valueint >= 0);
+    cJSON *version = cJSON_GetObjectItem(header, "version");
+    ASSERT_STR_EQUALS("1.0", cJSON_GetStringValue(version));
 
-    cJSON *metrics = report->child->next;
-    ASSERT_NOT_NULL(metrics);
-    ASSERT_TRUE(cJSON_HasObjectItem(metrics, "listening_tcp_ports"));
-    ASSERT_TRUE(cJSON_HasObjectItem(metrics, "tcp_connections"));
-    ASSERT_TRUE(cJSON_HasObjectItem(metrics, "listening_udp_ports"));
-    ASSERT_TRUE(cJSON_HasObjectItem(metrics, "network_stats"));
+    cJSON *metrics = cJSON_GetObjectItemCaseSensitive(report, "metrics");
+
+    cJSON *tcpPorts = cJSON_GetObjectItem(metrics, "listening_tcp_ports");
+    ASSERT_TRUE(cJSON_IsObject(tcpPorts));
+    ASSERT_TRUE(cJSON_IsArray(cJSON_GetObjectItem(tcpPorts, "ports")));
+
+    cJSON *udpPorts = cJSON_GetObjectItem(metrics, "listening_udp_ports");
+    ASSERT_TRUE(cJSON_IsObject(udpPorts));
+    ASSERT_TRUE(cJSON_IsArray(cJSON_GetObjectItem(udpPorts, "ports")));
+
+    cJSON *netstats = cJSON_GetObjectItem(metrics, "network_stats");
+    ASSERT_TRUE(cJSON_IsObject(netstats));
+
+    cJSON *connections = cJSON_GetObjectItem(metrics, "tcp_connections");
+    ASSERT_TRUE(cJSON_IsObject(connections));
+    cJSON *established = cJSON_GetObjectItem(connections, "established_connections");
+    ASSERT_TRUE(cJSON_IsObject(established));
+    ASSERT_TRUE(cJSON_IsArray(cJSON_GetObjectItem(established, "connections")));
 
     cJSON_Delete(report);
     return AWS_OP_SUCCESS;
 }
 
 /* Test Cases */
-
-AWS_TEST_CASE(dummy_test, dummy_test_fn)
-static int dummy_test_fn(struct aws_allocator *allocator, void *ctx) {
-    (void)allocator;
-    (void)ctx;
-
-    return AWS_OP_SUCCESS;
-}
 
 AWS_TEST_CASE(devicedefender_task_unsupported_report_format, s_devicedefender_task_unsupported_report_format);
 static int s_devicedefender_task_unsupported_report_format(struct aws_allocator *allocator, void *ctx) {
@@ -410,14 +419,13 @@ static int s_devicedefender_task_unsupported_report_format(struct aws_allocator 
         .task_canceled_fn = NULL,
         .cancelation_userdata = NULL};
 
-    ASSERT_NULL(aws_iotdevice_defender_v1_run_task(allocator, &config));
+    ASSERT_NULL(aws_iotdevice_defender_v1_report_task(allocator, &config));
     ASSERT_UINT_EQUALS(AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT, aws_last_error());
     aws_reset_error();
 
     return AWS_OP_SUCCESS;
 }
 
-/* TODO: Address memory leak issues */
 AWS_TEST_CASE_FIXTURE(
     devicedefender_task_success,
     s_setup_mqtt_server_fn,
@@ -453,14 +461,14 @@ static int s_devicedefender_task_success(struct aws_allocator *allocator, void *
         .task_period_ns = 1000000000ul};
 
     struct aws_iotdevice_defender_v1_task *defender_task = NULL;
-    defender_task = aws_iotdevice_defender_v1_run_task(allocator, &task_config);
+    defender_task = aws_iotdevice_defender_v1_report_task(allocator, &task_config);
     AWS_FATAL_ASSERT(defender_task != NULL);
 
     mqtt_mock_server_wait_for_publishes_received(state_test_data->test_channel_handler, 1, 1000000000);
 
     aws_iotdevice_defender_v1_stop_task(defender_task);
 
-    mqtt_mock_server_wait_for_unsubscribe_received(state_test_data->test_channel_handler, 2, 10000000);
+    mqtt_mock_server_wait_for_unsubscribe_received(state_test_data->test_channel_handler, 2, 1000000000);
 
     ASSERT_SUCCESS(
         aws_mqtt_client_connection_disconnect(state_test_data->mqtt_connection, s_on_disconnect_fn, state_test_data));
@@ -504,8 +512,6 @@ static int s_devicedefender_task_success(struct aws_allocator *allocator, void *
     validate_devicedefender_record((const char *)abc.ptr);
 
     aws_iotdevice_library_clean_up();
-
-    // ASSERT_UINT_EQUALS(0, aws_mem_tracer_count(allocator));
 
     return AWS_OP_SUCCESS;
 }

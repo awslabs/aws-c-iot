@@ -43,7 +43,7 @@ AWS_EXTERN_C_BEGIN
  * Creates a new reporting task for Device Defender metrics
  */
 AWS_IOTDEVICE_API
-struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_run_task(
+struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
     struct aws_allocator *allocator,
     const struct aws_iotdevice_defender_report_task_config *config);
 

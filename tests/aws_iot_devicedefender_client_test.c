@@ -69,7 +69,7 @@ static void s_mqtt_on_connection_complete(
 
     printf("Client connected...");
 
-    defender_task = aws_iotdevice_defender_v1_run_task(connection_args->allocator, &connection_args->task_config);
+    defender_task = aws_iotdevice_defender_v1_report_task(connection_args->allocator, &connection_args->task_config);
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
 
     struct aws_socket_options socket_options;
     AWS_ZERO_STRUCT(socket_options);
-    socket_options.connect_timeout_ms = 500;
+    socket_options.connect_timeout_ms = 3000;
     socket_options.type = AWS_SOCKET_STREAM;
     socket_options.domain = AWS_SOCKET_IPV6;
 
@@ -230,17 +230,16 @@ int main(int argc, char **argv) {
         .task_period_ns = 5ul * 60ul * 1000000000ul};
     args.task_config = task_config;
 
-    struct aws_mqtt_connection_options conn_options = {
-        .host_name = host_name_cur,
-        .port = 8883,
-        .socket_options = &socket_options,
-        .tls_options = &tls_con_opt,
-        .client_id = client_id_cur,
-        .keep_alive_time_secs = 0,
-        .ping_timeout_ms = 0,
-        .on_connection_complete = s_mqtt_on_connection_complete,
-        .user_data = &args,
-        .clean_session = true};
+    struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
+                                                       .port = 8883,
+                                                       .socket_options = &socket_options,
+                                                       .tls_options = &tls_con_opt,
+                                                       .client_id = client_id_cur,
+                                                       .keep_alive_time_secs = 0,
+                                                       .ping_timeout_ms = 0,
+                                                       .on_connection_complete = s_mqtt_on_connection_complete,
+                                                       .user_data = &args,
+                                                       .clean_session = true};
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);

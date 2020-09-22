@@ -81,9 +81,15 @@ void mqtt_mock_server_set_max_connack(struct aws_channel_handler *handler, size_
 /* Wait for puback_count PUBACK packages from client */
 void mqtt_mock_server_wait_for_pubacks(struct aws_channel_handler *handler, size_t puback_count, int64_t time_to_wait);
 /* Wait for publishes_received from client */
-void mqtt_mock_server_wait_for_publishes_received(struct aws_channel_handler *handler, size_t publishes_received_count, int64_t time_to_wait);
+void mqtt_mock_server_wait_for_publishes_received(
+    struct aws_channel_handler *handler,
+    size_t publishes_received_count,
+    int64_t time_to_wait);
 /* Wait for unsubscribe_received from client */
-void mqtt_mock_server_wait_for_unsubscribe_received(struct aws_channel_handler *handler, size_t unsubscribe_received_count, int64_t time_to_wait);
+void mqtt_mock_server_wait_for_unsubscribe_received(
+    struct aws_channel_handler *handler,
+    size_t unsubscribe_received_count,
+    int64_t time_to_wait);
 
 /* Getters for decoded packets, call mqtt_mock_server_decode_packets first. */
 size_t mqtt_mock_server_decoded_packets_count(struct aws_channel_handler *handler);
