@@ -30,31 +30,28 @@ static int s_mqtt_mock_server_handler_process_packet(
     aws_array_list_push_back(&testing_handler->received_messages, &received_message);
 
     struct aws_byte_cursor message_cur_cpy = *message_cur;
-    int err = 0;
 
     enum aws_mqtt_packet_type packet_type = aws_mqtt_get_packet_type(message_cur_cpy.ptr);
     switch (packet_type) {
         case AWS_MQTT_PACKET_CONNECT: {
             size_t connacks_available = 0;
-            err |= aws_mutex_lock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_lock(&testing_handler->lock));
             AWS_LOGF_DEBUG(
                 MOCK_LOG_SUBJECT,
                 "server, CONNECT received, %llu available connacks.",
                 (long long unsigned)testing_handler->connacks_avail);
             connacks_available = testing_handler->connacks_avail > 0 ? testing_handler->connacks_avail-- : 0;
-            err |= aws_mutex_unlock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_unlock(&testing_handler->lock));
 
             if (connacks_available) {
                 struct aws_io_message *connack_msg = aws_channel_acquire_message_from_pool(
                     testing_handler->slot->channel, AWS_IO_MESSAGE_APPLICATION_DATA, 256);
 
                 struct aws_mqtt_packet_connack conn_ack;
-                err |= aws_mqtt_packet_connack_init(&conn_ack, false, AWS_MQTT_CONNECT_ACCEPTED);
-                err |= aws_mqtt_packet_connack_encode(&connack_msg->message_data, &conn_ack);
-                if (aws_channel_slot_send_message(testing_handler->slot, connack_msg, AWS_CHANNEL_DIR_WRITE)) {
-                    err |= 1;
-                    AWS_LOGF_DEBUG(MOCK_LOG_SUBJECT, "Failed to send connack with error %d", aws_last_error());
-                }
+                ASSERT_SUCCESS(aws_mqtt_packet_connack_init(&conn_ack, false, AWS_MQTT_CONNECT_ACCEPTED));
+                ASSERT_SUCCESS(aws_mqtt_packet_connack_encode(&connack_msg->message_data, &conn_ack));
+                ASSERT_SUCCESS(
+                    aws_channel_slot_send_message(testing_handler->slot, connack_msg, AWS_CHANNEL_DIR_WRITE));
             }
             break;
         }
@@ -62,24 +59,24 @@ static int s_mqtt_mock_server_handler_process_packet(
         case AWS_MQTT_PACKET_DISCONNECT:
             AWS_LOGF_DEBUG(MOCK_LOG_SUBJECT, "server, DISCONNECT received");
 
-            err |= aws_channel_shutdown(testing_handler->slot->channel, AWS_OP_SUCCESS);
+            ASSERT_SUCCESS(aws_channel_shutdown(testing_handler->slot->channel, AWS_OP_SUCCESS));
             break;
 
         case AWS_MQTT_PACKET_PINGREQ: {
             AWS_LOGF_DEBUG(MOCK_LOG_SUBJECT, "server, PINGREQ received");
 
             size_t ping_resp_available = 0;
-            err |= aws_mutex_lock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_lock(&testing_handler->lock));
             ping_resp_available = testing_handler->ping_resp_avail > 0 ? testing_handler->ping_resp_avail-- : 0;
-            err |= aws_mutex_unlock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_unlock(&testing_handler->lock));
 
             if (ping_resp_available) {
                 struct aws_io_message *ping_resp = aws_channel_acquire_message_from_pool(
                     testing_handler->slot->channel, AWS_IO_MESSAGE_APPLICATION_DATA, 256);
                 struct aws_mqtt_packet_connection packet;
-                err |= aws_mqtt_packet_pingresp_init(&packet);
-                err |= aws_mqtt_packet_connection_encode(&ping_resp->message_data, &packet);
-                err |= aws_channel_slot_send_message(testing_handler->slot, ping_resp, AWS_CHANNEL_DIR_WRITE);
+                ASSERT_SUCCESS(aws_mqtt_packet_pingresp_init(&packet));
+                ASSERT_SUCCESS(aws_mqtt_packet_connection_encode(&ping_resp->message_data, &packet));
+                ASSERT_SUCCESS(aws_channel_slot_send_message(testing_handler->slot, ping_resp, AWS_CHANNEL_DIR_WRITE));
             }
             break;
         }
@@ -88,87 +85,82 @@ static int s_mqtt_mock_server_handler_process_packet(
             AWS_LOGF_DEBUG(MOCK_LOG_SUBJECT, "server, SUBSCRIBE received");
 
             struct aws_mqtt_packet_subscribe subscribe_packet;
-            err |= aws_mqtt_packet_subscribe_init(&subscribe_packet, testing_handler->handler.alloc, 0);
-            err |= aws_mqtt_packet_subscribe_decode(message_cur, &subscribe_packet);
+            ASSERT_SUCCESS(aws_mqtt_packet_subscribe_init(&subscribe_packet, testing_handler->handler.alloc, 0));
+            ASSERT_SUCCESS(aws_mqtt_packet_subscribe_decode(message_cur, &subscribe_packet));
 
             struct aws_io_message *suback_msg = aws_channel_acquire_message_from_pool(
                 testing_handler->slot->channel, AWS_IO_MESSAGE_APPLICATION_DATA, 256);
             struct aws_mqtt_packet_ack suback;
-            err |= aws_mqtt_packet_suback_init(&suback, subscribe_packet.packet_identifier);
+            ASSERT_SUCCESS(aws_mqtt_packet_suback_init(&suback, subscribe_packet.packet_identifier));
             aws_mqtt_packet_subscribe_clean_up(&subscribe_packet);
-            err |= aws_mqtt_packet_ack_encode(&suback_msg->message_data, &suback);
-            err |= aws_channel_slot_send_message(testing_handler->slot, suback_msg, AWS_CHANNEL_DIR_WRITE);
+            ASSERT_SUCCESS(aws_mqtt_packet_ack_encode(&suback_msg->message_data, &suback));
+            ASSERT_SUCCESS(aws_channel_slot_send_message(testing_handler->slot, suback_msg, AWS_CHANNEL_DIR_WRITE));
             break;
         }
 
         case AWS_MQTT_PACKET_UNSUBSCRIBE: {
             AWS_LOGF_DEBUG(MOCK_LOG_SUBJECT, "server, UNSUBSCRIBE received");
 
-            err |= aws_mutex_lock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_lock(&testing_handler->lock));
             testing_handler->unsubscribe_received++;
-            err |= aws_mutex_unlock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_unlock(&testing_handler->lock));
 
             struct aws_mqtt_packet_unsubscribe unsubscribe_packet;
-            err |= aws_mqtt_packet_unsubscribe_init(&unsubscribe_packet, testing_handler->handler.alloc, 0);
-            err |= aws_mqtt_packet_unsubscribe_decode(message_cur, &unsubscribe_packet);
+            ASSERT_SUCCESS(aws_mqtt_packet_unsubscribe_init(&unsubscribe_packet, testing_handler->handler.alloc, 0));
+            ASSERT_SUCCESS(aws_mqtt_packet_unsubscribe_decode(message_cur, &unsubscribe_packet));
 
             struct aws_io_message *unsuback_msg = aws_channel_acquire_message_from_pool(
                 testing_handler->slot->channel, AWS_IO_MESSAGE_APPLICATION_DATA, 256);
             struct aws_mqtt_packet_ack unsuback;
-            err |= aws_mqtt_packet_unsuback_init(&unsuback, unsubscribe_packet.packet_identifier);
+            ASSERT_SUCCESS(aws_mqtt_packet_unsuback_init(&unsuback, unsubscribe_packet.packet_identifier));
             aws_mqtt_packet_unsubscribe_clean_up(&unsubscribe_packet);
-            err |= aws_mqtt_packet_ack_encode(&unsuback_msg->message_data, &unsuback);
-            err |= aws_channel_slot_send_message(testing_handler->slot, unsuback_msg, AWS_CHANNEL_DIR_WRITE);
+            ASSERT_SUCCESS(aws_mqtt_packet_ack_encode(&unsuback_msg->message_data, &unsuback));
+            ASSERT_SUCCESS(aws_channel_slot_send_message(testing_handler->slot, unsuback_msg, AWS_CHANNEL_DIR_WRITE));
             break;
         }
 
         case AWS_MQTT_PACKET_PUBLISH: {
             AWS_LOGF_DEBUG(MOCK_LOG_SUBJECT, "server, PUBLISH received");
 
-            err |= aws_mutex_lock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_lock(&testing_handler->lock));
             testing_handler->publishes_received++;
-            err |= aws_mutex_unlock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_unlock(&testing_handler->lock));
 
             struct aws_mqtt_packet_publish publish_packet;
-            err |= aws_mqtt_packet_publish_decode(message_cur, &publish_packet);
+            ASSERT_SUCCESS(aws_mqtt_packet_publish_decode(message_cur, &publish_packet));
 
             struct aws_io_message *puback_msg = aws_channel_acquire_message_from_pool(
                 testing_handler->slot->channel, AWS_IO_MESSAGE_APPLICATION_DATA, 256);
             struct aws_mqtt_packet_ack puback;
-            err |= aws_mqtt_packet_puback_init(&puback, publish_packet.packet_identifier);
-            err |= aws_mqtt_packet_ack_encode(&puback_msg->message_data, &puback);
-            err |= aws_channel_slot_send_message(testing_handler->slot, puback_msg, AWS_CHANNEL_DIR_WRITE);
+            ASSERT_SUCCESS(aws_mqtt_packet_puback_init(&puback, publish_packet.packet_identifier));
+            ASSERT_SUCCESS(aws_mqtt_packet_ack_encode(&puback_msg->message_data, &puback));
+            ASSERT_SUCCESS(aws_channel_slot_send_message(testing_handler->slot, puback_msg, AWS_CHANNEL_DIR_WRITE));
             break;
         }
 
         case AWS_MQTT_PACKET_PUBACK:
             AWS_LOGF_DEBUG(MOCK_LOG_SUBJECT, "server, PUBACK received");
 
-            err |= aws_mutex_lock(&testing_handler->lock);
+            ASSERT_SUCCESS(aws_mutex_lock(&testing_handler->lock));
             testing_handler->pubacks_received++;
-            err |= aws_mutex_unlock(&testing_handler->lock);
-            err |= aws_condition_variable_notify_one(&testing_handler->cvar);
+            ASSERT_SUCCESS(aws_mutex_unlock(&testing_handler->lock));
+            ASSERT_SUCCESS(aws_condition_variable_notify_one(&testing_handler->cvar));
             break;
 
         default:
             aws_mutex_lock(&testing_handler->lock);
             if (aws_array_list_length(&testing_handler->response_messages)) {
                 struct aws_byte_buf response_message;
-                err |= aws_array_list_front(&testing_handler->response_messages, &response_message);
-                err |= aws_array_list_pop_front(&testing_handler->response_messages);
+                ASSERT_SUCCESS(aws_array_list_front(&testing_handler->response_messages, &response_message));
+                ASSERT_SUCCESS(aws_array_list_pop_front(&testing_handler->response_messages));
 
                 struct aws_io_message *reply = aws_channel_acquire_message_from_pool(
                     testing_handler->slot->channel, AWS_IO_MESSAGE_APPLICATION_DATA, response_message.len);
-                err |= !aws_byte_buf_write_from_whole_buffer(&reply->message_data, response_message);
-                err |= aws_channel_slot_send_message(testing_handler->slot, reply, AWS_CHANNEL_DIR_WRITE);
+                ASSERT_SUCCESS(!aws_byte_buf_write_from_whole_buffer(&reply->message_data, response_message));
+                ASSERT_SUCCESS(aws_channel_slot_send_message(testing_handler->slot, reply, AWS_CHANNEL_DIR_WRITE));
             }
             aws_mutex_unlock(&testing_handler->lock);
             break;
-    }
-    if (err) {
-        AWS_LOGF_DEBUG(MOCK_LOG_SUBJECT, "server, process packet failed, the package type is %d", packet_type);
-        /* crash */
-        AWS_FATAL_ASSERT(!err);
     }
     return AWS_OP_SUCCESS;
 }
