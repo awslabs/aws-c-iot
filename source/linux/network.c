@@ -40,7 +40,7 @@ struct aws_iotdevice_network_iface {
     struct aws_iotdevice_metric_network_transfer metrics;
 };
 
-static void s_aws_hash_callback_iotdevice_network_iface_destroy(void *iface) {
+static void s_network_iface_destroy(void *iface) {
     struct aws_iotdevice_network_iface *ptr = iface;
     if (ptr->allocator != NULL) {
         aws_mem_release(ptr->allocator, ptr);
@@ -351,7 +351,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
             aws_hash_c_string,
             aws_hash_callback_c_str_eq,
             NULL,
-            s_aws_hash_callback_iotdevice_network_iface_destroy)) {
+            s_network_iface_destroy)) {
         return AWS_OP_ERR;
     }
     int result = AWS_OP_ERR;

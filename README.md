@@ -8,7 +8,7 @@ C99 implementation of AWS IoT cloud services integration with devices
 * aws-c-compression: Cross-platform implementation of compression algorithms.
 * aws-c-io: Cross-platform event-loops, non-blocking I/O, and TLS implementations.
 * aws-c-mqtt: MQTT client.
-* aws-c-http: HTTP 1.1 client, and websockets (H2 coming soon).
+* aws-c-http: HTTP clients.
 
 ## Building
 

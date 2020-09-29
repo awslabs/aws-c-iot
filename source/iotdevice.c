@@ -34,7 +34,7 @@ static struct aws_error_info s_errors[] = {
         "Unknown format value selected for defender reporting task"),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE,
-        "Problem serializing report for publishing"),
+        "Error serializing report for publishing"),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE
