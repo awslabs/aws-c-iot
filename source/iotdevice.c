@@ -32,6 +32,9 @@ static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT,
         "Unknown format value selected for defender reporting task"),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE,
+        "Error serializing report for publishing"),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE
@@ -76,11 +79,14 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator) {
 }
 
 /**
- * Shuts down the internal datastructures used by aws-c-iot
+ * Shuts down the internal data structures used by aws-c-iot
  */
 void aws_iotdevice_library_clean_up(void) {
     if (s_iotdevice_library_initialized) {
         s_library_allocator = NULL;
+
+        aws_unregister_error_info(&s_error_list);
+        aws_unregister_log_subject_info_list(&s_logging_subjects_list);
 
         s_iotdevice_library_initialized = false;
     }

@@ -23,10 +23,10 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
     return AWS_ERROR_UNIMPLEMENTED;
 }
 
-int get_net_connections(
+int get_network_connections(
     struct aws_array_list *net_conns,
-    struct aws_allocator *allocator,
-    const struct aws_iotdevice_network_ifconfig *ifconfig) {
+    struct aws_iotdevice_network_ifconfig *ifconfig,
+    struct aws_allocator *allocator) {
     (void)net_conns;
     (void)ifconfig;
     (void)allocator;
