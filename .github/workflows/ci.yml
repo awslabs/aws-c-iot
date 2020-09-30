@@ -59,8 +59,9 @@ jobs:
     #     sudo make install
     #     sudo ldconfig
     - uses: actions/checkout@master
-    - name: Test
+    - name: ls
       run: ls ./.github
+    - name: run test
       run: ./pb-test.sh
 
   al2:
