@@ -60,9 +60,8 @@ jobs:
     #     sudo ldconfig
     - uses: actions/checkout@master
     - name: Test
-      uses: skx/github-action-tester@master
-      with:
-        script: .github/pb-tests.sh
+      run: ls ./.github
+      run: ./pb-test.sh
 
   al2:
     runs-on: ubuntu-latest
