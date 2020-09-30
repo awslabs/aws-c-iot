@@ -35,34 +35,33 @@ jobs:
   pbtest:
     runs-on: ubuntu-latest
     steps:
-    # - uses: actions/checkout@v2
-    # - name: Cache protobuf library
-    #   id: cache-protobuf
-    #   uses: actions/cache@v1
-    #   with:
-    #     path: protobuf
-    #     key: ${{ runner.os }}-protobuf
-    # - name: Build protobuf library
-    #   if: steps.cache-protobuf.outputs.cache-hit != 'true'
-    #   run: |
-    #     git clone https://github.com/protocolbuffers/protobuf.git
-    #     cd protobuf
-    #     git submodule update --init --recursive
-    #     ./autogen.sh
-    #     ./autogen.sh
-    #     ./configure
-    #     make
-    #     make check
-    # - name: Install protobuf library
-    #   run: |
-    #     cd protobuf
-    #     sudo make install
-    #     sudo ldconfig
-    - uses: actions/checkout@master
-    - name: ls
-      run: ls ./.github
+    - name: Cache protobuf library
+      id: cache-protobuf
+      uses: actions/cache@v1
+      with:
+        path: protobuf
+        key: ${{ runner.os }}-protobuf
+    - name: Build protobuf library
+      if: steps.cache-protobuf.outputs.cache-hit != 'true'
+      run: |
+        git clone https://github.com/protocolbuffers/protobuf.git
+        cd protobuf
+        git submodule update --init --recursive
+        ./autogen.sh
+        ./autogen.sh
+        ./configure
+        make
+        make check
+    - name: Install protobuf library
+      run: |
+        cd protobuf
+        sudo make install
+        sudo ldconfig
+    - uses: actions/checkout@v2
+      with:
+          submodules: 'recursive'
     - name: run test
-      run: chmod +x ./.github/pb-test.sh && ./.github/pb-test.sh
+      run: cd ./.github && chmod +x ./pb-test.sh && ./pb-test.sh
 
   al2:
     runs-on: ubuntu-latest

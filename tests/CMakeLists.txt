@@ -8,7 +8,6 @@ file(GLOB TESTS ${TEST_HDRS} ${TEST_SRC})
 
 add_test_case(devicedefender_task_unsupported_report_format)
 add_test_case(devicedefender_task_success)
-add_test_case(pbtest)
 
 generate_test_driver(${PROJECT_NAME}-tests)
 
