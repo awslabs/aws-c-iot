@@ -62,7 +62,7 @@ jobs:
     - name: ls
       run: ls ./.github
     - name: run test
-      run: ./.github/pb-test.sh
+      run: chmod +x ./.github/pb-test.sh && ./.github/pb-test.sh
 
   al2:
     runs-on: ubuntu-latest
