@@ -7,7 +7,11 @@ set(TEST_SRC metrics_tests.c mqtt_mock_server_handler.c)
 file(GLOB TESTS ${TEST_HDRS} ${TEST_SRC})
 
 add_test_case(devicedefender_task_unsupported_report_format)
-add_test_case(devicedefender_task_success)
+
+# Network metrics are only implemented for Linux so far
+if (UNIX AND NOT APPLE)
+    add_test_case(devicedefender_task_success)
+endif()
 
 generate_test_driver(${PROJECT_NAME}-tests)
 
