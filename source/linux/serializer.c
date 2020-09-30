@@ -159,6 +159,9 @@ int aws_iot_st_msg_deserialize_from_cursor(
     uint8_t wire_type;
     uint8_t field_number;
     int length;
+    message->ignorable = 0;
+    message->streamId = 0;
+    message->type = 0;
     while ((aws_byte_cursor_is_valid(cursor)) && (cursor->len > 0)) {
         // wire_type is only the first 3 bits, Zeroing out the first 5
         // 0x07 == 00000111
