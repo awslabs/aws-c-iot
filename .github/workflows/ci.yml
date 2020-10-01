@@ -44,7 +44,7 @@ jobs:
     - name: Build protobuf library
       if: steps.cache-protobuf.outputs.cache-hit != 'true'
       run: |
-        git clone https://github.com/protocolbuffers/protobuf.git
+        git clone https://github.com/protocolbuffers/protobuf.git --branch 3.6.x
         cd protobuf
         git submodule update --init --recursive
         ./autogen.sh
@@ -60,7 +60,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
           submodules: 'recursive'
-    - name: run test
+    - name: Run build and pbuf test
       run: cd ./.github && chmod +x ./pb-test.sh && ./pb-test.sh
 
   al2:

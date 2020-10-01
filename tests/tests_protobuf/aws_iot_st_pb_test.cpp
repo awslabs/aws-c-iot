@@ -128,9 +128,9 @@ int protobuf_message_test_case_six() {
   int32_t streamid = 1;
   int ignorable = 1;
   std::string payload = "";
-  for (size_t i = 0; i < 100; i++)
+  for (size_t i = 0; i < 10000; i++)
   {
-    payload += "xyz !";
+    payload += "xyz1!";
   }
 
   return execTest(type, streamid, ignorable, payload);
