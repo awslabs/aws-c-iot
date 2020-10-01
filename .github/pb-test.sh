@@ -1,10 +1,44 @@
 #!/bin/sh
 export PROTOBUF_TEST=TRUE
-cd .. 
+cd ..
 mkdir build
 cd build
 cmake -DBUILD_DEPS=ON ../
 make
-./tests/protobuf-test/aws-c-iot-st-pb-test 5 || exit 1
-
-exit 0
+./tests/tests_protobuf/aws-c-iot-st-pb-test 1
+var=$?
+./tests/tests_protobuf/aws-c-iot-st-pb-test 2
+if [ $? != 0 ]
+then
+    var=$?
+    echo "$var"
+fi
+./tests/tests_protobuf/aws-c-iot-st-pb-test 3
+if [ $? != 0 ]
+then
+    var=$?
+    echo "$var"
+fi
+./tests/tests_protobuf/aws-c-iot-st-pb-test 4
+if [ $? != 0 ]
+then
+    var=$?
+    echo "$var"
+fi
+./tests/tests_protobuf/aws-c-iot-st-pb-test 5
+if [ $? != 0 ]
+then
+    var=$?
+    echo "$var"
+fi
+./tests/tests_protobuf/aws-c-iot-st-pb-test 6
+if [ $? != 0 ]
+then
+    var=$?
+    echo "$var"
+fi
+if [ "$var" != 0 ]
+then
+    exit 1
+fi
+exit 1
