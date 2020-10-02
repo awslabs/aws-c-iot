@@ -2,15 +2,17 @@ include(CTest)
 include(AwsTestHarness)
 enable_testing()
 
-file(GLOB TEST_HDRS "mqtt_mock_server_handler.h")
-set(TEST_SRC metrics_tests.c mqtt_mock_server_handler.c)
+file(GLOB TEST_HDRS "mqtt_mock_structs.h")
+set(TEST_SRC metrics_tests.c)
 file(GLOB TESTS ${TEST_HDRS} ${TEST_SRC})
 
 add_test_case(devicedefender_task_unsupported_report_format)
 
 # Network metrics are only implemented for Linux so far
 if (UNIX AND NOT APPLE)
-    add_test_case(devicedefender_task_success)
+    add_test_case(devicedefender_get_system_network_total)
+    add_test_case(devicedefender_get_network_connections)
+    add_test_case(devicedefender_success_test)
 endif()
 
 generate_test_driver(${PROJECT_NAME}-tests)
