@@ -138,9 +138,6 @@ static int s_devicedefender_get_network_connections(struct aws_allocator *alloca
     aws_array_list_init_dynamic(&net_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
     ASSERT_SUCCESS(get_network_connections(&net_conns, &ifconfig, allocator));
 
-    size_t entries = aws_hash_table_get_entry_count(&ifconfig.iface_name_to_info);
-    ASSERT_TRUE(entries <= net_conns.length);
-
     for (size_t i = 0; i < net_conns.length; ++i) {
         struct aws_iotdevice_metric_net_connection *con = NULL;
         if (aws_array_list_get_at_ptr(&net_conns, (void **)&con, i)) {
@@ -249,8 +246,9 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_condition_variable_wait_for(&test, &lock, 1000000000UL);
 
     int count = 1;
-    struct aws_string *publish_topic;
+    struct aws_string *publish_topic = NULL;
     struct aws_byte_cursor payload;
+    AWS_ZERO_STRUCT(payload);
     aws_mutex_lock(&state_test_data->mqtt_connection->synced_data.lock);
     for (struct aws_linked_list_node *iter =
              aws_linked_list_begin(&state_test_data->mqtt_connection->synced_data.pending_requests_list);
