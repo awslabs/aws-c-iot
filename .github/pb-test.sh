@@ -11,31 +11,26 @@ var=$?
 if [ $? != 0 ]
 then
     var=$?
-    echo "$var"
 fi
 ./tests/tests_protobuf/aws-c-iot-st-pb-test 3
 if [ $? != 0 ]
 then
     var=$?
-    echo "$var"
 fi
 ./tests/tests_protobuf/aws-c-iot-st-pb-test 4
 if [ $? != 0 ]
 then
     var=$?
-    echo "$var"
 fi
 ./tests/tests_protobuf/aws-c-iot-st-pb-test 5
 if [ $? != 0 ]
 then
     var=$?
-    echo "$var"
 fi
 ./tests/tests_protobuf/aws-c-iot-st-pb-test 6
 if [ $? != 0 ]
 then
     var=$?
-    echo "$var"
 fi
 if [ "$var" != 0 ]
 then
