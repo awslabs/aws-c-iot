@@ -1,4 +1,6 @@
 #!/bin/sh
+
+# Flag For Building C++
 export PROTOBUF_TEST=TRUE
 cd ..
 mkdir build
