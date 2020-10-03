@@ -258,14 +258,11 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
         struct aws_mqtt_outstanding_request *request =
             AWS_CONTAINER_OF(iter, struct aws_mqtt_outstanding_request, list_node);
 
+        struct subscribe_task_topic *topic = NULL;
         // Subscribe packets
         if (count < 3) {
             struct subscribe_task_arg sub = *(struct subscribe_task_arg *)request->send_request_ud;
-            struct subscribe_task_topic *topic = NULL;
             aws_array_list_get_at(&sub.topics, &topic, 0);
-            // TODO: Seems these may be leaked in aws-c-mqtt
-            aws_string_destroy(topic->filter);
-            aws_mem_release(request->allocator, topic);
         }
 
         // The third packet is the report publish
@@ -275,10 +272,16 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
             payload = aws_byte_cursor_from_c_str((const char *)pub.payload.ptr);
         }
 
-        // Since there's no connection, complete the requests for cleanup
+        // Since there's no real connection, complete the requests for cleanup
         request->on_complete(
             request->connection, request->packet_id, AWS_ERROR_MQTT_CONNECTION_DESTROYED, request->on_complete_ud);
         request->completed = true;
+
+        if (topic != NULL) {
+            // TODO: Seems these may be leaked in aws-c-mqtt
+            aws_string_destroy(topic->filter);
+            aws_mem_release(request->allocator, topic);
+        }
 
         count++;
     }
