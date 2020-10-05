@@ -9,6 +9,6 @@ run git clone --recursive https://github.com/protocolbuffers/protobuf.git --bran
 run cd protobuf && make install && ldconfig
 WORKDIR /home
 
-ADD entry_script.sh /home/builder
-RUN chmod a+x /home/builder
-ENTRYPOINT ["/home/builder"]
+ADD entry_script.sh /home/protobuf_test
+RUN chmod a+x /home/protobuf_test
+ENTRYPOINT ["/home/protobuf_test"]

@@ -1,39 +1,20 @@
-#!/bin/sh
-
-# Flag For Building C++
+#!/bin/bash
+# Flag For Building C++ pbuf binary
 export PROTOBUF_TEST=TRUE
 cd ..
 mkdir build
 cd build
 cmake -DBUILD_DEPS=ON ../
 make
-./tests/tests_protobuf/aws-c-iot-st-pb-test 1
-var=$?
-./tests/tests_protobuf/aws-c-iot-st-pb-test 2
-if [ $? != 0 ]
-then
+var=0
+for i in {1..6}
+do
+  ./tests/tests_protobuf/aws-c-iot-st-pb-test $i
+  if [ $? != 0 ]
+  then
     var=$?
-fi
-./tests/tests_protobuf/aws-c-iot-st-pb-test 3
-if [ $? != 0 ]
-then
-    var=$?
-fi
-./tests/tests_protobuf/aws-c-iot-st-pb-test 4
-if [ $? != 0 ]
-then
-    var=$?
-fi
-./tests/tests_protobuf/aws-c-iot-st-pb-test 5
-if [ $? != 0 ]
-then
-    var=$?
-fi
-./tests/tests_protobuf/aws-c-iot-st-pb-test 6
-if [ $? != 0 ]
-then
-    var=$?
-fi
+  fi
+done
 if [ "$var" != 0 ]
 then
     exit 1

@@ -143,71 +143,34 @@ int protobuf_message_test_case_six() {
     return execute_tests(type, streamid, ignorable, payload);
 }
 
+static std::vector<int (*)()> test_cases= {
+        protobuf_message_test_case_one,
+        protobuf_message_test_case_two,
+        protobuf_message_test_case_three,
+        protobuf_message_test_case_four,
+        protobuf_message_test_case_five,
+        protobuf_message_test_case_six,
+    };
+
 int main(int argc, char *argv[]) {
-    char i = 0;
+    int i = 0;
     if (argc > 1) {
-        i = *argv[1];
+        i = std::stoi(std::string(argv[1]));
     } else {
         return AWS_OP_ERR;
     }
+
+    if (i < 1 || i > test_cases.size()) {
+        std::cout << "protobuf_message_test_case " << i << " NOT_FOUND" << std::endl;
+        return AWS_OP_ERR;
+    }
     GOOGLE_PROTOBUF_VERIFY_VERSION;
-    switch (i) {
-        case '1':
-            if (protobuf_message_test_case_one()) {
-                std::cout << "protobuf_message_test_case_one FAILED" << std::endl;
-                return AWS_OP_ERR;
-            }
-            else {
-                std::cout << "protobuf_message_test_case_one PASS" << std::endl;
-            }
-            break;
-        case '2':
-            if (protobuf_message_test_case_two()) {
-                std::cout << "protobuf_message_test_case_two FAILED" << std::endl;
-                return AWS_OP_ERR;
-            }
-            else {
-                std::cout << "protobuf_message_test_case_two PASS" << std::endl;
-            }
-            break;
-        case '3':
-            if (protobuf_message_test_case_three()) {
-                std::cout << "protobuf_message_test_case_three FAILED" << std::endl;
-                return AWS_OP_ERR;
-            }
-            else {
-                std::cout << "protobuf_message_test_case_three PASS" << std::endl;
-            }
-            break;
-        case '4':
-            if (protobuf_message_test_case_four()) {
-                std::cout << "protobuf_message_test_case_four FAILED" << std::endl;
-                return AWS_OP_ERR;
-            }
-            else {
-                std::cout << "protobuf_message_test_case_four PASS" << std::endl;
-            }
-            break;
-        case '5':
-            if (protobuf_message_test_case_five()) {
-                std::cout << "protobuf_message_test_case_five FAILED" << std::endl;
-                return AWS_OP_ERR;
-            }
-            else {
-                std::cout << "protobuf_message_test_case_five PASS" << std::endl;
-            }
-            break;
-        case '6':
-            if (protobuf_message_test_case_six()) {
-                std::cout << "protobuf_message_test_case_six FAILED" << std::endl;
-                return AWS_OP_ERR;
-            }
-            else {
-                std::cout << "protobuf_message_test_case_six PASS" << std::endl;
-            }
-            break;
-        default:
-            return AWS_OP_ERR;
+    if (test_cases[i-1]()) {
+        std::cout << "protobuf_message_test_case FAIL" << std::endl;
+        return AWS_OP_ERR;
+    }
+    else {
+        std::cout << "protobuf_message_test_case PASS" << std::endl;
     }
     google::protobuf::ShutdownProtobufLibrary();
     return AWS_OP_SUCCESS;
