@@ -6,16 +6,17 @@ mkdir build
 cd build
 cmake -DBUILD_DEPS=ON ../
 make
-var=0
+failed=0
+set -e
 for i in {1..6}
 do
   ./tests/tests_protobuf/aws-c-iot-st-pb-test $i
   if [ $? != 0 ]
   then
-    var=$?
+    failed=$?
   fi
 done
-if [ "$var" != 0 ]
+if [ "$failed" != 0 ]
 then
     exit 1
 fi
