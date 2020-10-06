@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-project(aws-c-iot C)
+project(aws-c-iot)
 option(BUILD_IOT_DEPS "Builds aws common runtime dependencies as part of build, only do this if you don't want to control your dependency chain." OFF)
 
 if (POLICY CMP0069)
