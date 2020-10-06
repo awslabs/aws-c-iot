@@ -72,34 +72,6 @@ struct aws_mqtt_packet_subscribe {
     struct aws_array_list topic_filters;
 };
 
-struct subscribe_task_topic {
-    struct aws_mqtt_client_connection *connection;
-
-    struct aws_mqtt_topic_subscription request;
-    struct aws_string *filter;
-    bool is_local;
-};
-
-struct subscribe_task_arg {
-
-    struct aws_mqtt_client_connection *connection;
-
-    /* list of subscribe_task_topic *s */
-    struct aws_array_list topics;
-
-    /* Packet to populate */
-    struct aws_mqtt_packet_subscribe subscribe;
-
-    /* true if transaction was committed to the topic tree, false requires a retry */
-    bool tree_updated;
-
-    struct {
-        aws_mqtt_suback_multi_fn *multi;
-        aws_mqtt_suback_fn *single;
-    } on_suback;
-    void *on_suback_ud;
-};
-
 typedef enum aws_mqtt_client_request_state(
     aws_mqtt_send_request_fn)(uint16_t packet_id, bool is_first_attempt, void *userdata);
 
