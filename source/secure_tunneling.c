@@ -8,16 +8,6 @@
 /* TODO: Remove me */
 #define UNUSED(x) (void)(x)
 
-/* Only one active secure tunnel is supported */
-static int32_t s_active_stream_id = -1;
-static struct aws_websocket *s_active_websocket = NULL;
-
-struct aws_secure_tunneling_connection_ctx {
-    struct aws_allocator *allocator;
-    struct aws_http_message *handshake_request;
-    aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
-};
-
 static void s_on_websocket_setup(
     struct aws_websocket *websocket,
     int error_code,
@@ -36,14 +26,13 @@ static void s_on_websocket_setup(
      * https://github.com/aws-samples/aws-iot-securetunneling-localproxy/blob/master/WebsocketProtocolGuide.md#handshake-error-responses
      */
 
-    const struct aws_secure_tunneling_connection_ctx *connection_ctx = user_data;
-    aws_http_message_release(connection_ctx->handshake_request);
+    struct aws_secure_tunnel *secure_tunnel = user_data;
+    aws_http_message_release(secure_tunnel->handshake_request);
+    secure_tunnel->handshake_request = NULL;
 
-    s_active_stream_id++;
-    s_active_websocket = websocket;
-    connection_ctx->on_connection_complete(s_active_stream_id);
-
-    aws_mem_release(connection_ctx->allocator, (void *)connection_ctx);
+    secure_tunnel->stream_id++;
+    secure_tunnel->websocket = websocket;
+    secure_tunnel->config.on_connection_complete(secure_tunnel);
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
@@ -55,23 +44,22 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
 static const char *s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy_mode local_proxy_mode) {
     if (local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
         return "source";
-    } else {
-        return "destination";
     }
+
+    return "destination";
 }
 
-static struct aws_http_message *s_new_handshake_request(
-    const struct aws_secure_tunneling_connection_config *connection_config) {
+static struct aws_http_message *s_new_handshake_request(const struct aws_secure_tunnel *secure_tunnel) {
     struct aws_byte_buf path;
-    aws_byte_buf_init(&path, connection_config->allocator, 50);
+    aws_byte_buf_init(&path, secure_tunnel->config.allocator, 50);
     snprintf(
         (char *)path.buffer,
         path.capacity,
         "/tunnel?local-proxy-mode=%s",
-        s_get_proxy_mode_string(connection_config->local_proxy_mode));
+        s_get_proxy_mode_string(secure_tunnel->config.local_proxy_mode));
 
     struct aws_http_message *handshake_request = aws_http_message_new_websocket_handshake_request(
-        connection_config->allocator, aws_byte_cursor_from_buf(&path), connection_config->endpoint_host);
+        secure_tunnel->config.allocator, aws_byte_cursor_from_buf(&path), secure_tunnel->config.endpoint_host);
 
     aws_byte_buf_clean_up(&path);
 
@@ -82,7 +70,7 @@ static struct aws_http_message *s_new_handshake_request(
         },
         {
             .name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("access-token"),
-            .value = connection_config->access_token,
+            .value = secure_tunnel->config.access_token,
         },
     };
     for (size_t i = 0; i < AWS_ARRAY_SIZE(extra_headers); ++i) {
@@ -93,34 +81,36 @@ static struct aws_http_message *s_new_handshake_request(
 }
 
 static void s_init_websocket_client_connection_options(
-    const struct aws_secure_tunneling_connection_config *connection_config,
+    struct aws_secure_tunnel *secure_tunnel,
     struct aws_websocket_client_connection_options *websocket_options) {
 
-    websocket_options->allocator = connection_config->allocator;
-    websocket_options->bootstrap = connection_config->bootstrap;
-    websocket_options->socket_options = connection_config->socket_options;
-    websocket_options->host = connection_config->endpoint_host;
-    websocket_options->handshake_request = s_new_handshake_request(connection_config);
+    websocket_options->allocator = secure_tunnel->config.allocator;
+    websocket_options->bootstrap = secure_tunnel->config.bootstrap;
+    websocket_options->socket_options = secure_tunnel->config.socket_options;
+    websocket_options->host = secure_tunnel->config.endpoint_host;
+    websocket_options->handshake_request = s_new_handshake_request(secure_tunnel);
     websocket_options->initial_window_size = MAX_WEBSOCKET_PAYLOAD; /* TODO: followup */
-
-    struct aws_secure_tunneling_connection_ctx *connection_ctx =
-        aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunneling_connection_ctx));
-    connection_ctx->allocator = connection_config->allocator;
-    connection_ctx->handshake_request = websocket_options->handshake_request;
-    connection_ctx->on_connection_complete = connection_config->on_connection_complete;
-    websocket_options->user_data = connection_ctx;
-
+    websocket_options->user_data = secure_tunnel;
     websocket_options->on_connection_setup = s_on_websocket_setup;
     websocket_options->on_connection_shutdown = s_on_websocket_shutdown;
     // websocket_options->on_incoming_frame_begin
     // websocket_options->on_incoming_frame_payload
     // websocket_options->on_incoming_frame_complete
     websocket_options->manual_window_management = false;
+
+    /* TODO: Do I need to set the optional fields? */
+
+    /* Save handshake_request to release it later */
+    secure_tunnel->handshake_request = websocket_options->handshake_request;
 }
 
-int aws_secure_tunneling_connect(const struct aws_secure_tunneling_connection_config *connection_config) {
+static int s_secure_tunneling_connect(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id != -1) {
+        return AWS_OP_ERR;
+    }
+
     struct aws_websocket_client_connection_options websocket_options;
-    s_init_websocket_client_connection_options(connection_config, &websocket_options);
+    s_init_websocket_client_connection_options(secure_tunnel, &websocket_options);
     if (aws_websocket_client_connect(&websocket_options)) {
         return AWS_OP_ERR;
     }
@@ -128,17 +118,52 @@ int aws_secure_tunneling_connect(const struct aws_secure_tunneling_connection_co
     return AWS_OP_SUCCESS;
 }
 
-static bool s_is_active_stream(int32_t stream_id) {
-    return stream_id == s_active_stream_id;
-}
-
-int aws_secure_tunneling_close(int32_t stream_id) {
-    if (s_is_active_stream(stream_id)) {
+static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id == -1) {
         return AWS_OP_ERR;
     }
 
-    s_active_stream_id = -1;
-    aws_websocket_release(s_active_websocket);
-    s_active_websocket = NULL;
+    secure_tunnel->stream_id = -1;
+    aws_websocket_release(secure_tunnel->websocket);
+    secure_tunnel->websocket = NULL;
     return AWS_OP_SUCCESS;
+}
+
+static void s_copy_secure_tunneling_connection_config(
+    const struct aws_secure_tunneling_connection_config *src,
+    struct aws_secure_tunneling_connection_config *dest) {
+    dest->allocator = src->allocator;
+    dest->bootstrap = src->bootstrap;
+    dest->socket_options = src->socket_options;
+    dest->access_token = src->access_token; /* TODO: followup */
+    dest->local_proxy_mode = src->local_proxy_mode;
+    dest->endpoint_host = src->endpoint_host; /* TODO: followup */
+    dest->on_connection_complete = src->on_connection_complete;
+    dest->on_data_receive = src->on_data_receive;
+    dest->on_stream_start = src->on_stream_start;
+    dest->on_stream_reset = src->on_stream_reset;
+    dest->on_close = src->on_close;
+}
+
+struct aws_secure_tunnel *aws_secure_tunnel_new(
+    const struct aws_secure_tunneling_connection_config *connection_config) {
+    struct aws_secure_tunnel *secure_tunnel =
+        aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunnel));
+
+    s_copy_secure_tunneling_connection_config(connection_config, &secure_tunnel->config);
+
+    /* Setup vtable here */
+    secure_tunnel->vtable.connect = s_secure_tunneling_connect;
+    secure_tunnel->vtable.close = s_secure_tunneling_close;
+
+    secure_tunnel->handshake_request = NULL;
+    secure_tunnel->stream_id = -1;
+    secure_tunnel->websocket = NULL;
+
+    return secure_tunnel;
+}
+
+void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
+    secure_tunnel->vtable.close(secure_tunnel);
+    aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
 }
