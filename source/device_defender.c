@@ -453,12 +453,13 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         aws_byte_buf_clean_up(&defender_task->report_topic_name);
         aws_byte_buf_clean_up(&defender_task->report_accepted_topic_name);
         aws_byte_buf_clean_up(&defender_task->report_rejected_topic_name);
-        aws_mem_release(allocator, defender_task);
 
         /* totally fine if this function ptr is NULL */
         if (defender_task->config.task_canceled_fn != NULL) {
             defender_task->config.task_canceled_fn(cancel_userdata);
         }
+
+        aws_mem_release(allocator, defender_task);
     } else {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,

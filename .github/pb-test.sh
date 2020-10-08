@@ -4,7 +4,7 @@ export PROTOBUF_TEST=TRUE
 cd ..
 mkdir build
 cd build
-cmake -DBUILD_DEPS=ON ../
+cmake -DBUILD_IOT_DEPS=ON ../
 make
 failed=0
 set -e
