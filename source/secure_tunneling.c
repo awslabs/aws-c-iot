@@ -1,7 +1,7 @@
-#include <aws/iotdevice/secure_tunneling.h>
-
 #include <aws/http/request_response.h>
 #include <aws/http/websocket.h>
+#include <aws/io/tls_channel_handler.h>
+#include <aws/iotdevice/secure_tunneling.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076
 
@@ -50,18 +50,12 @@ static const char *s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy
 }
 
 static struct aws_http_message *s_new_handshake_request(const struct aws_secure_tunnel *secure_tunnel) {
-    struct aws_byte_buf path;
-    aws_byte_buf_init(&path, secure_tunnel->config.allocator, 50);
+    const size_t size = 50;
+    char path[size];
     snprintf(
-        (char *)path.buffer,
-        path.capacity,
-        "/tunnel?local-proxy-mode=%s",
-        s_get_proxy_mode_string(secure_tunnel->config.local_proxy_mode));
-
+        path, size, "/tunnel?local-proxy-mode=%s", s_get_proxy_mode_string(secure_tunnel->config.local_proxy_mode));
     struct aws_http_message *handshake_request = aws_http_message_new_websocket_handshake_request(
-        secure_tunnel->config.allocator, aws_byte_cursor_from_buf(&path), secure_tunnel->config.endpoint_host);
-
-    aws_byte_buf_clean_up(&path);
+        secure_tunnel->config.allocator, aws_byte_cursor_from_c_str(path), secure_tunnel->config.endpoint_host);
 
     struct aws_http_header extra_headers[] = {
         {
@@ -88,6 +82,7 @@ static void s_init_websocket_client_connection_options(
     websocket_options->allocator = secure_tunnel->config.allocator;
     websocket_options->bootstrap = secure_tunnel->config.bootstrap;
     websocket_options->socket_options = secure_tunnel->config.socket_options;
+    websocket_options->tls_options = &secure_tunnel->tls_con_opt;
     websocket_options->host = secure_tunnel->config.endpoint_host;
     websocket_options->handshake_request = s_new_handshake_request(secure_tunnel);
     websocket_options->initial_window_size = MAX_WEBSOCKET_PAYLOAD; /* TODO: followup */
@@ -146,11 +141,20 @@ static void s_copy_secure_tunneling_connection_config(
 
 struct aws_secure_tunnel *aws_secure_tunnel_new(
     const struct aws_secure_tunneling_connection_config *connection_config) {
+
     struct aws_secure_tunnel *secure_tunnel =
         aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunnel));
     AWS_ZERO_STRUCT(*secure_tunnel);
 
     s_copy_secure_tunneling_connection_config(connection_config, &secure_tunnel->config);
+
+    // tls
+    struct aws_tls_ctx_options tls_ctx_opt;
+    aws_tls_ctx_options_init_default_client(&tls_ctx_opt, connection_config->allocator);
+    aws_tls_ctx_options_set_verify_peer(&tls_ctx_opt, false); /* TODO: remove me! */
+    secure_tunnel->tls_ctx = aws_tls_client_ctx_new(connection_config->allocator, &tls_ctx_opt);
+    aws_tls_ctx_options_clean_up(&tls_ctx_opt);
+    aws_tls_connection_options_init_from_ctx(&secure_tunnel->tls_con_opt, secure_tunnel->tls_ctx);
 
     /* Setup vtable here */
     secure_tunnel->vtable.connect = s_secure_tunneling_connect;
@@ -165,5 +169,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
     secure_tunnel->vtable.close(secure_tunnel);
+    aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
+    aws_tls_ctx_release(secure_tunnel->tls_ctx);
     aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
 }

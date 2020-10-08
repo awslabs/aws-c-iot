@@ -2,6 +2,7 @@
 #define AWS_IOTDEVICE_SECURE_TUNNELING_H
 
 #include <aws/common/byte_buf.h>
+#include <aws/io/tls_channel_handler.h>
 
 /* TODO: Add to exports.h */
 #define AWS_SECURE_TUNNELING_API
@@ -54,6 +55,8 @@ struct aws_secure_tunneling_connection_config {
 struct aws_secure_tunnel {
     /* Static settings */
     struct aws_secure_tunneling_connection_config config;
+    struct aws_tls_ctx *tls_ctx;
+    struct aws_tls_connection_options tls_con_opt;
     struct aws_secure_tunnel_vtable vtable;
 
     /* Used only during initial websocket setup. Otherwise, should be NULL */
