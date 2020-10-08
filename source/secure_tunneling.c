@@ -84,6 +84,7 @@ static void s_init_websocket_client_connection_options(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_websocket_client_connection_options *websocket_options) {
 
+    AWS_ZERO_STRUCT(*websocket_options);
     websocket_options->allocator = secure_tunnel->config.allocator;
     websocket_options->bootstrap = secure_tunnel->config.bootstrap;
     websocket_options->socket_options = secure_tunnel->config.socket_options;
@@ -97,8 +98,6 @@ static void s_init_websocket_client_connection_options(
     // websocket_options->on_incoming_frame_payload
     // websocket_options->on_incoming_frame_complete
     websocket_options->manual_window_management = false;
-
-    /* TODO: Do I need to set the optional fields? */
 
     /* Save handshake_request to release it later */
     secure_tunnel->handshake_request = websocket_options->handshake_request;
@@ -149,6 +148,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     const struct aws_secure_tunneling_connection_config *connection_config) {
     struct aws_secure_tunnel *secure_tunnel =
         aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunnel));
+    AWS_ZERO_STRUCT(*secure_tunnel);
 
     s_copy_secure_tunneling_connection_config(connection_config, &secure_tunnel->config);
 
