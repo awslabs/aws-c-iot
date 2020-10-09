@@ -121,6 +121,7 @@ static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
     }
 
     secure_tunnel->stream_id = -1;
+    aws_websocket_close(secure_tunnel->websocket, false);
     aws_websocket_release(secure_tunnel->websocket);
     secure_tunnel->websocket = NULL;
     return AWS_OP_SUCCESS;
