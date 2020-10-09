@@ -95,6 +95,9 @@ int main(int argc, char **argv) {
     aws_mutex_unlock(&mutex);
 
     /* clean up */
+    secure_tunnel->vtable.close(secure_tunnel);
+    aws_secure_tunnel_release(secure_tunnel);
+
     aws_client_bootstrap_release(bootstrap);
     aws_host_resolver_release(resolver);
     aws_event_loop_group_release(elg);
