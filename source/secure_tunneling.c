@@ -50,10 +50,12 @@ static const char *s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy
 }
 
 static struct aws_http_message *s_new_handshake_request(const struct aws_secure_tunnel *secure_tunnel) {
-    const size_t size = 50;
-    char path[size];
+    char path[50];
     snprintf(
-        path, size, "/tunnel?local-proxy-mode=%s", s_get_proxy_mode_string(secure_tunnel->config.local_proxy_mode));
+        path,
+        sizeof(path),
+        "/tunnel?local-proxy-mode=%s",
+        s_get_proxy_mode_string(secure_tunnel->config.local_proxy_mode));
     struct aws_http_message *handshake_request = aws_http_message_new_websocket_handshake_request(
         secure_tunnel->config.allocator, aws_byte_cursor_from_c_str(path), secure_tunnel->config.endpoint_host);
 
@@ -84,6 +86,7 @@ static void s_init_websocket_client_connection_options(
     websocket_options->socket_options = secure_tunnel->config.socket_options;
     websocket_options->tls_options = &secure_tunnel->tls_con_opt;
     websocket_options->host = secure_tunnel->config.endpoint_host;
+    websocket_options->port = 443;
     websocket_options->handshake_request = s_new_handshake_request(secure_tunnel);
     websocket_options->initial_window_size = MAX_WEBSOCKET_PAYLOAD; /* TODO: followup */
     websocket_options->user_data = secure_tunnel;
