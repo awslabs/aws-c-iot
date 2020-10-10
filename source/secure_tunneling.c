@@ -4,6 +4,7 @@
 #include <aws/iotdevice/secure_tunneling.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076
+#define INVALID_STREAM_ID (-1)
 
 /* TODO: Remove me */
 #define UNUSED(x) (void)(x)
@@ -102,7 +103,7 @@ static void s_init_websocket_client_connection_options(
 }
 
 static int s_secure_tunneling_connect(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id != -1) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id != INVALID_STREAM_ID) {
         return AWS_OP_ERR;
     }
 
@@ -116,11 +117,11 @@ static int s_secure_tunneling_connect(struct aws_secure_tunnel *secure_tunnel) {
 }
 
 static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id == -1) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
         return AWS_OP_ERR;
     }
 
-    secure_tunnel->stream_id = -1;
+    secure_tunnel->stream_id = INVALID_STREAM_ID;
     aws_websocket_close(secure_tunnel->websocket, false);
     aws_websocket_release(secure_tunnel->websocket);
     secure_tunnel->websocket = NULL;
@@ -165,7 +166,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->vtable.close = s_secure_tunneling_close;
 
     secure_tunnel->handshake_request = NULL;
-    secure_tunnel->stream_id = -1;
+    secure_tunnel->stream_id = INVALID_STREAM_ID;
     secure_tunnel->websocket = NULL;
 
     return secure_tunnel;
