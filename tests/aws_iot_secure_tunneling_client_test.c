@@ -8,10 +8,14 @@
 #include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
 
+#define UNUSED(x) (void)(x)
+
 static struct aws_mutex mutex = AWS_MUTEX_INIT;
 static struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
 
 static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunnel) {
+    UNUSED(secure_tunnel);
+
     aws_mutex_lock(&mutex);
     aws_condition_variable_notify_one(&condition_variable);
     aws_mutex_unlock(&mutex);
@@ -95,6 +99,9 @@ int main(int argc, char **argv) {
     aws_mutex_unlock(&mutex);
 
     /* clean up */
+    secure_tunnel->vtable.close(secure_tunnel);
+    aws_secure_tunnel_release(secure_tunnel);
+
     aws_client_bootstrap_release(bootstrap);
     aws_host_resolver_release(resolver);
     aws_event_loop_group_release(elg);
