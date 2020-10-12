@@ -4,7 +4,7 @@
 #include <aws/iotdevice/secure_tunneling.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076
-#define INVALID_STREAM_ID (-1)
+#define INVALID_STREAM_ID 0
 
 /* TODO: Remove me */
 #define UNUSED(x) (void)(x)
