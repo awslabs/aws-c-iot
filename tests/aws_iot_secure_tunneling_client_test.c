@@ -16,7 +16,6 @@ static struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE
 
 static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunnel) {
     UNUSED(secure_tunnel);
-
     aws_mutex_lock(&mutex);
     aws_condition_variable_notify_one(&condition_variable);
     aws_mutex_unlock(&mutex);
@@ -37,6 +36,7 @@ static void s_init_secure_tunneling_connection_config(
     config->socket_options = socket_options;
     config->access_token = aws_byte_cursor_from_c_str(access_token);
     config->local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
+
     if (strcmp(local_proxy_mode, "src") != 0) {
         config->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
     }
@@ -99,11 +99,11 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     aws_mutex_unlock(&mutex);
 
-    char *payload = "My name's Paul / Some garbage payload.";
+    char *payload = "My name's Paul / Some random payload";
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
     secure_tunnel->vtable.send_data(secure_tunnel, &buffer);
 
-    // usleep(30000000);
+    // usleep(5000000);
 
     /* clean up */
     secure_tunnel->vtable.close(secure_tunnel);

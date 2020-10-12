@@ -11,13 +11,6 @@ enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, A
 
 struct aws_secure_tunnel;
 
-struct secure_tunnel_send_data_struct {
-    struct aws_byte_buf *encoded_data;
-    const struct aws_byte_buf *set_payload;
-    struct aws_allocator *allocator;
-    struct aws_secure_tunnel *secure_tunnel;
-};
-
 /* APIs */
 typedef int(aws_secure_tunneling_connect_fn)(struct aws_secure_tunnel *secure_tunnel);
 typedef int(
@@ -28,10 +21,6 @@ typedef int(aws_secure_tunneling_close_fn)(struct aws_secure_tunnel *secure_tunn
 
 /* Callbacks */
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(const struct aws_secure_tunnel *secure_tunnel);
-typedef void(aws_secure_tunneling_on_send_data_complete_fn)(
-    const struct aws_secure_tunnel *secure_tunnel,
-    int error_code,
-    const struct aws_byte_buf *data);
 typedef void(aws_secure_tunneling_on_data_receive_fn)(
     const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_buf *data);
@@ -57,7 +46,6 @@ struct aws_secure_tunneling_connection_config {
     struct aws_byte_cursor endpoint_host;
 
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
-    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_data_receive_fn *on_data_receive;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
