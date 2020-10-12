@@ -1,16 +1,6 @@
-/*
+/**
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License").
- * You may not use this file except in compliance with the License.
- * A copy of the License is located at
- *
- *  http://aws.amazon.com/apache2.0
- *
- * or in the "license" file accompanying this file. This file is distributed
- * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
- * express or implied. See the License for the specific language governing
- * permissions and limitations under the License.
+ * SPDX-License-Identifier: Apache-2.0.
  */
 #include "mqtt_mock_structs.h"
 #include <aws/iotdevice/device_defender.h>
@@ -53,8 +43,6 @@ static int validate_devicedefender_record(const char *value) {
     return AWS_OP_SUCCESS;
 }
 
-/* Test Cases */
-
 AWS_TEST_CASE(devicedefender_task_unsupported_report_format, s_devicedefender_task_unsupported_report_format);
 static int s_devicedefender_task_unsupported_report_format(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
@@ -66,8 +54,8 @@ static int s_devicedefender_task_unsupported_report_format(struct aws_allocator 
         .report_format = AWS_IDDRF_CBOR,
         .task_period_ns = 0,
         .netconn_sample_period_ns = 0,
-        .task_canceled_fn = NULL,
-        .cancelation_userdata = NULL};
+        .task_cancelled_fn = NULL,
+        .cancellation_userdata = NULL};
 
     ASSERT_NULL(aws_iotdevice_defender_v1_report_task(allocator, &config));
     ASSERT_UINT_EQUALS(AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT, aws_last_error());
@@ -143,7 +131,6 @@ static int s_devicedefender_get_network_connections(struct aws_allocator *alloca
         if (aws_array_list_get_at_ptr(&net_conns, (void **)&con, i)) {
             continue;
         }
-        /* Release allocated strings in connection struct */
         if (con->local_interface) {
             aws_string_destroy(con->local_interface);
         }
@@ -224,8 +211,8 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_iotdevice_library_init(state_test_data->allocator);
 
     struct aws_iotdevice_defender_report_task_config task_config = {
-        .cancelation_userdata = NULL,
-        .task_canceled_fn = NULL,
+        .cancellation_userdata = NULL,
+        .task_cancelled_fn = NULL,
         .connection = state_test_data->mqtt_connection,
         .event_loop = aws_event_loop_group_get_next_loop(state_test_data->el_group),
         .netconn_sample_period_ns = 1000000000ul,
@@ -274,7 +261,6 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     }
     aws_mutex_unlock(&state_test_data->mqtt_connection->synced_data.lock);
 
-    // Validate the publish message topic and payload
     ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestSuccessThing/defender/metrics/json"));
     aws_string_destroy(publish_topic);
     validate_devicedefender_record((const char *)payload.ptr);

@@ -26,7 +26,7 @@ struct aws_iotdevice_defender_v1_task {
     struct aws_byte_buf report_accepted_topic_name;
     struct aws_byte_buf report_rejected_topic_name;
     bool has_previous_net_xfer;
-    struct aws_atomic_var task_canceled; /* flag value switches to non-zero when canceled */
+    struct aws_atomic_var task_cancelled;
 };
 
 static void s_mqtt_on_suback(
@@ -289,9 +289,6 @@ cleanup:
     return return_value;
 }
 
-/**
- * Report_id generated using epoch time.
- */
 static uint64_t s_defender_report_id_epoch_time_ms(struct aws_iotdevice_defender_v1_task *defender_task) {
     AWS_PRECONDITION(defender_task != NULL);
     uint64_t now;
@@ -317,12 +314,9 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     int return_code = 0;
 
     if (status == AWS_TASK_STATUS_RUN_READY) {
-        /* check if a cancelation has been requested the normal way (not from the task scheduler) */
-        /* note: the actual cancelation logic still happens on AWS_TASK_STATUS_CANCEL and thus the cancelation_fn could
-         * theoretically be overwritten by then */
 
-        const size_t task_canceled = aws_atomic_load_int(&defender_task->task_canceled);
-        if (task_canceled) {
+        const size_t task_cancelled = aws_atomic_load_int(&defender_task->task_cancelled);
+        if (task_cancelled) {
             AWS_LOGF_TRACE(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
                 "id=%p: DeviceDefender reporting task cancel requested",
@@ -423,7 +417,6 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 if (aws_array_list_get_at_ptr(&net_conns, (void **)&con, i)) {
                     continue;
                 }
-                /* Release allocated strings in connection struct */
                 if (con->local_interface) {
                     aws_string_destroy(con->local_interface);
                 }
@@ -441,22 +434,20 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         }
     } else if (status == AWS_TASK_STATUS_CANCELED) {
         AWS_LOGF_TRACE(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Reporting task canceled, cleaning up", (void *)defender_task);
+            AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Reporting task cancelled, cleaning up", (void *)defender_task);
 
-        /* intentionally dropping response handling and packet IDs */
         struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_buf(&defender_task->report_accepted_topic_name);
         aws_mqtt_client_connection_unsubscribe(defender_task->config.connection, &accepted_topic, NULL, NULL);
         struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_buf(&defender_task->report_rejected_topic_name);
         aws_mqtt_client_connection_unsubscribe(defender_task->config.connection, &rejected_topic, NULL, NULL);
 
-        void *cancel_userdata = defender_task->config.cancelation_userdata;
+        void *cancel_userdata = defender_task->config.cancellation_userdata;
         aws_byte_buf_clean_up(&defender_task->report_topic_name);
         aws_byte_buf_clean_up(&defender_task->report_accepted_topic_name);
         aws_byte_buf_clean_up(&defender_task->report_rejected_topic_name);
 
-        /* totally fine if this function ptr is NULL */
-        if (defender_task->config.task_canceled_fn != NULL) {
-            defender_task->config.task_canceled_fn(cancel_userdata);
+        if (defender_task->config.task_cancelled_fn != NULL) {
+            defender_task->config.task_cancelled_fn(cancel_userdata);
         }
 
         aws_mem_release(allocator, defender_task);
@@ -465,7 +456,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Reporting task in unknown run state being ignored",
             (void *)defender_task);
-        /* TODO: revise if reschedule or cancelation is appropriate here */
+        /* TODO: revise if reschedule or cancellation is appropriate here */
         uint64_t now;
         aws_event_loop_current_clock_time(defender_task->config.event_loop, &now);
         aws_event_loop_schedule_task_future(
@@ -481,9 +472,6 @@ cleanup:
     }
 }
 
-/**
- * Creates a new reporting task for Device Defender metrics
- */
 struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
     struct aws_allocator *allocator,
     const struct aws_iotdevice_defender_report_task_config *config) {
@@ -499,7 +487,6 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
         goto cleanup;
     }
 
-    /* To be freed on task cancellation */
     defender_task = (struct aws_iotdevice_defender_v1_task *)aws_mem_acquire(
         allocator, sizeof(struct aws_iotdevice_defender_v1_task));
     AWS_ZERO_STRUCT(*defender_task);
@@ -516,9 +503,8 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
     defender_task->previous_net_xfer.packets_out = 0;
     defender_task->has_previous_net_xfer = false;
     defender_task->config = *config;
-    aws_atomic_store_int(&defender_task->task_canceled, 0);
+    aws_atomic_store_int(&defender_task->task_cancelled, 0);
 
-    /* derive the topics we will be publishing to and potentially reading the responses on */
     const size_t thing_name_len = strlen((const char *)config->thing_name.ptr);
     const char pub_topic_base[37] = "$aws/things/%s/defender/metrics/json";
     const size_t pub_topic_len = 36 + thing_name_len;
@@ -581,7 +567,6 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
             sub_accepted_packet_id,
             AWS_BYTE_BUF_PRI(defender_task->report_accepted_topic_name));
     } else {
-        /* log error, but subscription not necessary to publish messages */
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Failed to send subscription packet for topic: " PRInSTR,
@@ -608,7 +593,6 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
             sub_rejected_packet_id,
             AWS_BYTE_BUF_PRI(defender_task->report_rejected_topic_name));
     } else {
-        /* log error, but subscription not necessary to publish messages */
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Failed to send subscription packet for rejected topic: " PRInSTR,
@@ -632,10 +616,6 @@ cleanup:
     return defender_task;
 }
 
-/**
- * Cancels the running task reporting Device Defender metrics
- */
 void aws_iotdevice_defender_v1_stop_task(struct aws_iotdevice_defender_v1_task *defender_task) {
-    /* this will trigger proper callback fn set on creation */
-    aws_atomic_store_int(&defender_task->task_canceled, 1);
+    aws_atomic_store_int(&defender_task->task_cancelled, 1);
 }

@@ -22,7 +22,6 @@ static void s_cJSONFree(void *ptr) {
  * Library Init
  ******************************************************************************/
 
-/* Incomplete: error code definitions aren't exhaustive by any means and are not used well in the code */
 #define AWS_DEFINE_ERROR_INFO_IOTDEVICE(C, ES) AWS_DEFINE_ERROR_INFO(C, ES, "libaws-c-iotdevice")
 /* clang-format off */
 static struct aws_error_info s_errors[] = {
@@ -58,10 +57,6 @@ static struct aws_log_subject_info_list s_logging_subjects_list = {
 
 static bool s_iotdevice_library_initialized = false;
 
-/**
- * Initializes internal datastructures used by aws-c-iot.
- * Must be called before using any functionality in aws-c-iot.
- */
 void aws_iotdevice_library_init(struct aws_allocator *allocator) {
     AWS_PRECONDITION(aws_allocator_is_valid(allocator));
 
@@ -78,9 +73,6 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator) {
     }
 }
 
-/**
- * Shuts down the internal data structures used by aws-c-iot
- */
 void aws_iotdevice_library_clean_up(void) {
     if (s_iotdevice_library_initialized) {
         s_library_allocator = NULL;

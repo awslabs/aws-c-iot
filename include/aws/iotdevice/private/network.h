@@ -2,15 +2,14 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#ifndef _AWS_IOTDEVICE_NETWORK_H_
-#define _AWS_IOTDEVICE_NETWORK_H_
+#ifndef AWS_IOTDEVICE_NETWORK_H
+#define AWS_IOTDEVICE_NETWORK_H
 
 #include <aws/common/hash_table.h>
 
 #include <stdbool.h>
 #include <stdint.h>
 
-/* externally defined types */
 struct aws_allocator;
 struct aws_array_list;
 struct aws_byte_buf;
@@ -40,7 +39,6 @@ struct aws_iotdevice_metric_net_connection {
 
 struct aws_iotdevice_network_iface;
 struct aws_iotdevice_network_ifconfig {
-    /* cstr:IPV4 address -> aws_iotdevice_network_iface:instance */
     struct aws_hash_table iface_name_to_info;
 };
 

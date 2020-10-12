@@ -2,8 +2,8 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#ifndef _AWS_IOTDEVICE_DEFENDER_H_
-#define _AWS_IOTDEVICE_DEFENDER_H_
+#ifndef AWS_IOTDEVICE_DEFENDER_H
+#define AWS_IOTDEVICE_DEFENDER_H
 
 #include <aws/common/byte_buf.h>
 #include <aws/iotdevice/iotdevice.h>
@@ -16,25 +16,21 @@ struct aws_task;
 struct aws_event_loop;
 struct aws_mqtt_client_connection;
 
-/**
- * Called when a connection is closed, right before any resources are deleted
- **/
-typedef void(aws_iotdevice_defender_v1_task_canceled_fn)(void *userdata);
+typedef void(aws_iotdevice_defender_v1_task_cancelled_fn)(void *userdata);
 
 enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON, AWS_IDDRF_CBOR };
 
 struct aws_iotdevice_defender_v1_task;
 
 struct aws_iotdevice_defender_report_task_config {
-    struct aws_mqtt_client_connection *connection; /* mqtt connection to use to send report messages */
-    struct aws_byte_cursor thing_name;             /* Thing name for which to publish reports for. Decided topic name */
-    struct aws_event_loop *event_loop;             /* event loop to schedule task on continuously */
-    enum aws_iotdevice_defender_report_format report_format; /* only JSON supported for now */
-    uint64_t task_period_ns;           /* how frequently do we send out a report. Service limit is once every 5m */
-    uint64_t netconn_sample_period_ns; /* how frequently we sample for established connections and listening ports,
-                                          unused currently but necessary to sample substantially more frequently */
-    aws_iotdevice_defender_v1_task_canceled_fn *task_canceled_fn;
-    void *cancelation_userdata;
+    struct aws_mqtt_client_connection *connection;
+    struct aws_byte_cursor thing_name;
+    struct aws_event_loop *event_loop;
+    enum aws_iotdevice_defender_report_format report_format;
+    uint64_t task_period_ns;
+    uint64_t netconn_sample_period_ns;
+    aws_iotdevice_defender_v1_task_cancelled_fn *task_cancelled_fn;
+    void *cancellation_userdata;
 };
 
 AWS_EXTERN_C_BEGIN

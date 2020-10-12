@@ -10,10 +10,6 @@
 
 #include <stdio.h>
 
-/**
- * This converts uint32_t to varint encoding in buffer.
- * For type, streamid, & ignorable (payload length)
- */
 static int s_iot_st_encode_varint_uint32_t(struct aws_byte_buf *buffer, uint32_t n) {
     // & 2's complement
     // ~0x7F == b-10000000
@@ -29,10 +25,6 @@ static int s_iot_st_encode_varint_uint32_t(struct aws_byte_buf *buffer, uint32_t
     return AWS_OP_SUCCESS;
 }
 
-/**
- * This converts enocded varint into uint32_t.
- * For type, streamid, & ignorable (payload length)
- */
 static int s_iot_st_decode_varint_uint32_t(struct aws_byte_cursor *cursor, uint32_t *result) {
     int bits = 0;
     // Continue while the first bit is one
@@ -54,9 +46,6 @@ static int s_iot_st_decode_varint_uint32_t(struct aws_byte_cursor *cursor, uint3
     return AWS_OP_SUCCESS;
 }
 
-/**
- * Add the meta data, field_number & wire_type before varint encoding
- */
 static int s_iot_st_encode_varint(
     const uint8_t field_number,
     const uint8_t wire_type,
@@ -68,9 +57,6 @@ static int s_iot_st_encode_varint(
     return s_iot_st_encode_varint_uint32_t(buffer, value);
 }
 
-/**
- * Add the meta data, field_number & wire_type & payload.length before varint encoding
- */
 static int s_iot_st_encode_lengthdelim(
     const uint8_t field_number,
     const uint8_t wire_type,
@@ -99,11 +85,6 @@ static int s_iot_st_encode_payload(struct aws_byte_buf *payload, struct aws_byte
     return s_iot_st_encode_lengthdelim(AWS_IOT_ST_MESSAGE_PAYLOAD, AWS_IOT_ST_VARINT_LENGTHDELIM_WIRE, payload, buffer);
 }
 
-/**
- * Loads a serialized version of message into buffer
- * Input Message
- * Output Buffer
- */
 int aws_iot_st_msg_serialize_from_struct(
     struct aws_byte_buf *buffer,
     struct aws_allocator *allocator,
@@ -146,11 +127,6 @@ static int s_aws_st_decode_lengthdelim(struct aws_byte_cursor *cursor, struct aw
     return AWS_OP_SUCCESS;
 }
 
-/**
- * Loads serialized cursor data into a st message
- * Input cursor
- * Output message
- */
 int aws_iot_st_msg_deserialize_from_cursor(
     struct aws_iot_st_msg *message,
     struct aws_byte_cursor *cursor,
