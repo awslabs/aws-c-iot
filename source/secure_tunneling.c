@@ -1,6 +1,7 @@
 #include <aws/http/request_response.h>
 #include <aws/http/websocket.h>
 #include <aws/io/tls_channel_handler.h>
+#include <aws/iotdevice/private/serializer.h>
 #include <aws/iotdevice/secure_tunneling.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076
@@ -128,6 +129,73 @@ static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
     return AWS_OP_SUCCESS;
 }
 
+static void s_secure_tunneling_send_data_complete_callback(
+    struct aws_websocket *websocket,
+    int error_code,
+    void *user_data) {
+    UNUSED(websocket);
+    struct secure_tunnel_send_data_struct *send_data_struct = user_data;
+    if (send_data_struct->secure_tunnel->config.on_send_data_complete != NULL) {
+        send_data_struct->secure_tunnel->config.on_send_data_complete(
+            send_data_struct->secure_tunnel, error_code, send_data_struct->set_payload);
+    }
+}
+
+static bool s_secure_tunneling_send_data_call(
+    struct aws_websocket *websocket,
+    struct aws_byte_buf *out_buf,
+    void *user_data) {
+    UNUSED(websocket);
+    struct secure_tunnel_send_data_struct *send_data_struct = user_data;
+    struct aws_byte_buf *buffer = send_data_struct->encoded_data;
+    AWS_RETURN_ERROR_IF2(aws_byte_buf_write_from_whole_buffer(out_buf, *buffer) == AWS_OP_SUCCESS, false);
+    aws_byte_buf_clean_up(buffer);
+    return true;
+}
+
+static void s_init_websocket_send_frame_options(
+    struct aws_websocket_send_frame_options *frame_options,
+    struct secure_tunnel_send_data_struct *send_data_struct) {
+    frame_options->payload_length = send_data_struct->encoded_data->len;
+    frame_options->user_data = send_data_struct;
+    frame_options->stream_outgoing_payload = s_secure_tunneling_send_data_call;
+    frame_options->on_complete = s_secure_tunneling_send_data_complete_callback;
+    frame_options->opcode = AWS_WEBSOCKET_OPCODE_BINARY;
+    frame_options->fin = true;
+    frame_options->high_priority = false;
+    AWS_ZERO_STRUCT(frame_options->rsv);
+}
+
+static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id == -1) {
+        return AWS_OP_ERR;
+    }
+    struct aws_iot_st_msg message;
+    message.streamId = secure_tunnel->stream_id;
+    message.ignorable = 0;
+    message.type = DATA;
+    message.payload.allocator = data->allocator;
+    message.payload.buffer = data->buffer;
+    message.payload.capacity = data->capacity;
+    message.payload.len = data->len;
+
+    struct aws_allocator *allocator = aws_default_allocator();
+    struct aws_byte_buf buffer;
+    AWS_RETURN_ERROR_IF2(
+        aws_iot_st_msg_serialize_from_struct(&buffer, allocator, message) == AWS_OP_SUCCESS, AWS_OP_ERR);
+
+    struct aws_websocket_send_frame_options frame_options;
+    struct secure_tunnel_send_data_struct send_data_struct;
+    send_data_struct.encoded_data = &buffer;
+    send_data_struct.set_payload = data;
+    send_data_struct.allocator = allocator;
+    send_data_struct.secure_tunnel = secure_tunnel;
+    s_init_websocket_send_frame_options(&frame_options, &send_data_struct);
+
+    aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
+    return AWS_OP_SUCCESS;
+}
+
 static void s_copy_secure_tunneling_connection_config(
     const struct aws_secure_tunneling_connection_config *src,
     struct aws_secure_tunneling_connection_config *dest) {
@@ -164,6 +232,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     /* Setup vtable here */
     secure_tunnel->vtable.connect = s_secure_tunneling_connect;
     secure_tunnel->vtable.close = s_secure_tunneling_close;
+    secure_tunnel->vtable.send_data = s_secure_tunneling_send_data;
 
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->stream_id = INVALID_STREAM_ID;
