@@ -83,7 +83,7 @@ static void s_on_connection_interrupted(struct aws_mqtt_client_connection *conne
 static void s_on_resubscribed(
     struct aws_mqtt_client_connection *connection,
     uint16_t packet_id,
-    const struct aws_array_list *topic_subacks, /* contains aws_mqtt_topic_subscription pointers */
+    const struct aws_array_list *topic_subacks,
     int error_code,
     void *userdata) {
 
@@ -206,7 +206,6 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_mqtt_client_connection_set_connection_interruption_handlers(
         args.connection, s_on_connection_interrupted, NULL, s_on_connection_resumed, NULL));
 
-    /* Generate a random clientid */
     char client_id[128];
     struct aws_byte_buf client_id_buf = aws_byte_buf_from_empty_array(client_id, AWS_ARRAY_SIZE(client_id));
 
@@ -219,8 +218,8 @@ int main(int argc, char **argv) {
     struct aws_byte_cursor client_id_cur = aws_byte_cursor_from_buf(&client_id_buf);
 
     struct aws_iotdevice_defender_report_task_config task_config = {
-        .cancelation_userdata = NULL,
-        .task_canceled_fn = NULL,
+        .cancellation_userdata = NULL,
+        .task_cancelled_fn = NULL,
         .connection = args.connection,
         .event_loop = aws_event_loop_group_get_next_loop(elg),
         .netconn_sample_period_ns = 5ul * 60ul * 1000000000ul,
@@ -244,6 +243,7 @@ int main(int argc, char **argv) {
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);
 
+    // TODO: Revisit wait condition
     aws_mutex_lock(&mutex);
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     aws_mutex_unlock(&mutex);

@@ -2,8 +2,8 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#ifndef _AWS_IOTDEVICE_SERIALIZER_H_
-#define _AWS_IOTDEVICE_SERIALIZER_H_
+#ifndef AWS_IOTDEVICE_SERIALIZER_H
+#define AWS_IOTDEVICE_SERIALIZER_H
 
 #include <aws/common/byte_buf.h>
 #include <aws/iotdevice/exports.h>

@@ -29,7 +29,6 @@
 
 static size_t s_proc_net_tcp_size_hint = 4096;
 static size_t s_proc_net_udp_size_hint = 4096;
-/* sets hint value by multiplying read proc_net file size with this number */
 static float PROC_NET_HINT_FACTOR = 1.1f;
 static const int EXPECTED_NETWORK_CONFIG_TOKENS = 5;
 
@@ -61,20 +60,16 @@ int s_hashfn_foreach_total_iface_transfer_metrics(void *context, struct aws_hash
     return AWS_COMMON_HASH_TABLE_ITER_CONTINUE;
 }
 
-/* based on linux  */
 enum linux_network_connection_state { LINUX_NCS_UNKNOWN = 0, LINUX_NCS_ESTABLISHED = 1, LINUX_NCS_LISTEN = 10 };
 
 static uint16_t map_network_state(uint16_t linux_state) {
     switch (linux_state) {
         case LINUX_NCS_LISTEN:
             return AWS_IDNCS_LISTEN;
-            break;
         case LINUX_NCS_ESTABLISHED:
             return AWS_IDNCS_ESTABLISHED;
-            break;
         default:
             return AWS_IDNCS_UNKNOWN;
-            break;
     }
 }
 
@@ -110,9 +105,6 @@ void get_network_total_delta(
     delta->packets_out = curr_total->packets_out - prev_total->packets_out;
 }
 
-/**
- * This file read is not terribly efficient if not enough bytes are allocated up front.
- */
 int read_proc_net_from_file(
     struct aws_byte_buf *out_buf,
     struct aws_allocator *allocator,
@@ -135,7 +127,6 @@ int read_proc_net_from_file(
                 return_value = aws_error;
                 goto cleanup;
             }
-            /* double size hint increase if we need to do it again */
             size_hint += size_hint;
             read = fread(out_buf->buffer + out_buf->len, 1, size_hint, fp);
         }
@@ -226,7 +217,6 @@ int get_net_connections_from_proc_buf(
             struct aws_hash_element *element;
             int return_code = aws_hash_table_find(&ifconfig->iface_name_to_info, local_addr, &element);
             if (element == NULL || return_code != AWS_OP_SUCCESS) {
-                /* TODO: element == NULL seems to be the failure mode. When might return code matter? Log it? */
                 AWS_LOGF_WARN(
                     AWS_LS_IOTDEVICE_NETWORK_CONFIG,
                     "id=%p: Could not retrieve interface mapping for address: %s",
@@ -298,7 +288,6 @@ int get_network_connections(
             aws_error_name(aws_last_error()));
         goto cleanup;
     }
-    /* hint on read size next go around */
     s_proc_net_tcp_size_hint = net_tcp.len * PROC_NET_HINT_FACTOR;
 
     if (read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp")) {
@@ -309,7 +298,6 @@ int get_network_connections(
             aws_error_name(aws_last_error()));
         goto cleanup;
     }
-    /* hint on read size next go around */
     s_proc_net_udp_size_hint = net_udp.len * PROC_NET_HINT_FACTOR;
 
     struct aws_byte_cursor net_tcp_cursor = aws_byte_cursor_from_buf(&net_tcp);
@@ -318,7 +306,6 @@ int get_network_connections(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to parse network connections from /proc/net/tcp",
             (void *)ifconfig);
-        /* intentionally not considered an error right now */
     }
 
     struct aws_byte_cursor net_udp_cursor = aws_byte_cursor_from_buf(&net_udp);
@@ -327,7 +314,6 @@ int get_network_connections(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to parse network connections from /proc/net/udp",
             (void *)ifconfig);
-        /* intentionally not considered an error right now */
     }
 
     return_code = AWS_OP_SUCCESS;

@@ -2,8 +2,8 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#ifndef _AWS_IOTDEVICE__H_
-#define _AWS_IOTDEVICE__H_
+#ifndef AWS_IOTDEVICE_H
+#define AWS_IOTDEVICE_H
 
 #include <aws/common/error.h>
 #include <aws/common/logging.h>
@@ -25,6 +25,8 @@ enum aws_iotdevice_log_subject {
     AWS_LS_IOTDEVICE_NETWORK_CONFIG,
 };
 
+AWS_EXTERN_C_BEGIN
+
 /**
  * Initializes internal datastructures used by aws-c-iot.
  * Must be called before using any functionality in aws-c-iot.
@@ -37,5 +39,7 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator);
  */
 AWS_IOTDEVICE_API
 void aws_iotdevice_library_clean_up(void);
+
+AWS_EXTERN_C_END
 
 #endif
