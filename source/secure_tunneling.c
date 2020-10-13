@@ -162,16 +162,13 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     message.ignorable = 0;
     message.type = DATA;
     message.payload = *data;
-
     struct aws_byte_buf buffer;
     AWS_RETURN_ERROR_IF2(
         aws_iot_st_msg_serialize_from_struct(&buffer, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
         AWS_OP_ERR);
-
     if (buffer.len > MAX_ST_PAYLOAD) {
         return AWS_OP_ERR;
     }
-
     struct aws_websocket_send_frame_options frame_options;
     s_init_websocket_send_frame_options(&frame_options, &buffer);
     aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
@@ -187,7 +184,7 @@ static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure
     message.streamId = secure_tunnel->stream_id;
     message.ignorable = 0;
     message.type = STREAM_START;
-    message.payload.len = 0;
+    message.payload = aws_byte_buf_from_c_str("");
 
     struct aws_byte_buf buffer;
     AWS_RETURN_ERROR_IF2(
@@ -207,7 +204,7 @@ static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure
     message.streamId = secure_tunnel->stream_id;
     message.ignorable = 0;
     message.type = STREAM_RESET;
-    message.payload.len = 0;
+    message.payload = aws_byte_buf_from_c_str("");
 
     struct aws_byte_buf buffer;
     AWS_RETURN_ERROR_IF2(
