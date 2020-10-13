@@ -189,6 +189,10 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     x->secure_tunnel = secure_tunnel;
     x->buf = &buffer;
 
+    if (buffer.len > MAX_ST_PAYLOAD) {
+        return AWS_OP_ERR;
+    }
+
     struct aws_websocket_send_frame_options frame_options;
     s_init_websocket_send_frame_options(&frame_options, x);
     aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
