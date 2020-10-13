@@ -120,7 +120,7 @@ int protobuf_message_test_case_four() {
  */
 int protobuf_message_test_case_five() {
     com::amazonaws::iot::securedtunneling::Message_Type type = com::amazonaws::iot::securedtunneling::Message_Type_DATA;
-    int32_t streamid = 1;
+    int32_t streamid = -50000;
     int ignorable = 1;
     std::string payload = "h";
 
@@ -143,14 +143,14 @@ int protobuf_message_test_case_six() {
     return execute_tests(type, streamid, ignorable, payload);
 }
 
-static std::vector<int (*)()> test_cases= {
-        protobuf_message_test_case_one,
-        protobuf_message_test_case_two,
-        protobuf_message_test_case_three,
-        protobuf_message_test_case_four,
-        protobuf_message_test_case_five,
-        protobuf_message_test_case_six,
-    };
+static std::vector<int (*)()> test_cases = {
+    protobuf_message_test_case_one,
+    protobuf_message_test_case_two,
+    protobuf_message_test_case_three,
+    protobuf_message_test_case_four,
+    protobuf_message_test_case_five,
+    protobuf_message_test_case_six,
+};
 
 int main(int argc, char *argv[]) {
     int i = 0;
@@ -165,11 +165,10 @@ int main(int argc, char *argv[]) {
         return AWS_OP_ERR;
     }
     GOOGLE_PROTOBUF_VERIFY_VERSION;
-    if (test_cases[i-1]()) {
+    if (test_cases[i - 1]()) {
         std::cout << "protobuf_message_test_case FAIL" << std::endl;
         return AWS_OP_ERR;
-    }
-    else {
+    } else {
         std::cout << "protobuf_message_test_case PASS" << std::endl;
     }
     google::protobuf::ShutdownProtobufLibrary();
