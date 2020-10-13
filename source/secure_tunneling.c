@@ -199,6 +199,47 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     return AWS_OP_SUCCESS;
 }
 
+static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID ||
+        secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+        return AWS_OP_ERR;
+    }
+    struct aws_iot_st_msg message;
+    message.streamId = secure_tunnel->stream_id;
+    message.ignorable = 0;
+    message.type = STREAM_START;
+    message.payload.len = 0;
+
+    struct aws_byte_buf buffer;
+    AWS_RETURN_ERROR_IF2(
+        aws_iot_st_msg_serialize_from_struct(&buffer, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
+        AWS_OP_ERR);
+    struct aws_websocket_send_frame_options frame_options;
+    s_init_websocket_send_frame_options(&frame_options, &buffer);
+    aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
+    return AWS_OP_SUCCESS;
+}
+
+static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
+        return AWS_OP_ERR;
+    }
+    struct aws_iot_st_msg message;
+    message.streamId = secure_tunnel->stream_id;
+    message.ignorable = 0;
+    message.type = STREAM_RESET;
+    message.payload.len = 0;
+
+    struct aws_byte_buf buffer;
+    AWS_RETURN_ERROR_IF2(
+        aws_iot_st_msg_serialize_from_struct(&buffer, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
+        AWS_OP_ERR);
+    struct aws_websocket_send_frame_options frame_options;
+    s_init_websocket_send_frame_options(&frame_options, &buffer);
+    aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
+    return AWS_OP_SUCCESS;
+}
+
 static void s_copy_secure_tunneling_connection_config(
     const struct aws_secure_tunneling_connection_config *src,
     struct aws_secure_tunneling_connection_config *dest) {
@@ -237,6 +278,8 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->vtable.connect = s_secure_tunneling_connect;
     secure_tunnel->vtable.close = s_secure_tunneling_close;
     secure_tunnel->vtable.send_data = s_secure_tunneling_send_data;
+    secure_tunnel->vtable.send_stream_start = s_secure_tunneling_send_stream_start;
+    secure_tunnel->vtable.send_stream_reset = s_secure_tunneling_send_stream_reset;
 
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->stream_id = INVALID_STREAM_ID;

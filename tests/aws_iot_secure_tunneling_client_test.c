@@ -104,10 +104,15 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     aws_mutex_unlock(&mutex);
 
+    secure_tunnel->vtable.send_stream_start(secure_tunnel);
+    usleep(5000000);
+
     char *payload = "Hi! I'm Paul / Some random payload";
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
     secure_tunnel->vtable.send_data(secure_tunnel, &buffer);
+    usleep(5000000);
 
+    secure_tunnel->vtable.send_stream_reset(secure_tunnel);
     usleep(5000000);
 
     /* clean up */
