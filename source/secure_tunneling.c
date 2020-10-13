@@ -5,6 +5,7 @@
 #include <aws/iotdevice/secure_tunneling.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076
+#define MAX_ST_PAYLOAD 64512
 #define INVALID_STREAM_ID (-1)
 
 /* TODO: Remove me */
@@ -153,7 +154,7 @@ static void s_init_websocket_send_frame_options(
 }
 
 static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id == -1) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
         return AWS_OP_ERR;
     }
     struct aws_iot_st_msg message;
@@ -169,6 +170,10 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     AWS_RETURN_ERROR_IF2(
         aws_iot_st_msg_serialize_from_struct(&buffer, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
         AWS_OP_ERR);
+
+    if (buffer.len > MAX_ST_PAYLOAD) {
+        return AWS_OP_ERR;
+    }
 
     struct aws_websocket_send_frame_options frame_options;
     s_init_websocket_send_frame_options(&frame_options, &buffer);
