@@ -43,7 +43,11 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     UNUSED(user_data);
 }
 
-static bool s_on_websocket_incoming_frame_begin(const struct aws_websocket_incoming_frame *frame, void *user_data) {
+static bool s_on_websocket_incoming_frame_begin(
+    struct aws_websocket *websocket,
+    const struct aws_websocket_incoming_frame *frame,
+    void *user_data) {
+    UNUSED(websocket);
     UNUSED(frame);
     UNUSED(user_data);
     return true;
