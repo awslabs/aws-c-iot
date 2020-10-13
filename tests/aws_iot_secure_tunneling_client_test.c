@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     aws_mutex_unlock(&mutex);
 
-    char *payload = "My name's Paul / Some random payload";
+    char *payload = "Hi! I'm Paul / Some random payload";
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
     secure_tunnel->vtable.send_data(secure_tunnel, &buffer);
 
