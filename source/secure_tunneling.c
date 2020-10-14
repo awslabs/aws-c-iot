@@ -176,10 +176,14 @@ static int s_secure_tunneling_send(
     message.streamId = secure_tunnel->stream_id;
     message.ignorable = 0;
     message.type = type;
-    message.payload.allocator = data->allocator;
-    message.payload.buffer = data->buffer;
-    message.payload.capacity = data->capacity;
-    message.payload.len = data->len;
+    if (data != NULL) {
+        message.payload.allocator = data->allocator;
+        message.payload.buffer = data->buffer;
+        message.payload.capacity = data->capacity;
+        message.payload.len = data->len;
+    } else {
+        message.payload.len = 0;
+    }
     struct aws_byte_buf buffer;
     AWS_RETURN_ERROR_IF2(
         aws_iot_st_msg_serialize_from_struct(&buffer, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
@@ -210,20 +214,20 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
 }
 
 static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID ||
-        secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+    if (secure_tunnel == NULL || secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         return AWS_OP_ERR;
     }
-    struct aws_byte_buf buffer = aws_byte_buf_from_c_str("");
-    return s_secure_tunneling_send(secure_tunnel, &buffer, STREAM_START);
+    secure_tunnel->stream_id += 1;
+    if (secure_tunnel->stream_id == 0)
+        secure_tunnel->stream_id += 1;
+    return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_START);
 }
 
 static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
     if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
         return AWS_OP_ERR;
     }
-    struct aws_byte_buf buffer = aws_byte_buf_from_c_str("");
-    return s_secure_tunneling_send(secure_tunnel, &buffer, STREAM_RESET);
+    return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
 }
 
 static void s_copy_secure_tunneling_connection_config(

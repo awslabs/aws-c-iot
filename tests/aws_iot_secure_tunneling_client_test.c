@@ -7,7 +7,6 @@
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
-// #include <unistd.h>
 
 #define UNUSED(x) (void)(x)
 
@@ -106,7 +105,7 @@ int main(int argc, char **argv) {
     aws_mutex_unlock(&mutex);
 
     secure_tunnel->vtable.send_stream_start(secure_tunnel);
-    // usleep(5000000);
+    aws_thread_current_sleep(1000000000);
 
     char *payload = "Hi! I'm Paul / Some random payload";
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
@@ -115,10 +114,10 @@ int main(int argc, char **argv) {
     char *payload2 = "Hi! I'm Paul / Some random payload";
     struct aws_byte_buf buffer2 = aws_byte_buf_from_c_str(payload2);
     secure_tunnel->vtable.send_data(secure_tunnel, &buffer2);
-    // usleep(5000000);
+    aws_thread_current_sleep(1000000000);
 
     secure_tunnel->vtable.send_stream_reset(secure_tunnel);
-    // usleep(50000000);
+    aws_thread_current_sleep(2000000000);
 
     /* clean up */
     secure_tunnel->vtable.close(secure_tunnel);
