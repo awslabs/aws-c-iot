@@ -7,7 +7,6 @@
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
-#include <unistd.h>
 
 #define UNUSED(x) (void)(x)
 
@@ -114,7 +113,7 @@ int main(int argc, char **argv) {
 
     if (local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         /* Wait a little for data to show up */
-        sleep(60);
+        aws_thread_current_sleep((uint64_t)60 * 1000000000);
     }
 
     /* clean up */
