@@ -138,7 +138,16 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     struct data_tunnel_pair *x = user_data;
     x->secure_tunnel->config.on_send_data_complete(error_code, user_data);
 }
-
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0') 
 static bool s_secure_tunneling_send_data_call(
     struct aws_websocket *websocket,
     struct aws_byte_buf *out_buf,
@@ -146,7 +155,14 @@ static bool s_secure_tunneling_send_data_call(
     UNUSED(websocket);
     struct data_tunnel_pair *x = user_data;
     struct aws_byte_buf *buffer = x->buf;
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_write(out_buf, buffer->buffer, buffer->len) == AWS_OP_SUCCESS, false);
+    printf("size %zu\n\n\n\n\n", buffer->len);  // size 94028301664288 or the actual size without the mutex 
+    for (size_t i = 0; i < buffer->len; i++) {    
+        printf("Byte #%zu: "BYTE_TO_BINARY_PATTERN "\n", i, BYTE_TO_BINARY(buffer->buffer[i]));
+    }
+    AWS_RETURN_ERROR_IF2(aws_byte_buf_write(out_buf, buffer->buffer, buffer->len-1) == AWS_OP_SUCCESS, false);
+    for (size_t i = 0; i < out_buf->len; i++) {    
+        printf("Byte #%zu: "BYTE_TO_BINARY_PATTERN "\n", i, BYTE_TO_BINARY(out_buf->buffer[i]));
+    }
     aws_byte_buf_clean_up(buffer);
     aws_mem_release(x->secure_tunnel->config.allocator, (void *)x);
     return true;
