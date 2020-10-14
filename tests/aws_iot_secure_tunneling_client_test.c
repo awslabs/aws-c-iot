@@ -22,6 +22,8 @@ static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunn
 }
 
 static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+    UNUSED(secure_tunnel);
+
     /* Didn't want to copy to a null terminated string. So just print out each character */
     for (size_t i = 0; i < data->len; i++) {
         printf("%c", data->buffer[i]);
