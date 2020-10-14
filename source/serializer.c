@@ -11,18 +11,58 @@
 #include <stdio.h>
 
 static int s_iot_st_encode_varint_uint32_t(struct aws_byte_buf *buffer, uint32_t n) {
+    // & 2's comp   lement
+    // ~0x7F == b-10000000
+    while (n & ~0x7F) {
+        AWS_RETURN_ERROR_IF2(
+            // 0xFF == b11111111
+            // 0x80 == b10000000
+            aws_byte_buf_append_byte_dynamic_secure(buffer, (uint8_t)(n & 0xFF) | 0x80) == AWS_OP_SUCCESS,
+            AWS_OP_ERR);
+        n = n >> 7;
+    }
+    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, (uint8_t)n) == AWS_OP_SUCCESS, AWS_OP_ERR);
+    return AWS_OP_SUCCESS;
+}
+
+static int s_iot_st_encode_varint_negative_uint32_t(struct aws_byte_buf *buffer, uint32_t n) {
+    int byte_count = 0;
     // & 2's complement
     // ~0x7F == b-10000000
     while (n & ~0x7F) {
         AWS_RETURN_ERROR_IF2(
             // 0xFF == b11111111
             // 0x80 == b10000000
-            aws_byte_buf_append_byte_dynamic_secure(buffer, (n & 0xFF) | 0x80) == AWS_OP_SUCCESS,
+            aws_byte_buf_append_byte_dynamic_secure(buffer, (uint8_t)(n & 0xFF) | 0x80) == AWS_OP_SUCCESS,
             AWS_OP_ERR);
         n = n >> 7;
+        byte_count += 1;
     }
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, n) == AWS_OP_SUCCESS, AWS_OP_ERR);
+    // Last Byte Math
+    int count = 0;
+    while (!(n & 0x80)) {
+        n = n << 1;
+        count += 1;
+    }
+    for (int i = 0; i < count; i++) {
+        n = n >> 1;
+        n = n | 0x80;
+    }
+    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, (uint8_t)n) == AWS_OP_SUCCESS, AWS_OP_ERR);
+    for (int i = 0; i < 10 - byte_count - 2; i++) {
+        AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, 0xFF) == AWS_OP_SUCCESS, AWS_OP_ERR);
+    }
+    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, 0x1) == AWS_OP_SUCCESS, AWS_OP_ERR);
     return AWS_OP_SUCCESS;
+}
+
+static int s_iot_st_encode_varint_pos(struct aws_byte_buf *buffer, int32_t n) {
+    if (n > 0) {
+        return s_iot_st_encode_varint_uint32_t(buffer, (uint32_t)n);
+    } else if (n < 0) {
+        return s_iot_st_encode_varint_negative_uint32_t(buffer, (uint32_t)n);
+    }
+    return AWS_OP_ERR;
 }
 
 static int s_iot_st_decode_varint_uint32_t(struct aws_byte_cursor *cursor, uint32_t *result) {
@@ -54,7 +94,7 @@ static int s_iot_st_encode_varint(
     const uint8_t field_and_wire_type = (field_number << AWS_IOT_ST_FIELD_NUMBER_SHIFT) + wire_type;
     AWS_RETURN_ERROR_IF2(
         aws_byte_buf_append_byte_dynamic_secure(buffer, field_and_wire_type) == AWS_OP_SUCCESS, AWS_OP_ERR);
-    return s_iot_st_encode_varint_uint32_t(buffer, value);
+    return s_iot_st_encode_varint_pos(buffer, value);
 }
 
 static int s_iot_st_encode_lengthdelim(
@@ -64,7 +104,7 @@ static int s_iot_st_encode_lengthdelim(
     struct aws_byte_buf *buffer) {
     const uint8_t field_and_wire_type = (field_number << AWS_IOT_ST_FIELD_NUMBER_SHIFT) + wire_type;
     aws_byte_buf_append_byte_dynamic_secure(buffer, field_and_wire_type);
-    s_iot_st_encode_varint_uint32_t(buffer, payload->len);
+    s_iot_st_encode_varint_uint32_t(buffer, (uint32_t)payload->len);
     struct aws_byte_cursor temp = aws_byte_cursor_from_array(payload->buffer, payload->len);
     return aws_byte_buf_append_dynamic_secure(buffer, &temp);
 }
