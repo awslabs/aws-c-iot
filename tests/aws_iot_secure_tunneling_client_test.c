@@ -7,6 +7,7 @@
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
+#include <unistd.h>
 
 #define UNUSED(x) (void)(x)
 
