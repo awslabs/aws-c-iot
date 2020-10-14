@@ -7,7 +7,7 @@
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
-#include <unistd.h>
+// #include <unistd.h>
 
 #define UNUSED(x) (void)(x)
 
@@ -15,6 +15,7 @@ static struct aws_mutex mutex = AWS_MUTEX_INIT;
 static struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
 
 static void s_on_send_data_complete(int error_code, void *user_data) {
+    UNUSED(user_data);
     printf("Error code on complete %d.\n\n", error_code);
 }
 
@@ -105,7 +106,7 @@ int main(int argc, char **argv) {
     aws_mutex_unlock(&mutex);
 
     secure_tunnel->vtable.send_stream_start(secure_tunnel);
-    usleep(5000000);
+    // usleep(5000000);
 
     char *payload = "Hi! I'm Paul / Some random payload";
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
