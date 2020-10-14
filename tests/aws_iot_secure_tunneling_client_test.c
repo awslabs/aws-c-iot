@@ -14,6 +14,10 @@
 static struct aws_mutex mutex = AWS_MUTEX_INIT;
 static struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
 
+static void s_on_send_data_complete(int error_code, void *user_data) {
+    printf("%d\n\n", error_code);
+}
+
 static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunnel) {
     UNUSED(secure_tunnel);
     aws_mutex_lock(&mutex);
@@ -43,6 +47,7 @@ static void s_init_secure_tunneling_connection_config(
     config->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
 
     config->on_connection_complete = s_on_connection_complete;
+    config->on_send_data_complete = s_on_send_data_complete;
     /* TODO: Initialize the rest of the callbacks */
 }
 
@@ -103,7 +108,7 @@ int main(int argc, char **argv) {
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
     secure_tunnel->vtable.send_data(secure_tunnel, &buffer);
 
-    // usleep(5000000);
+    usleep(5000000);
 
     /* clean up */
     secure_tunnel->vtable.close(secure_tunnel);

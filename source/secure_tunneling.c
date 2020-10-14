@@ -130,23 +130,35 @@ static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
     return AWS_OP_SUCCESS;
 }
 
+static void s_secure_tunneling_on_send_data_complete_callback(
+    struct aws_websocket *websocket,
+    int error_code,
+    void *user_data) {
+    UNUSED(websocket);
+    struct data_tunnel_pair *x = user_data;
+    x->secure_tunnel->config.on_send_data_complete(error_code, user_data);
+}
+
 static bool s_secure_tunneling_send_data_call(
     struct aws_websocket *websocket,
     struct aws_byte_buf *out_buf,
     void *user_data) {
     UNUSED(websocket);
-    struct aws_byte_buf *buffer = user_data;
+    struct data_tunnel_pair *x = user_data;
+    struct aws_byte_buf *buffer = x->buf;
     AWS_RETURN_ERROR_IF2(aws_byte_buf_write(out_buf, buffer->buffer, buffer->len) == AWS_OP_SUCCESS, false);
     aws_byte_buf_clean_up(buffer);
+    aws_mem_release(x->secure_tunnel->config.allocator, (void *)x);
     return true;
 }
 
 static void s_init_websocket_send_frame_options(
     struct aws_websocket_send_frame_options *frame_options,
-    struct aws_byte_buf *buffer) {
-    frame_options->payload_length = buffer->len;
-    frame_options->user_data = buffer;
+    struct data_tunnel_pair *x) {
+    frame_options->payload_length = x->buf->len;
+    frame_options->user_data = x;
     frame_options->stream_outgoing_payload = s_secure_tunneling_send_data_call;
+    frame_options->on_complete = s_secure_tunneling_on_send_data_complete_callback;
     frame_options->opcode = AWS_WEBSOCKET_OPCODE_BINARY;
     frame_options->fin = true;
     frame_options->high_priority = false;
@@ -165,18 +177,20 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     message.payload.buffer = data->buffer;
     message.payload.capacity = data->capacity;
     message.payload.len = data->len;
-
     struct aws_byte_buf buffer;
     AWS_RETURN_ERROR_IF2(
         aws_iot_st_msg_serialize_from_struct(&buffer, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
         AWS_OP_ERR);
-
     if (buffer.len > MAX_ST_PAYLOAD) {
         return AWS_OP_ERR;
     }
+    struct data_tunnel_pair *x =
+        (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct data_tunnel_pair));
+    x->secure_tunnel = secure_tunnel;
+    x->buf = &buffer;
 
     struct aws_websocket_send_frame_options frame_options;
-    s_init_websocket_send_frame_options(&frame_options, &buffer);
+    s_init_websocket_send_frame_options(&frame_options, x);
     aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
     return AWS_OP_SUCCESS;
 }
@@ -191,6 +205,7 @@ static void s_copy_secure_tunneling_connection_config(
     dest->local_proxy_mode = src->local_proxy_mode;
     dest->endpoint_host = src->endpoint_host; /* TODO: followup */
     dest->on_connection_complete = src->on_connection_complete;
+    dest->on_send_data_complete = src->on_send_data_complete;
     dest->on_data_receive = src->on_data_receive;
     dest->on_stream_start = src->on_stream_start;
     dest->on_stream_reset = src->on_stream_reset;
