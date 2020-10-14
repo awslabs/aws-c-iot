@@ -14,7 +14,8 @@ static struct aws_mutex mutex = AWS_MUTEX_INIT;
 static struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
 
 static void s_on_send_data_complete(int error_code, void *user_data) {
-    printf("%d\n\n", error_code);
+    UNUSED(user_data);
+    printf("Error code on complete %d.\n\n", error_code);
 }
 
 static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunnel) {
@@ -107,7 +108,10 @@ int main(int argc, char **argv) {
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
     secure_tunnel->vtable.send_data(secure_tunnel, &buffer);
 
-    usleep(5000000);
+    char *payload2 = "Hi! I'm Paul / Some random payload";
+    struct aws_byte_buf buffer2 = aws_byte_buf_from_c_str(payload2);
+    secure_tunnel->vtable.send_data(secure_tunnel, &buffer2);
+    // usleep(50000000);
 
     /* clean up */
     secure_tunnel->vtable.close(secure_tunnel);
