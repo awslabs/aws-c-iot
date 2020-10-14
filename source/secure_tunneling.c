@@ -135,44 +135,28 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     int error_code,
     void *user_data) {
     UNUSED(websocket);
-    struct data_tunnel_pair *x = user_data;
-    x->secure_tunnel->config.on_send_data_complete(error_code, user_data);
+    struct data_tunnel_pair *pair = user_data;
+    pair->secure_tunnel->config.on_send_data_complete(error_code, user_data);
 }
-#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
-#define BYTE_TO_BINARY(byte)  \
-  (byte & 0x80 ? '1' : '0'), \
-  (byte & 0x40 ? '1' : '0'), \
-  (byte & 0x20 ? '1' : '0'), \
-  (byte & 0x10 ? '1' : '0'), \
-  (byte & 0x08 ? '1' : '0'), \
-  (byte & 0x04 ? '1' : '0'), \
-  (byte & 0x02 ? '1' : '0'), \
-  (byte & 0x01 ? '1' : '0') 
+
 static bool s_secure_tunneling_send_data_call(
     struct aws_websocket *websocket,
     struct aws_byte_buf *out_buf,
     void *user_data) {
     UNUSED(websocket);
-    struct data_tunnel_pair *x = user_data;
-    struct aws_byte_buf *buffer = x->buf;
-    printf("size %zu\n\n\n\n\n", buffer->len);  // size 94028301664288 or the actual size without the mutex 
-    for (size_t i = 0; i < buffer->len; i++) {    
-        printf("Byte #%zu: "BYTE_TO_BINARY_PATTERN "\n", i, BYTE_TO_BINARY(buffer->buffer[i]));
-    }
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_write(out_buf, buffer->buffer, buffer->len-1) == AWS_OP_SUCCESS, false);
-    for (size_t i = 0; i < out_buf->len; i++) {    
-        printf("Byte #%zu: "BYTE_TO_BINARY_PATTERN "\n", i, BYTE_TO_BINARY(out_buf->buffer[i]));
-    }
+    struct data_tunnel_pair *pair = user_data;
+    struct aws_byte_buf *buffer = &pair->buf;
+    AWS_RETURN_ERROR_IF2(aws_byte_buf_write(out_buf, buffer->buffer, buffer->len - 1) == AWS_OP_SUCCESS, false);
     aws_byte_buf_clean_up(buffer);
-    aws_mem_release(x->secure_tunnel->config.allocator, (void *)x);
+    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
     return true;
 }
 
 static void s_init_websocket_send_frame_options(
     struct aws_websocket_send_frame_options *frame_options,
-    struct data_tunnel_pair *x) {
-    frame_options->payload_length = x->buf->len;
-    frame_options->user_data = x;
+    struct data_tunnel_pair *pair) {
+    frame_options->payload_length = pair->buf.len;
+    frame_options->user_data = pair;
     frame_options->stream_outgoing_payload = s_secure_tunneling_send_data_call;
     frame_options->on_complete = s_secure_tunneling_on_send_data_complete_callback;
     frame_options->opcode = AWS_WEBSOCKET_OPCODE_BINARY;
@@ -193,20 +177,19 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     message.payload.buffer = data->buffer;
     message.payload.capacity = data->capacity;
     message.payload.len = data->len;
-    struct aws_byte_buf buffer;
+
+    struct data_tunnel_pair *pair =
+        (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct data_tunnel_pair));
+    pair->secure_tunnel = secure_tunnel;
     AWS_RETURN_ERROR_IF2(
-        aws_iot_st_msg_serialize_from_struct(&buffer, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
+        aws_iot_st_msg_serialize_from_struct(&pair->buf, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
         AWS_OP_ERR);
-    if (buffer.len > MAX_ST_PAYLOAD) {
+    if (pair->buf.len > MAX_ST_PAYLOAD) {
         return AWS_OP_ERR;
     }
-    struct data_tunnel_pair *x =
-        (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct data_tunnel_pair));
-    x->secure_tunnel = secure_tunnel;
-    x->buf = &buffer;
 
     struct aws_websocket_send_frame_options frame_options;
-    s_init_websocket_send_frame_options(&frame_options, x);
+    s_init_websocket_send_frame_options(&frame_options, pair);
     aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
     return AWS_OP_SUCCESS;
 }
@@ -262,4 +245,8 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
     aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
+}
+
+int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+    return secure_tunnel->vtable.send_data(secure_tunnel, data);
 }

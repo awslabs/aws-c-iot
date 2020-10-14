@@ -7,16 +7,20 @@
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
-#include <unistd.h>
 
 #define UNUSED(x) (void)(x)
 
 static struct aws_mutex mutex = AWS_MUTEX_INIT;
 static struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
 
+static int on_send_data_complete_error_code = 0;
+
 static void s_on_send_data_complete(int error_code, void *user_data) {
     UNUSED(user_data);
-    printf("Error code on complete %d.\n\n", error_code);
+    aws_mutex_lock(&mutex);
+    on_send_data_complete_error_code = error_code;
+    aws_condition_variable_notify_one(&condition_variable);
+    aws_mutex_unlock(&mutex);
 }
 
 static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunnel) {
@@ -107,10 +111,11 @@ int main(int argc, char **argv) {
 
     char *payload = "Hi! I'm Paul / Some random payload";
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
-    secure_tunnel->vtable.send_data(secure_tunnel, &buffer);
-    aws_mutex_lock(&mutex);
+    AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &buffer) == AWS_OP_SUCCESS, AWS_OP_ERR);
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-    aws_mutex_unlock(&mutex);
+    printf("Error Code: %d", on_send_data_complete_error_code);
+
+    // aws_thread_current_sleep(5000000000);
 
     /* clean up */
     secure_tunnel->vtable.close(secure_tunnel);

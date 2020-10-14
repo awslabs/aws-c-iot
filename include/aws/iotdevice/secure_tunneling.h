@@ -12,7 +12,7 @@ enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, A
 struct aws_secure_tunnel;
 
 struct data_tunnel_pair {
-    struct aws_byte_buf *buf;
+    struct aws_byte_buf buf;
     const struct aws_secure_tunnel *secure_tunnel;
 };
 
@@ -79,5 +79,8 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnelin
 
 AWS_SECURE_TUNNELING_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
+
+AWS_SECURE_TUNNELING_API
+int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data);
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_H */
