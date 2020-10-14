@@ -1,6 +1,7 @@
 #include <aws/http/request_response.h>
 #include <aws/http/websocket.h>
 #include <aws/io/tls_channel_handler.h>
+#include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/serializer.h>
 #include <aws/iotdevice/secure_tunneling.h>
 
@@ -53,6 +54,22 @@ static bool s_on_websocket_incoming_frame_begin(
     return true;
 }
 
+static void s_on_stream_start(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
+    if (secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
+        /* Source mode tunnel clients SHOULD treat receiving StreamStart as an error and close the active data stream
+         * and WebSocket connection. */
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Received StreamStart in source mode. Closing the tunnel.");
+        secure_tunnel->vtable.close(secure_tunnel);
+    } else {
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "Received StreamStart in destination mode. streamId=%d",
+            st_msg->streamId);
+        secure_tunnel->stream_id = st_msg->streamId;
+        secure_tunnel->config.on_stream_start(secure_tunnel);
+    }
+}
+
 static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
     /* TODO: Check streamId */
     /* secure_tunnel->stream_id != st_msg->streamId */
@@ -64,6 +81,7 @@ static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct
             secure_tunnel->config.on_data_receive(secure_tunnel, &st_msg->payload);
             break;
         case STREAM_START:
+            s_on_stream_start(secure_tunnel, st_msg);
             break;
         case STREAM_RESET:
             break;

@@ -31,6 +31,10 @@ static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, con
     printf("\n");
 }
 
+static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
+    printf("Client received StreamStart. streamId=%d", secure_tunnel->stream_id);
+}
+
 enum aws_secure_tunneling_local_proxy_mode s_local_proxy_mode_from_c_str(const char *local_proxy_mode) {
     if (strcmp(local_proxy_mode, "src") == 0) {
         return AWS_SECURE_TUNNELING_SOURCE_MODE;
@@ -57,6 +61,7 @@ static void s_init_secure_tunneling_connection_config(
 
     config->on_connection_complete = s_on_connection_complete;
     config->on_data_receive = s_on_data_receive;
+    config->on_stream_start = s_on_stream_start;
     /* TODO: Initialize the rest of the callbacks */
 }
 
@@ -115,7 +120,7 @@ int main(int argc, char **argv) {
 
     if (local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         /* Wait a little for data to show up */
-        aws_thread_current_sleep((uint64_t)60 * 1000000000);
+        aws_thread_current_sleep((uint64_t)2 * 60 * 1000000000);
     }
 
     /* clean up */
