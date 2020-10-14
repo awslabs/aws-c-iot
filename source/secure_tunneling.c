@@ -289,16 +289,7 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     pair->secure_tunnel->config.on_send_data_complete(error_code, user_data);
     aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
 }
-#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
-#define BYTE_TO_BINARY(byte)  \
-  (byte & 0x80 ? '1' : '0'), \
-  (byte & 0x40 ? '1' : '0'), \
-  (byte & 0x20 ? '1' : '0'), \
-  (byte & 0x10 ? '1' : '0'), \
-  (byte & 0x08 ? '1' : '0'), \
-  (byte & 0x04 ? '1' : '0'), \
-  (byte & 0x02 ? '1' : '0'), \
-  (byte & 0x01 ? '1' : '0') 
+
 static bool s_secure_tunneling_send_data_call(
     struct aws_websocket *websocket,
     struct aws_byte_buf *out_buf,
@@ -315,7 +306,7 @@ static bool s_secure_tunneling_send_data_call(
         goto cleanup;
     }
     aws_byte_buf_clean_up(buffer);
-    aws_mem_release(x->secure_tunnel->config.allocator, (void *)x);
+    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
     return true;
 cleanup:
     aws_byte_buf_clean_up(buffer);
