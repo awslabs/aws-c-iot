@@ -9,7 +9,7 @@ file(GLOB TESTS ${TEST_HDRS} ${TEST_SRC})
 add_test_case(devicedefender_task_unsupported_report_format)
 
 # Network metrics are only implemented for Linux so far
-if (UNIX AND NOT APPLE)
+if (UNIX AND NOT APPLE AND NOT TARGET_ARCH MATCHES ANDROID)
     add_test_case(devicedefender_get_system_network_total)
     add_test_case(devicedefender_get_network_connections)
     add_test_case(devicedefender_success_test)

@@ -70,9 +70,15 @@ elseif (APPLE)
         "source/apple/*.c"
         )
 elseif (UNIX AND NOT APPLE)
-    file(GLOB AWS_IOT_OS_SRC
-        "source/linux/*.c"
+    if (TARGET_ARCH MATCHES ANDROID)
+        file(GLOB AWS_IOT_OS_SRC
+        "source/android/*.c"
         )
+    else()
+        file(GLOB AWS_IOT_OS_SRC
+            "source/linux/*.c"
+            )
+    endif()
 endif()
 
 file(GLOB AWS_IOT_HEADERS
