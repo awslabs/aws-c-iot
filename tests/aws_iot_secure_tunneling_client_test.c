@@ -109,13 +109,25 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     aws_mutex_unlock(&mutex);
 
+    AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_start(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
+    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
+    printf("Error Code: %d", on_send_data_complete_error_code);
+
     char *payload = "Hi! I'm Paul / Some random payload";
     struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
     AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &buffer) == AWS_OP_SUCCESS, AWS_OP_ERR);
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     printf("Error Code: %d", on_send_data_complete_error_code);
 
-    // aws_thread_current_sleep(5000000000);
+    AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &buffer) == AWS_OP_SUCCESS, AWS_OP_ERR);
+    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
+    printf("Error Code: %d", on_send_data_complete_error_code);
+
+    AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_reset(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
+    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
+    printf("Error Code: %d", on_send_data_complete_error_code);
+
+    aws_thread_current_sleep(5000000000);
 
     /* clean up */
     secure_tunnel->vtable.close(secure_tunnel);

@@ -155,7 +155,7 @@ static bool s_secure_tunneling_send_data_call(
 static void s_init_websocket_send_frame_options(
     struct aws_websocket_send_frame_options *frame_options,
     struct data_tunnel_pair *pair) {
-    frame_options->payload_length = pair->buf.len;
+    frame_options->payload_length = pair->buf.len - 1;
     frame_options->user_data = pair;
     frame_options->stream_outgoing_payload = s_secure_tunneling_send_data_call;
     frame_options->on_complete = s_secure_tunneling_on_send_data_complete_callback;
@@ -165,19 +165,22 @@ static void s_init_websocket_send_frame_options(
     AWS_ZERO_STRUCT(frame_options->rsv);
 }
 
-static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
-        return AWS_OP_ERR;
-    }
+static int s_secure_tunneling_send(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_byte_buf *data,
+    enum aws_iot_st_message_type type) {
     struct aws_iot_st_msg message;
     message.streamId = secure_tunnel->stream_id;
     message.ignorable = 0;
-    message.type = DATA;
-    message.payload.allocator = data->allocator;
-    message.payload.buffer = data->buffer;
-    message.payload.capacity = data->capacity;
-    message.payload.len = data->len;
-
+    message.type = type;
+    if (data != NULL) {
+        message.payload.allocator = data->allocator;
+        message.payload.buffer = data->buffer;
+        message.payload.capacity = data->capacity;
+        message.payload.len = data->len;
+    } else {
+        message.payload = aws_byte_buf_from_c_str("");
+    }
     struct data_tunnel_pair *pair =
         (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct data_tunnel_pair));
     pair->secure_tunnel = secure_tunnel;
@@ -187,11 +190,34 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     if (pair->buf.len > MAX_ST_PAYLOAD) {
         return AWS_OP_ERR;
     }
-
     struct aws_websocket_send_frame_options frame_options;
     s_init_websocket_send_frame_options(&frame_options, pair);
     aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
     return AWS_OP_SUCCESS;
+}
+
+static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
+        return AWS_OP_ERR;
+    }
+    return s_secure_tunneling_send(secure_tunnel, data, DATA);
+}
+
+static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel == NULL || secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+        return AWS_OP_ERR;
+    }
+    secure_tunnel->stream_id += 1;
+    if (secure_tunnel->stream_id == 0)
+        secure_tunnel->stream_id += 1;
+    return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_START);
+}
+
+static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
+        return AWS_OP_ERR;
+    }
+    return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
 }
 
 static void s_copy_secure_tunneling_connection_config(
@@ -232,6 +258,8 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->vtable.connect = s_secure_tunneling_connect;
     secure_tunnel->vtable.close = s_secure_tunneling_close;
     secure_tunnel->vtable.send_data = s_secure_tunneling_send_data;
+    secure_tunnel->vtable.send_stream_start = s_secure_tunneling_send_stream_start;
+    secure_tunnel->vtable.send_stream_reset = s_secure_tunneling_send_stream_reset;
 
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->stream_id = INVALID_STREAM_ID;
@@ -249,4 +277,12 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
 
 int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
     return secure_tunnel->vtable.send_data(secure_tunnel, data);
+}
+
+int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel) {
+    return secure_tunnel->vtable.send_stream_start(secure_tunnel);
+}
+
+int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
+    return secure_tunnel->vtable.send_stream_reset(secure_tunnel);
 }

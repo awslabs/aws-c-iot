@@ -83,4 +83,10 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 AWS_SECURE_TUNNELING_API
 int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data);
 
+AWS_SECURE_TUNNELING_API
+int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
+
+AWS_SECURE_TUNNELING_API
+int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel);
+
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_H */
