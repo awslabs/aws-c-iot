@@ -306,6 +306,7 @@ static bool s_secure_tunneling_send_data_call(
         goto cleanup;
     }
     aws_byte_buf_clean_up(buffer);
+    aws_mem_release(x->secure_tunnel->config.allocator, (void *)x);
     return true;
 cleanup:
     aws_byte_buf_clean_up(buffer);
