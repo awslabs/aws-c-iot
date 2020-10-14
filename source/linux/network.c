@@ -358,7 +358,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
         struct ifreq ifr;
         AWS_ZERO_STRUCT(ifr);
 
-        strncpy(ifr.ifr_name, address->ifa_name, IFNAMSIZ);
+        strncpy(ifr.ifr_name, address->ifa_name, IFNAMSIZ-1);
         fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (fd == -1) {
             AWS_LOGF_ERROR(
@@ -388,7 +388,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
         if (ifr.ifr_addr.sa_family == AF_INET) {
             inet_ntop(AF_INET, &((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr, iface->ipv4_addr_str, 16);
         }
-        strncpy(iface->iface_name, ifr.ifr_name, IFACE_NAME_SIZE);
+        strncpy(iface->iface_name, ifr.ifr_name, IFACE_NAME_SIZE-1);
 
         if (address->ifa_data) {
             struct rtnl_link_stats *stats = address->ifa_data;
