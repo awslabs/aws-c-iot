@@ -306,7 +306,6 @@ static bool s_secure_tunneling_send_data_call(
         goto cleanup;
     }
     aws_byte_buf_clean_up(buffer);
-    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
     return true;
 cleanup:
     aws_byte_buf_clean_up(buffer);
@@ -390,7 +389,7 @@ static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure
     return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
 }
 
-static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
     if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
         return AWS_OP_ERR;
     }
