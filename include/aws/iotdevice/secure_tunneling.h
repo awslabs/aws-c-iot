@@ -3,6 +3,7 @@
 
 #include <aws/common/byte_buf.h>
 #include <aws/io/tls_channel_handler.h>
+#include <aws/iotdevice/iotdevice.h>
 
 /* TODO: Add to exports.h */
 #define AWS_SECURE_TUNNELING_API

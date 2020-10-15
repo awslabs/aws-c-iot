@@ -148,6 +148,7 @@ static bool s_secure_tunneling_send_data_call(
     struct data_tunnel_pair *pair = user_data;
     struct aws_byte_buf *buffer = &pair->buf;
     if (aws_byte_buf_write(out_buf, buffer->buffer, buffer->len) == false) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Failure writing to out_buf");
         goto cleanup;
     }
     aws_byte_buf_clean_up(buffer);
@@ -190,9 +191,11 @@ static int s_secure_tunneling_send(
         (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct data_tunnel_pair));
     pair->secure_tunnel = secure_tunnel;
     if (aws_iot_st_msg_serialize_from_struct(&pair->buf, secure_tunnel->config.allocator, message) != AWS_OP_SUCCESS) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Failure serializing message");
         goto cleanup;
     }
     if (pair->buf.len > MAX_ST_PAYLOAD) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Message size greater than MAX_ST_PAYLOAD");
         goto cleanup;
     }
     struct aws_websocket_send_frame_options frame_options;
@@ -206,15 +209,17 @@ cleanup:
 }
 
 static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
-        return AWS_OP_ERR;
+    if (secure_tunnel->stream_id == INVALID_STREAM_ID) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Invalid Stream Id");
+        return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INVALID_STREAM;
     }
     return s_secure_tunneling_send(secure_tunnel, data, DATA);
 }
 
 static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel == NULL || secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
-        return AWS_OP_ERR;
+    if (secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Start can only be sent from src mode");
+        return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INCORRECT_MODE;
     }
     secure_tunnel->stream_id += 1;
     if (secure_tunnel->stream_id == 0)
@@ -223,8 +228,9 @@ static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure
 }
 
 static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
-        return AWS_OP_ERR;
+    if (secure_tunnel->stream_id == INVALID_STREAM_ID) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Invalid Stream Id");
+        return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INVALID_STREAM;
     }
     return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
 }
