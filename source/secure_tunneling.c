@@ -54,7 +54,7 @@ static bool s_on_websocket_incoming_frame_begin(
     return true;
 }
 
-static void s_on_stream_start(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
+static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
     if (secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
         /* Source mode tunnel clients SHOULD treat receiving StreamStart as an error and close the active data stream
          * and WebSocket connection. */
@@ -70,24 +70,45 @@ static void s_on_stream_start(struct aws_secure_tunnel *secure_tunnel, struct aw
     }
 }
 
+static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
+    if (secure_tunnel->stream_id == INVALID_STREAM_ID || secure_tunnel->stream_id != st_msg->streamId) {
+        return;
+    }
+
+    secure_tunnel->config.on_stream_reset(secure_tunnel);
+    secure_tunnel->stream_id = INVALID_STREAM_ID;
+}
+
+static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel->stream_id == INVALID_STREAM_ID) {    /* Session reset does not need to check stream id */
+        return;
+    }
+
+    secure_tunnel->config.on_session_reset(secure_tunnel);
+    secure_tunnel->stream_id = INVALID_STREAM_ID;
+}
+
 static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
-    /* TODO: Check streamId */
-    /* secure_tunnel->stream_id != st_msg->streamId */
+    /* TODO: Check streamId, send reset? */
 
     switch (st_msg->type) {
-        case UNKNOWN:
-            break;
         case DATA:
             secure_tunnel->config.on_data_receive(secure_tunnel, &st_msg->payload);
             break;
         case STREAM_START:
-            s_on_stream_start(secure_tunnel, st_msg);
+            s_handle_stream_start(secure_tunnel, st_msg);
             break;
         case STREAM_RESET:
+            s_handle_stream_reset(secure_tunnel, st_msg);
             break;
         case SESSION_RESET:
+            s_handle_session_reset(secure_tunnel);
             break;
+        case UNKNOWN:
         default:
+            if (!st_msg->ignorable) {
+                AWS_LOGF_WARN(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Encountered an unknown but un-ignorable message. type=%d", st_msg->type);
+            }
             break;
     }
 }
@@ -248,10 +269,12 @@ static void s_copy_secure_tunneling_connection_config(
     dest->access_token = src->access_token; /* TODO: followup */
     dest->local_proxy_mode = src->local_proxy_mode;
     dest->endpoint_host = src->endpoint_host; /* TODO: followup */
+
     dest->on_connection_complete = src->on_connection_complete;
     dest->on_data_receive = src->on_data_receive;
     dest->on_stream_start = src->on_stream_start;
     dest->on_stream_reset = src->on_stream_reset;
+    dest->on_session_reset = src->on_session_reset;
     dest->on_close = src->on_close;
 }
 

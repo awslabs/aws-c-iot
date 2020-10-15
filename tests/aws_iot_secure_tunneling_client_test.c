@@ -35,6 +35,16 @@ static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
     printf("Client received StreamStart. streamId=%d", secure_tunnel->stream_id);
 }
 
+static void s_on_stream_reset(const struct aws_secure_tunnel *secure_tunnel) {
+    UNUSED(secure_tunnel);
+    printf("Client received StreamReset.");
+}
+
+static void s_on_session_reset(const struct aws_secure_tunnel *secure_tunnel) {
+    UNUSED(secure_tunnel);
+    printf("Client received SessionReset.");
+}
+
 enum aws_secure_tunneling_local_proxy_mode s_local_proxy_mode_from_c_str(const char *local_proxy_mode) {
     if (strcmp(local_proxy_mode, "src") == 0) {
         return AWS_SECURE_TUNNELING_SOURCE_MODE;
@@ -55,6 +65,7 @@ static void s_init_secure_tunneling_connection_config(
     config->allocator = allocator;
     config->bootstrap = bootstrap;
     config->socket_options = socket_options;
+
     config->access_token = aws_byte_cursor_from_c_str(access_token);
     config->local_proxy_mode = local_proxy_mode;
     config->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
@@ -62,6 +73,8 @@ static void s_init_secure_tunneling_connection_config(
     config->on_connection_complete = s_on_connection_complete;
     config->on_data_receive = s_on_data_receive;
     config->on_stream_start = s_on_stream_start;
+    config->on_stream_reset = s_on_stream_reset;
+    config->on_session_reset = s_on_session_reset;
     /* TODO: Initialize the rest of the callbacks */
 }
 
