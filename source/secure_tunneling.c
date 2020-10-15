@@ -137,6 +137,7 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
     pair->secure_tunnel->config.on_send_data_complete(error_code, user_data);
+    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
 }
 
 static bool s_secure_tunneling_send_data_call(
@@ -146,16 +147,21 @@ static bool s_secure_tunneling_send_data_call(
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
     struct aws_byte_buf *buffer = &pair->buf;
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_write(out_buf, buffer->buffer, buffer->len - 1) == AWS_OP_SUCCESS, false);
+    if (aws_byte_buf_write(out_buf, buffer->buffer, buffer->len) == false) {
+        goto cleanup;
+    }
+    aws_byte_buf_clean_up(buffer);
+    return true;
+cleanup:
     aws_byte_buf_clean_up(buffer);
     aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
-    return true;
+    return false;
 }
 
 static void s_init_websocket_send_frame_options(
     struct aws_websocket_send_frame_options *frame_options,
     struct data_tunnel_pair *pair) {
-    frame_options->payload_length = pair->buf.len - 1;
+    frame_options->payload_length = pair->buf.len;
     frame_options->user_data = pair;
     frame_options->stream_outgoing_payload = s_secure_tunneling_send_data_call;
     frame_options->on_complete = s_secure_tunneling_on_send_data_complete_callback;
@@ -167,36 +173,39 @@ static void s_init_websocket_send_frame_options(
 
 static int s_secure_tunneling_send(
     struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_byte_buf *data,
+    const struct aws_byte_cursor *data,
     enum aws_iot_st_message_type type) {
     struct aws_iot_st_msg message;
     message.streamId = secure_tunnel->stream_id;
     message.ignorable = 0;
     message.type = type;
     if (data != NULL) {
-        message.payload.allocator = data->allocator;
-        message.payload.buffer = data->buffer;
-        message.payload.capacity = data->capacity;
+        message.payload.buffer = data->ptr;
         message.payload.len = data->len;
     } else {
-        message.payload = aws_byte_buf_from_c_str("");
+        message.payload.buffer = NULL;
+        message.payload.len = 0;
     }
     struct data_tunnel_pair *pair =
         (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct data_tunnel_pair));
     pair->secure_tunnel = secure_tunnel;
-    AWS_RETURN_ERROR_IF2(
-        aws_iot_st_msg_serialize_from_struct(&pair->buf, secure_tunnel->config.allocator, message) == AWS_OP_SUCCESS,
-        AWS_OP_ERR);
+    if (aws_iot_st_msg_serialize_from_struct(&pair->buf, secure_tunnel->config.allocator, message) != AWS_OP_SUCCESS) {
+        goto cleanup;
+    }
     if (pair->buf.len > MAX_ST_PAYLOAD) {
-        return AWS_OP_ERR;
+        goto cleanup;
     }
     struct aws_websocket_send_frame_options frame_options;
     s_init_websocket_send_frame_options(&frame_options, pair);
     aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
     return AWS_OP_SUCCESS;
+cleanup:
+    aws_byte_buf_clean_up(&pair->buf);
+    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
+    return AWS_OP_ERR;
 }
 
-static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
     if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
         return AWS_OP_ERR;
     }
@@ -275,7 +284,7 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
     aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
 }
 
-int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
     return secure_tunnel->vtable.send_data(secure_tunnel, data);
 }
 

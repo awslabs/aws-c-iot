@@ -19,7 +19,7 @@ struct data_tunnel_pair {
 /* APIs */
 typedef int(aws_secure_tunneling_connect_fn)(struct aws_secure_tunnel *secure_tunnel);
 typedef int(
-    aws_secure_tunneling_send_data_fn)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data);
+    aws_secure_tunneling_send_data_fn)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
 typedef int(aws_secure_tunneling_send_stream_start_fn)(struct aws_secure_tunnel *secure_tunnel);
 typedef int(aws_secure_tunneling_send_stream_reset_fn)(struct aws_secure_tunnel *secure_tunnel);
 typedef int(aws_secure_tunneling_close_fn)(struct aws_secure_tunnel *secure_tunnel);
@@ -81,7 +81,7 @@ AWS_SECURE_TUNNELING_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_SECURE_TUNNELING_API
-int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data);
+int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
 
 AWS_SECURE_TUNNELING_API
 int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
