@@ -70,13 +70,18 @@ static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struc
     }
 }
 
+static void s_reset_secure_tunnel(struct aws_secure_tunnel *secure_tunnel) {
+    secure_tunnel->stream_id = INVALID_STREAM_ID;
+    secure_tunnel->received_data.len = 0; /* Drop any incomplete secure tunnel frame */
+}
+
 static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
     if (secure_tunnel->stream_id == INVALID_STREAM_ID || secure_tunnel->stream_id != st_msg->streamId) {
         return;
     }
 
     secure_tunnel->config.on_stream_reset(secure_tunnel);
-    secure_tunnel->stream_id = INVALID_STREAM_ID;
+    s_reset_secure_tunnel(secure_tunnel);
 }
 
 static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
@@ -85,7 +90,7 @@ static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
     }
 
     secure_tunnel->config.on_session_reset(secure_tunnel);
-    secure_tunnel->stream_id = INVALID_STREAM_ID;
+    s_reset_secure_tunnel(secure_tunnel);
 }
 
 static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
@@ -256,7 +261,7 @@ static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
         return AWS_OP_ERR;
     }
 
-    secure_tunnel->stream_id = INVALID_STREAM_ID;
+    s_reset_secure_tunnel(secure_tunnel);
     aws_websocket_close(secure_tunnel->websocket, false);
     aws_websocket_release(secure_tunnel->websocket);
     secure_tunnel->websocket = NULL;
