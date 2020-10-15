@@ -80,7 +80,7 @@ static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struc
 }
 
 static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel->stream_id == INVALID_STREAM_ID) {    /* Session reset does not need to check stream id */
+    if (secure_tunnel->stream_id == INVALID_STREAM_ID) { /* Session reset does not need to check stream id */
         return;
     }
 
@@ -107,7 +107,10 @@ static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct
         case UNKNOWN:
         default:
             if (!st_msg->ignorable) {
-                AWS_LOGF_WARN(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Encountered an unknown but un-ignorable message. type=%d", st_msg->type);
+                AWS_LOGF_WARN(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "Encountered an unknown but un-ignorable message. type=%d",
+                    st_msg->type);
             }
             break;
     }
