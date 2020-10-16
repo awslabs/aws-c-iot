@@ -139,8 +139,9 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         aws_iot_st_msg_deserialize_from_cursor(&st_msg, &st_frame, secure_tunnel->config.allocator);
         s_process_iot_st_msg(secure_tunnel, &st_msg);
 
-        /* TODO: `st_msg.payload` is not initialized for non Data messages. */
-        /* aws_byte_buf_clean_up(&st_msg.payload); */
+        if (st_msg.type == DATA) {
+            aws_byte_buf_clean_up(&st_msg.payload);
+        }
     }
 
     if (cursor.ptr != received_data->buffer) {
