@@ -24,6 +24,7 @@ static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunn
 static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
     UNUSED(secure_tunnel);
 
+    printf("Client received data:");
     /* Didn't want to copy to a null terminated string. So just print out each character */
     for (size_t i = 0; i < data->len; i++) {
         printf("%c", data->buffer[i]);
@@ -32,17 +33,17 @@ static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, con
 }
 
 static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
-    printf("Client received StreamStart. streamId=%d", secure_tunnel->stream_id);
+    printf("Client received StreamStart. streamId=%d\n", secure_tunnel->stream_id);
 }
 
 static void s_on_stream_reset(const struct aws_secure_tunnel *secure_tunnel) {
     UNUSED(secure_tunnel);
-    printf("Client received StreamReset.");
+    printf("Client received StreamReset.\n");
 }
 
 static void s_on_session_reset(const struct aws_secure_tunnel *secure_tunnel) {
     UNUSED(secure_tunnel);
-    printf("Client received SessionReset.");
+    printf("Client received SessionReset.\n");
 }
 
 enum aws_secure_tunneling_local_proxy_mode s_local_proxy_mode_from_c_str(const char *local_proxy_mode) {
@@ -133,7 +134,7 @@ int main(int argc, char **argv) {
 
     if (local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         /* Wait a little for data to show up */
-        aws_thread_current_sleep((uint64_t)2 * 60 * 1000000000);
+        aws_thread_current_sleep((uint64_t)60 * 60 * 1000000000);
     }
 
     /* clean up */
