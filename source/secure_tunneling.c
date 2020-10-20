@@ -321,6 +321,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->stream_id = INVALID_STREAM_ID;
     secure_tunnel->websocket = NULL;
 
+    /* TODO: Release this buffer when there is no data to hold */
     aws_byte_buf_init(&secure_tunnel->received_data, connection_config->allocator, MAX_WEBSOCKET_PAYLOAD);
 
     return secure_tunnel;
