@@ -7,6 +7,7 @@
 #define MAX_WEBSOCKET_PAYLOAD 131076
 #define INVALID_STREAM_ID 0
 #define MAX_ST_PAYLOAD 64512
+#define PAYLOAD_BYTE_LENGTH_PREFIX 2
 
 /* TODO: Remove me */
 #define UNUSED(x) (void)(x)
@@ -147,8 +148,12 @@ static bool s_secure_tunneling_send_data_call(
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
     struct aws_byte_buf *buffer = &pair->buf;
+    if (aws_byte_buf_write_be16(out_buf, (int16_t)pair->buf.len) == false) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Failure writing buffer length prefix to out_buf");
+        goto cleanup;
+    }
     if (aws_byte_buf_write(out_buf, buffer->buffer, buffer->len) == false) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Failure writing to out_buf");
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Failure writing data to out_buf");
         goto cleanup;
     }
     aws_byte_buf_clean_up(buffer);
@@ -162,7 +167,7 @@ cleanup:
 static void s_init_websocket_send_frame_options(
     struct aws_websocket_send_frame_options *frame_options,
     struct data_tunnel_pair *pair) {
-    frame_options->payload_length = pair->buf.len;
+    frame_options->payload_length = pair->buf.len + PAYLOAD_BYTE_LENGTH_PREFIX;
     frame_options->user_data = pair;
     frame_options->stream_outgoing_payload = s_secure_tunneling_send_data_call;
     frame_options->on_complete = s_secure_tunneling_on_send_data_complete_callback;

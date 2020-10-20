@@ -79,9 +79,9 @@ static int protobuf_message_test_case_one() {
  */
 int protobuf_message_test_case_two() {
     com::amazonaws::iot::securedtunneling::Message_Type type =
-        com::amazonaws::iot::securedtunneling::Message_Type_UNKNOWN;
-    int32_t streamid = 0;
-    int ignorable = 1;
+        com::amazonaws::iot::securedtunneling::Message_Type_STREAM_START;
+    int32_t streamid = 1;
+    int ignorable = 0;
     std::string payload = "";
     return execute_tests(type, streamid, ignorable, payload);
 }
