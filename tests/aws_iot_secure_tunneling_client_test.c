@@ -29,7 +29,7 @@ static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, con
     aws_byte_buf_init(&data_to_print, secure_tunnel->config.allocator, data->len + 1); /* +1 for null terminator */
     aws_byte_buf_append(&data_to_print, &data_cursor);
     aws_byte_buf_append_null_terminator(&data_to_print);
-    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, (char *)data_to_print.buffer);
+    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "%s", (char *)data_to_print.buffer);
 
     aws_byte_buf_clean_up(&data_to_print);
 }
