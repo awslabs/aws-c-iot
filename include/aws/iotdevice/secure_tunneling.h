@@ -26,6 +26,7 @@ typedef void(aws_secure_tunneling_on_data_receive_fn)(
     const struct aws_byte_buf *data);
 typedef void(aws_secure_tunneling_on_stream_start_fn)(const struct aws_secure_tunnel *secure_tunnel);
 typedef void(aws_secure_tunneling_on_stream_reset_fn)(const struct aws_secure_tunnel *secure_tunnel);
+typedef void(aws_secure_tunneling_on_session_reset_fn)(const struct aws_secure_tunnel *secure_tunnel);
 typedef void(aws_secure_tunneling_on_close_fn)(const struct aws_secure_tunnel *secure_tunnel, uint16_t close_code);
 
 struct aws_secure_tunnel_vtable {
@@ -49,6 +50,7 @@ struct aws_secure_tunneling_connection_config {
     aws_secure_tunneling_on_data_receive_fn *on_data_receive;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
+    aws_secure_tunneling_on_session_reset_fn *on_session_reset;
     aws_secure_tunneling_on_close_fn *on_close;
 };
 
@@ -65,6 +67,9 @@ struct aws_secure_tunnel {
     /* Dynamic data */
     int32_t stream_id;
     struct aws_websocket *websocket;
+
+    /* Stores what has been received but not processed */
+    struct aws_byte_buf received_data;
 };
 
 AWS_SECURE_TUNNELING_API
