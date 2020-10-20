@@ -63,7 +63,7 @@ static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struc
     } else {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "Received StreamStart in destination mode. streamId=%d",
+            "Received StreamStart in destination mode. stream_id=%d",
             st_msg->streamId);
         secure_tunnel->stream_id = st_msg->streamId;
         secure_tunnel->config.on_stream_start(secure_tunnel);
@@ -77,6 +77,12 @@ static void s_reset_secure_tunnel(struct aws_secure_tunnel *secure_tunnel) {
 
 static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
     if (secure_tunnel->stream_id == INVALID_STREAM_ID || secure_tunnel->stream_id != st_msg->streamId) {
+        AWS_LOGF_WARN(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "Received StreamReset with stream_id different than the active stream_id. Ignoring. st_msg->stream_id=%d "
+            "secure_tunnel->stream_id=%d",
+            st_msg->streamId,
+            secure_tunnel->stream_id);
         return;
     }
 
@@ -94,7 +100,7 @@ static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
 }
 
 static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
-    /* TODO: Check streamId, send reset? */
+    /* TODO: Check stream_id, send reset? */
 
     switch (st_msg->type) {
         case DATA:
