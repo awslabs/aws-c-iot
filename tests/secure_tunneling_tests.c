@@ -8,6 +8,8 @@
 #include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
 
+#define UNUSED(x) (void)(x)
+
 #define ACCESS_TOKEN "access_token"
 #define ENDPOINT "data.tunneling.iot.us-west-2.amazonaws.com"
 
@@ -27,6 +29,7 @@ static struct secure_tunneling_test_context s_test_context = {0};
 
 static bool s_on_stream_start_called = false;
 static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
+    UNUSED(secure_tunnel);
     s_on_stream_start_called = true;
 }
 
@@ -68,6 +71,9 @@ static int before(struct aws_allocator *allocator, void *ctx) {
 }
 
 static int after(struct aws_allocator *allocator, int setup_result, void *ctx) {
+    UNUSED(allocator);
+    UNUSED(setup_result);
+
     struct secure_tunneling_test_context *test_context = ctx;
 
     aws_secure_tunnel_release(test_context->secure_tunnel);
@@ -88,7 +94,7 @@ static void s_send_secure_tunneling_frame_to_websocket(
     /* Prepend 2 bytes length */
     struct aws_byte_buf websocket_frame;
     aws_byte_buf_init(&websocket_frame, allocator, serialized_st_msg.len + 2);
-    aws_byte_buf_write_be16(&websocket_frame, serialized_st_msg.len);
+    aws_byte_buf_write_be16(&websocket_frame, (uint16_t)serialized_st_msg.len);
     struct aws_byte_cursor c = aws_byte_cursor_from_buf(&serialized_st_msg);
     aws_byte_buf_append(&websocket_frame, &c);
     c = aws_byte_cursor_from_buf(&websocket_frame);
