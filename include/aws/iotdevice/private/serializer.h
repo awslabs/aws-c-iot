@@ -35,7 +35,7 @@ enum aws_iot_st_message_type { UNKNOWN, DATA, STREAM_START, STREAM_RESET, SESSIO
 
 struct aws_iot_st_msg {
     enum aws_iot_st_message_type type;
-    uint32_t streamId;
+    int32_t streamId; /* TODO: stream_id */
     int ignorable;
     struct aws_byte_buf payload;
 };

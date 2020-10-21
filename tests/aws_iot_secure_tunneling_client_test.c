@@ -30,12 +30,47 @@ static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunn
     aws_mutex_unlock(&mutex);
 }
 
+static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received data:");
+
+    struct aws_byte_cursor data_cursor = aws_byte_cursor_from_buf(data);
+    struct aws_byte_buf data_to_print;
+    aws_byte_buf_init(&data_to_print, secure_tunnel->config.allocator, data->len + 1); /* +1 for null terminator */
+    aws_byte_buf_append(&data_to_print, &data_cursor);
+    aws_byte_buf_append_null_terminator(&data_to_print);
+    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "%s", (char *)data_to_print.buffer);
+
+    aws_byte_buf_clean_up(&data_to_print);
+}
+
+static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
+    AWS_LOGF_INFO(
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamStart. stream_id=%d", secure_tunnel->stream_id);
+}
+
+static void s_on_stream_reset(const struct aws_secure_tunnel *secure_tunnel) {
+    UNUSED(secure_tunnel);
+    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamReset.");
+}
+
+static void s_on_session_reset(const struct aws_secure_tunnel *secure_tunnel) {
+    UNUSED(secure_tunnel);
+    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received SessionReset.");
+}
+
+enum aws_secure_tunneling_local_proxy_mode s_local_proxy_mode_from_c_str(const char *local_proxy_mode) {
+    if (strcmp(local_proxy_mode, "src") == 0) {
+        return AWS_SECURE_TUNNELING_SOURCE_MODE;
+    }
+    return AWS_SECURE_TUNNELING_DESTINATION_MODE;
+}
+
 static void s_init_secure_tunneling_connection_config(
     struct aws_allocator *allocator,
     struct aws_client_bootstrap *bootstrap,
     struct aws_socket_options *socket_options,
     const char *access_token,
-    const char *local_proxy_mode,
+    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode,
     const char *endpoint,
     struct aws_secure_tunneling_connection_config *config) {
 
@@ -43,16 +78,17 @@ static void s_init_secure_tunneling_connection_config(
     config->allocator = allocator;
     config->bootstrap = bootstrap;
     config->socket_options = socket_options;
-    config->access_token = aws_byte_cursor_from_c_str(access_token);
-    config->local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
 
-    if (strcmp(local_proxy_mode, "src") != 0) {
-        config->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
-    }
+    config->access_token = aws_byte_cursor_from_c_str(access_token);
+    config->local_proxy_mode = local_proxy_mode;
     config->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
 
     config->on_connection_complete = s_on_connection_complete;
     config->on_send_data_complete = s_on_send_data_complete;
+    config->on_data_receive = s_on_data_receive;
+    config->on_stream_start = s_on_stream_start;
+    config->on_stream_reset = s_on_stream_reset;
+    config->on_session_reset = s_on_session_reset;
     /* TODO: Initialize the rest of the callbacks */
 }
 
@@ -65,7 +101,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     const char *endpoint = argv[1];
-    const char *local_proxy_mode = argv[2];
+    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode = s_local_proxy_mode_from_c_str(argv[2]);
     const char *access_token = argv[3];
 
     struct aws_allocator *allocator = aws_mem_tracer_new(aws_default_allocator(), NULL, AWS_MEMTRACE_BYTES, 0);
@@ -109,22 +145,28 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     aws_mutex_unlock(&mutex);
 
-    AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_start(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
+    if (local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
+        AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_start(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
+        ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
 
-    char *payload = "Hi! I'm Paul / Some random payload\n";
-    struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
-    struct aws_byte_cursor cur = aws_byte_cursor_from_buf(&buffer);
-    AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-
-    for (size_t i = 0; i < 15; i++) {
+        char *payload = "Hi! I'm Paul / Some random payload\n";
+        struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
+        struct aws_byte_cursor cur = aws_byte_cursor_from_buf(&buffer);
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
         ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-    }
 
-    AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_reset(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
+        for (size_t i = 0; i < 15; i++) {
+            AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
+            ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
+        }
+
+        AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_reset(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
+        ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
+    }
+    if (local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+        /* Wait a little for data to show up */
+        aws_thread_current_sleep((uint64_t)60 * 60 * 1000000000);
+    }
 
     /* clean up */
     secure_tunnel->vtable.close(secure_tunnel);
