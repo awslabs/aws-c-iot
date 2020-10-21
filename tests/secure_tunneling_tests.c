@@ -12,6 +12,7 @@
 
 #define ACCESS_TOKEN "access_token"
 #define ENDPOINT "data.tunneling.iot.us-west-2.amazonaws.com"
+#define PAYLOAD "secure tunneling data payload"
 
 /* Callback when websocket gets data. The tests here are calling this function directly. */
 struct aws_websocket_incoming_frame;
@@ -33,6 +34,12 @@ static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
     s_on_stream_start_called = true;
 }
 
+static bool s_on_data_receive_correct_payload = false;
+static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+    UNUSED(secure_tunnel);
+    s_on_data_receive_correct_payload = aws_byte_buf_eq_c_str(data, PAYLOAD);
+}
+
 static void s_init_secure_tunneling_connection_config(
     struct aws_allocator *allocator,
     struct aws_client_bootstrap *bootstrap,
@@ -52,6 +59,7 @@ static void s_init_secure_tunneling_connection_config(
     config->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
 
     config->on_stream_start = s_on_stream_start;
+    config->on_data_receive = s_on_data_receive;
     /* TODO: Initialize the rest of the callbacks */
 }
 
@@ -127,6 +135,26 @@ static int s_secure_tunneling_handle_stream_start_test(struct aws_allocator *all
 
     ASSERT_TRUE(s_on_stream_start_called);
     ASSERT_INT_EQUALS(expected_stream_id, test_context->secure_tunnel->stream_id);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    secure_tunneling_handle_data_receive_test,
+    before,
+    s_secure_tunneling_handle_data_receive_test,
+    after,
+    &s_test_context);
+static int s_secure_tunneling_handle_data_receive_test(struct aws_allocator *allocator, void *ctx) {
+    struct secure_tunneling_test_context *test_context = ctx;
+
+    const int32_t stream_id = 10;
+    struct aws_iot_st_msg st_msg = {.type = DATA, .streamId = stream_id, .ignorable = false};
+    st_msg.payload = aws_byte_buf_from_c_str(PAYLOAD);
+
+    s_on_data_receive_correct_payload = false;
+    s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
+    ASSERT_TRUE(s_on_data_receive_correct_payload);
 
     return AWS_OP_SUCCESS;
 }

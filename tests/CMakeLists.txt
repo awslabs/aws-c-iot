@@ -14,6 +14,7 @@ if (UNIX AND NOT APPLE)
     add_test_case(devicedefender_get_network_connections)
     add_test_case(devicedefender_success_test)
     add_test_case(secure_tunneling_handle_stream_start_test)
+    add_test_case(secure_tunneling_handle_data_receive_test)
 endif()
 
 generate_test_driver(${PROJECT_NAME}-tests)
