@@ -10,6 +10,8 @@
 
 #define UNUSED(x) (void)(x)
 
+#define INVALID_STREAM_ID 0
+#define STREAM_ID 10
 #define ACCESS_TOKEN "access_token"
 #define ENDPOINT "data.tunneling.iot.us-west-2.amazonaws.com"
 #define PAYLOAD "secure tunneling data payload"
@@ -134,21 +136,19 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_stream_start_test(struct aws_allocator *allocator, void *ctx) {
-    const int32_t expected_stream_id = 10;
-
     struct secure_tunneling_test_context *test_context = ctx;
     test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
-
-    s_on_stream_start_called = false;
 
     struct aws_iot_st_msg st_msg;
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_START;
-    st_msg.streamId = expected_stream_id;
+    st_msg.streamId = STREAM_ID;
+    s_on_stream_start_called = false;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     ASSERT_TRUE(s_on_stream_start_called);
-    ASSERT_INT_EQUALS(expected_stream_id, test_context->secure_tunnel->stream_id);
+    ASSERT_INT_EQUALS(STREAM_ID, test_context->secure_tunnel->stream_id);
+    ASSERT_UINT_EQUALS(0, test_context->secure_tunnel->received_data.len);
 
     return AWS_OP_SUCCESS;
 }
@@ -161,14 +161,26 @@ AWS_TEST_CASE_FIXTURE(
     &s_test_context);
 static int s_secure_tunneling_handle_data_receive_test(struct aws_allocator *allocator, void *ctx) {
     struct secure_tunneling_test_context *test_context = ctx;
+    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
-    const int32_t stream_id = 10;
-    struct aws_iot_st_msg st_msg = {.type = DATA, .streamId = stream_id, .ignorable = false};
+    /* Send StreamStart first */
+    struct aws_iot_st_msg st_msg;
+    AWS_ZERO_STRUCT(st_msg);
+    st_msg.type = STREAM_START;
+    st_msg.streamId = STREAM_ID;
+    s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
+
+    /* Send data */
+    AWS_ZERO_STRUCT(st_msg);
+    st_msg.type = DATA;
+    st_msg.streamId = STREAM_ID;
     st_msg.payload = aws_byte_buf_from_c_str(PAYLOAD);
-
     s_on_data_receive_correct_payload = false;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
+
     ASSERT_TRUE(s_on_data_receive_correct_payload);
+    ASSERT_INT_EQUALS(STREAM_ID, test_context->secure_tunnel->stream_id);
+    ASSERT_UINT_EQUALS(0, test_context->secure_tunnel->received_data.len);
 
     return AWS_OP_SUCCESS;
 }
@@ -180,8 +192,6 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_stream_reset_test(struct aws_allocator *allocator, void *ctx) {
-    const int32_t expected_stream_id = 10;
-
     struct secure_tunneling_test_context *test_context = ctx;
     test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
@@ -189,17 +199,19 @@ static int s_secure_tunneling_handle_stream_reset_test(struct aws_allocator *all
     struct aws_iot_st_msg st_msg;
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_START;
-    st_msg.streamId = expected_stream_id;
+    st_msg.streamId = STREAM_ID;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     /* Send StreamReset */
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_RESET;
-    st_msg.streamId = expected_stream_id;
+    st_msg.streamId = STREAM_ID;
     s_on_stream_reset_called = false;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     ASSERT_TRUE(s_on_stream_reset_called);
+    ASSERT_INT_EQUALS(INVALID_STREAM_ID, test_context->secure_tunnel->stream_id);
+    ASSERT_UINT_EQUALS(0, test_context->secure_tunnel->received_data.len);
 
     return AWS_OP_SUCCESS;
 }
@@ -211,8 +223,6 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_session_reset_test(struct aws_allocator *allocator, void *ctx) {
-    const int32_t expected_stream_id = 10;
-
     struct secure_tunneling_test_context *test_context = ctx;
     test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
@@ -220,17 +230,19 @@ static int s_secure_tunneling_handle_session_reset_test(struct aws_allocator *al
     struct aws_iot_st_msg st_msg;
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_START;
-    st_msg.streamId = expected_stream_id;
+    st_msg.streamId = STREAM_ID;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     /* Send StreamReset */
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = SESSION_RESET;
-    st_msg.streamId = expected_stream_id;
+    st_msg.streamId = STREAM_ID;
     s_on_session_reset_called = false;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     ASSERT_TRUE(s_on_session_reset_called);
+    ASSERT_INT_EQUALS(INVALID_STREAM_ID, test_context->secure_tunnel->stream_id);
+    ASSERT_UINT_EQUALS(0, test_context->secure_tunnel->received_data.len);
 
     return AWS_OP_SUCCESS;
 }
