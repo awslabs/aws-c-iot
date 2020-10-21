@@ -47,7 +47,7 @@ static struct aws_error_info_list s_error_list = {
         static struct aws_log_subject_info s_logging_subjects[] = {
             DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER_TASK, "iotdevice-defender", "IoT DeviceDefender"),
             DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_NETWORK_CONFIG, "iotdevice-network", "IoT Device Network"),
-            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "iotdevice-secure-tunneling", "IoT Secure Tunneling")
+            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "iotdevice-st", "IoT Secure Tunneling"),
         };
 /* clang-format on */
 

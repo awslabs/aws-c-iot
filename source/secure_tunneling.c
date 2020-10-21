@@ -161,7 +161,7 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
     }
 }
 
-static bool s_on_websocket_incoming_frame_payload(
+bool on_websocket_incoming_frame_payload(
     struct aws_websocket *websocket,
     const struct aws_websocket_incoming_frame *frame,
     struct aws_byte_cursor data,
@@ -246,7 +246,7 @@ static void s_init_websocket_client_connection_options(
     websocket_options->on_connection_setup = s_on_websocket_setup;
     websocket_options->on_connection_shutdown = s_on_websocket_shutdown;
     websocket_options->on_incoming_frame_begin = s_on_websocket_incoming_frame_begin;
-    websocket_options->on_incoming_frame_payload = s_on_websocket_incoming_frame_payload;
+    websocket_options->on_incoming_frame_payload = on_websocket_incoming_frame_payload;
     websocket_options->on_incoming_frame_complete = s_on_websocket_incoming_frame_complete;
     websocket_options->manual_window_management = false;
 
@@ -443,12 +443,9 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 }
 
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
-    secure_tunnel->vtable.close(secure_tunnel);
-
+    aws_byte_buf_clean_up(&secure_tunnel->received_data);
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
-    aws_byte_buf_clean_up(&secure_tunnel->received_data);
-
     aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
 }
 
