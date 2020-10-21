@@ -46,6 +46,12 @@ static void s_on_stream_reset(const struct aws_secure_tunnel *secure_tunnel) {
     s_on_stream_reset_called = true;
 }
 
+static bool s_on_session_reset_called = false;
+static void s_on_session_reset(const struct aws_secure_tunnel *secure_tunnel) {
+    UNUSED(secure_tunnel);
+    s_on_session_reset_called = true;
+}
+
 static void s_init_secure_tunneling_connection_config(
     struct aws_allocator *allocator,
     struct aws_client_bootstrap *bootstrap,
@@ -67,6 +73,7 @@ static void s_init_secure_tunneling_connection_config(
     config->on_stream_start = s_on_stream_start;
     config->on_data_receive = s_on_data_receive;
     config->on_stream_reset = s_on_stream_reset;
+    config->on_session_reset = s_on_session_reset;
     /* TODO: Initialize the rest of the callbacks */
 }
 
@@ -193,6 +200,37 @@ static int s_secure_tunneling_handle_stream_reset_test(struct aws_allocator *all
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     ASSERT_TRUE(s_on_stream_reset_called);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    secure_tunneling_handle_session_reset_test,
+    before,
+    s_secure_tunneling_handle_session_reset_test,
+    after,
+    &s_test_context);
+static int s_secure_tunneling_handle_session_reset_test(struct aws_allocator *allocator, void *ctx) {
+    const int32_t expected_stream_id = 10;
+
+    struct secure_tunneling_test_context *test_context = ctx;
+    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
+
+    /* Send StreamStart first */
+    struct aws_iot_st_msg st_msg;
+    AWS_ZERO_STRUCT(st_msg);
+    st_msg.type = STREAM_START;
+    st_msg.streamId = expected_stream_id;
+    s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
+
+    /* Send StreamReset */
+    AWS_ZERO_STRUCT(st_msg);
+    st_msg.type = SESSION_RESET;
+    st_msg.streamId = expected_stream_id;
+    s_on_session_reset_called = false;
+    s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
+
+    ASSERT_TRUE(s_on_session_reset_called);
 
     return AWS_OP_SUCCESS;
 }
