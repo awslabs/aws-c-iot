@@ -9,7 +9,7 @@
 #include <aws/common/logging.h>
 #include <aws/iotdevice/exports.h>
 
-#define AWS_C_IOTDEVICE_PACKAGE_ID 11
+#define AWS_C_IOTDEVICE_PACKAGE_ID 13
 
 enum aws_iotdevice_error {
     AWS_ERROR_IOTDEVICE_INVALID_RESERVED_BITS = AWS_ERROR_ENUM_BEGIN_RANGE(AWS_C_IOTDEVICE_PACKAGE_ID),
