@@ -1,5 +1,7 @@
+#include <aws/common/string.h>
 #include <aws/common/zero.h>
 #include <aws/http/http.h>
+#include <aws/http/request_response.h>
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/event_loop.h>
 #include <aws/io/socket.h>
@@ -12,17 +14,23 @@
 
 #define INVALID_STREAM_ID 0
 #define STREAM_ID 10
-#define ACCESS_TOKEN "access_token"
+#define ACCESS_TOKEN "my_super_secret_access_token"
 #define ENDPOINT "data.tunneling.iot.us-west-2.amazonaws.com"
 #define PAYLOAD "secure tunneling data payload"
 
-/* Callback when websocket gets data. The tests here are calling this function directly. */
+/*
+ * The tests here call these functions directly.
+ */
+
+/* Callback when websocket gets data */
 struct aws_websocket_incoming_frame;
 extern bool on_websocket_incoming_frame_payload(
     struct aws_websocket *websocket,
     const struct aws_websocket_incoming_frame *frame,
     struct aws_byte_cursor data,
     void *user_data);
+/* Function that returns a websocket upgrade handshake request */
+extern struct aws_http_message *new_handshake_request(const struct aws_secure_tunnel *secure_tunnel);
 
 struct secure_tunneling_test_context {
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
@@ -244,5 +252,47 @@ static int s_secure_tunneling_handle_session_reset_test(struct aws_allocator *al
     ASSERT_INT_EQUALS(INVALID_STREAM_ID, test_context->secure_tunnel->stream_id);
     ASSERT_UINT_EQUALS(0, test_context->secure_tunnel->received_data.len);
 
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    secure_tunneling_new_handshake_request_test,
+    before,
+    s_secure_tunneling_new_handshake_request_test,
+    after,
+    &s_test_context);
+static int s_secure_tunneling_new_handshake_request_test(struct aws_allocator *allocator, void *ctx) {
+    UNUSED(allocator);
+
+    struct secure_tunneling_test_context *test_context = ctx;
+
+    /* Create the handshake request */
+    struct aws_http_message *handshake_request = new_handshake_request(test_context->secure_tunnel);
+
+    ASSERT_TRUE(aws_http_message_is_request(handshake_request));
+
+    struct aws_byte_cursor method;
+    aws_http_message_get_request_method(handshake_request, &method);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&method, "GET"));
+
+    /* Verify path */
+    struct aws_byte_cursor path;
+    aws_http_message_get_request_path(handshake_request, &path);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&path, "/tunnel?local-proxy-mode=source"));
+
+    /* Verify headers */
+    const char *expected_headers[][2] = {
+        {"Sec-WebSocket-Protocol", "aws.iot.securetunneling-1.0"},
+        {"access-token", ACCESS_TOKEN}
+    };
+    const struct aws_http_headers *headers = aws_http_message_get_const_headers(handshake_request);
+    for (size_t i = 0; i < sizeof(expected_headers)/sizeof(expected_headers[0]); i++) {
+        struct aws_byte_cursor name = aws_byte_cursor_from_c_str(expected_headers[i][0]);
+        struct aws_byte_cursor value;
+        ASSERT_INT_EQUALS(AWS_OP_SUCCESS, aws_http_headers_get(headers, name, &value));
+        ASSERT_TRUE(aws_byte_cursor_eq_c_str(&value, expected_headers[i][1]));
+    }
+
+    aws_http_message_release(handshake_request);
     return AWS_OP_SUCCESS;
 }
