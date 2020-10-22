@@ -3,6 +3,7 @@
 
 #include <aws/common/byte_buf.h>
 #include <aws/io/tls_channel_handler.h>
+#include <aws/iotdevice/exports.h>
 
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
