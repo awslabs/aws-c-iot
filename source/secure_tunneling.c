@@ -200,7 +200,7 @@ static const char *s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy
     return "destination";
 }
 
-struct aws_http_message *new_handshake_request(const struct aws_secure_tunnel *secure_tunnel) {
+static struct aws_http_message *s_new_handshake_request(const struct aws_secure_tunnel *secure_tunnel) {
     char path[50];
     snprintf(
         path,
@@ -227,7 +227,7 @@ struct aws_http_message *new_handshake_request(const struct aws_secure_tunnel *s
     return handshake_request;
 }
 
-static void s_init_websocket_client_connection_options(
+void init_websocket_client_connection_options(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_websocket_client_connection_options *websocket_options) {
 
@@ -238,7 +238,7 @@ static void s_init_websocket_client_connection_options(
     websocket_options->tls_options = &secure_tunnel->tls_con_opt;
     websocket_options->host = secure_tunnel->config.endpoint_host;
     websocket_options->port = 443;
-    websocket_options->handshake_request = new_handshake_request(secure_tunnel);
+    websocket_options->handshake_request = s_new_handshake_request(secure_tunnel);
     websocket_options->initial_window_size = MAX_WEBSOCKET_PAYLOAD; /* TODO: followup */
     websocket_options->user_data = secure_tunnel;
     websocket_options->on_connection_setup = s_on_websocket_setup;
@@ -258,7 +258,7 @@ static int s_secure_tunneling_connect(struct aws_secure_tunnel *secure_tunnel) {
     }
 
     struct aws_websocket_client_connection_options websocket_options;
-    s_init_websocket_client_connection_options(secure_tunnel, &websocket_options);
+    init_websocket_client_connection_options(secure_tunnel, &websocket_options);
     if (aws_websocket_client_connect(&websocket_options)) {
         return AWS_OP_ERR;
     }

@@ -17,7 +17,7 @@ if (UNIX AND NOT APPLE)
     add_test_case(secure_tunneling_handle_data_receive_test)
     add_test_case(secure_tunneling_handle_stream_reset_test)
     add_test_case(secure_tunneling_handle_session_reset_test)
-    add_test_case(secure_tunneling_new_handshake_request_test)
+    add_test_case(secure_tunneling_init_websocket_options_test)
 endif()
 
 generate_test_driver(${PROJECT_NAME}-tests)
