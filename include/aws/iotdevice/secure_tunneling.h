@@ -3,9 +3,7 @@
 
 #include <aws/common/byte_buf.h>
 #include <aws/io/tls_channel_handler.h>
-
-/* TODO: Add to exports.h */
-#define AWS_SECURE_TUNNELING_API
+#include <aws/iotdevice/exports.h>
 
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
@@ -72,10 +70,10 @@ struct aws_secure_tunnel {
     struct aws_byte_buf received_data;
 };
 
-AWS_SECURE_TUNNELING_API
+AWS_IOTDEVICE_API
 struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunneling_connection_config *connection_config);
 
-AWS_SECURE_TUNNELING_API
+AWS_IOTDEVICE_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_H */
