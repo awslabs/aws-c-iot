@@ -13,6 +13,13 @@
 /* TODO: Remove me */
 #define UNUSED(x) (void)(x)
 
+/*
+ * For testing
+ */
+typedef int(
+    websocket_send_frame_fn)(struct aws_websocket *websocket, const struct aws_websocket_send_frame_options *options);
+static websocket_send_frame_fn *s_websocket_send_frame = aws_websocket_send_frame;
+
 static void s_on_websocket_setup(
     struct aws_websocket *websocket,
     int error_code,
@@ -354,7 +361,7 @@ static int s_secure_tunneling_send(
     }
     struct aws_websocket_send_frame_options frame_options;
     s_init_websocket_send_frame_options(&frame_options, pair);
-    aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
+    s_websocket_send_frame(secure_tunnel->websocket, &frame_options);
     return AWS_OP_SUCCESS;
 cleanup:
     aws_byte_buf_clean_up(&pair->buf);
@@ -459,4 +466,25 @@ int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel) {
 
 int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
     return secure_tunnel->vtable.send_stream_reset(secure_tunnel);
+}
+
+/*
+ * For testing
+ */
+static int s_websocket_send_frame_for_testing(
+    struct aws_websocket *websocket,
+    const struct aws_websocket_send_frame_options *options) {
+
+    struct aws_byte_buf out_buf; /* TODO: initialize/allocate out_buf */
+    options->stream_outgoing_payload(websocket, &out_buf, options->user_data);
+
+    /* Just hand it over to myself */
+    struct aws_byte_cursor data = aws_byte_cursor_from_buf(&out_buf);
+    on_websocket_incoming_frame_payload(websocket, NULL, data, NULL /* TODO: How do I get websocket->user_data? */);
+
+    return 0;
+}
+
+void set_websocket_send_frame_for_testing(void) {
+    s_websocket_send_frame = s_websocket_send_frame_for_testing;
 }
