@@ -229,7 +229,7 @@ static struct aws_http_message *s_new_handshake_request(const struct aws_secure_
     return handshake_request;
 }
 
-static void s_init_websocket_client_connection_options(
+void init_websocket_client_connection_options(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_websocket_client_connection_options *websocket_options) {
 
@@ -260,7 +260,7 @@ static int s_secure_tunneling_connect(struct aws_secure_tunnel *secure_tunnel) {
     }
 
     struct aws_websocket_client_connection_options websocket_options;
-    s_init_websocket_client_connection_options(secure_tunnel, &websocket_options);
+    init_websocket_client_connection_options(secure_tunnel, &websocket_options);
     if (aws_websocket_client_connect(&websocket_options)) {
         return AWS_OP_ERR;
     }
