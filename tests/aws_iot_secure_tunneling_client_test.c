@@ -150,8 +150,7 @@ int main(int argc, char **argv) {
         ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
 
         char *payload = "Hi! I'm Paul / Some random payload\n";
-        struct aws_byte_buf buffer = aws_byte_buf_from_c_str(payload);
-        struct aws_byte_cursor cur = aws_byte_cursor_from_buf(&buffer);
+        struct aws_byte_cursor cur = aws_byte_cursor_from_c_str(payload);
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
         ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
 
