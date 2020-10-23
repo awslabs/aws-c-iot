@@ -129,7 +129,7 @@ int aws_iot_st_msg_serialize_from_struct(
     struct aws_byte_buf *buffer,
     struct aws_allocator *allocator,
     struct aws_iot_st_msg message) {
-    if (aws_byte_buf_init(buffer, allocator, AWS_IOT_ST_DEFAULT_ALLO + message.payload.capacity) != AWS_OP_SUCCESS) {
+    if (aws_byte_buf_init(buffer, allocator, AWS_IOT_ST_DEFAULT_ALLO + message.payload.len) != AWS_OP_SUCCESS) {
         return AWS_OP_ERR;
     }
 

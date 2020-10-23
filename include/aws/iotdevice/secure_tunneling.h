@@ -3,22 +3,30 @@
 
 #include <aws/common/byte_buf.h>
 #include <aws/io/tls_channel_handler.h>
+#include <aws/iotdevice/iotdevice.h>
+
 #include <aws/iotdevice/exports.h>
 
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
 struct aws_secure_tunnel;
 
+struct data_tunnel_pair {
+    struct aws_byte_buf buf;
+    const struct aws_secure_tunnel *secure_tunnel;
+};
+
 /* APIs */
 typedef int(aws_secure_tunneling_connect_fn)(struct aws_secure_tunnel *secure_tunnel);
 typedef int(
-    aws_secure_tunneling_send_data_fn)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data);
+    aws_secure_tunneling_send_data_fn)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
 typedef int(aws_secure_tunneling_send_stream_start_fn)(struct aws_secure_tunnel *secure_tunnel);
 typedef int(aws_secure_tunneling_send_stream_reset_fn)(struct aws_secure_tunnel *secure_tunnel);
 typedef int(aws_secure_tunneling_close_fn)(struct aws_secure_tunnel *secure_tunnel);
 
 /* Callbacks */
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(const struct aws_secure_tunnel *secure_tunnel);
+typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_data_receive_fn)(
     const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_buf *data);
@@ -45,6 +53,7 @@ struct aws_secure_tunneling_connection_config {
     struct aws_byte_cursor endpoint_host;
 
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
+    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_data_receive_fn *on_data_receive;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
@@ -75,5 +84,14 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnelin
 
 AWS_IOTDEVICE_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
+
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
+
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
+
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel);
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_H */
