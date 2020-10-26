@@ -406,32 +406,6 @@ static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure
     return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
 }
 
-static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
-        return AWS_OP_ERR;
-    }
-    return s_secure_tunneling_send(secure_tunnel, data, DATA);
-}
-
-static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Start can only be sent from src mode");
-        return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INCORRECT_MODE;
-    }
-    secure_tunnel->stream_id += 1;
-    if (secure_tunnel->stream_id == 0)
-        secure_tunnel->stream_id += 1;
-    return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_START);
-}
-
-static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel->stream_id == INVALID_STREAM_ID) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECUTRE_TUNNELING, "Invalid Stream Id");
-        return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INVALID_STREAM;
-    }
-    return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
-}
-
 static void s_copy_secure_tunneling_connection_config(
     const struct aws_secure_tunneling_connection_config *src,
     struct aws_secure_tunneling_connection_config *dest) {
