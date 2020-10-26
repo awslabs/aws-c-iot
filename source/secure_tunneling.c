@@ -449,6 +449,14 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
     aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
 }
 
+int aws_secure_tunnel_connect(struct aws_secure_tunnel *secure_tunnel) {
+    return secure_tunnel->vtable.connect(secure_tunnel);
+}
+
+int aws_secure_tunnel_close(struct aws_secure_tunnel *secure_tunnel) {
+    return secure_tunnel->vtable.close(secure_tunnel);
+}
+
 int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
     return secure_tunnel->vtable.send_data(secure_tunnel, data);
 }

@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
 
     /* Create a secure tunnel object and connect */
     struct aws_secure_tunnel *secure_tunnel = aws_secure_tunnel_new(&config);
-    secure_tunnel->vtable.connect(secure_tunnel);
+    aws_secure_tunnel_connect(secure_tunnel);
 
     /* wait here until the connection is done */
     aws_mutex_lock(&mutex);
@@ -168,7 +168,7 @@ int main(int argc, char **argv) {
     }
 
     /* clean up */
-    secure_tunnel->vtable.close(secure_tunnel);
+    aws_secure_tunnel_close(secure_tunnel);
     aws_secure_tunnel_release(secure_tunnel);
 
     aws_client_bootstrap_release(bootstrap);
