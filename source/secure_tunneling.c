@@ -280,7 +280,10 @@ static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
     return AWS_OP_SUCCESS;
 }
 
-void secure_tunneling_on_send_data_complete_callback(struct aws_websocket *websocket, int error_code, void *user_data) {
+void s_secure_tunneling_on_send_data_complete_callback(
+    struct aws_websocket *websocket,
+    int error_code,
+    void *user_data) {
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
     pair->secure_tunnel->config.on_send_data_complete(error_code, user_data);
@@ -313,7 +316,7 @@ static void s_init_websocket_send_frame_options(
     frame_options->payload_length = pair->buf.len + PAYLOAD_BYTE_LENGTH_PREFIX;
     frame_options->user_data = pair;
     frame_options->stream_outgoing_payload = secure_tunneling_send_data_call;
-    frame_options->on_complete = secure_tunneling_on_send_data_complete_callback;
+    frame_options->on_complete = s_secure_tunneling_on_send_data_complete_callback;
     frame_options->opcode = AWS_WEBSOCKET_OPCODE_BINARY;
     frame_options->fin = true;
     frame_options->high_priority = false;
