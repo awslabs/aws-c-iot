@@ -425,7 +425,6 @@ static void s_copy_secure_tunneling_connection_config(
     dest->on_stream_start = src->on_stream_start;
     dest->on_stream_reset = src->on_stream_reset;
     dest->on_session_reset = src->on_session_reset;
-    dest->on_close = src->on_close;
 }
 
 struct aws_secure_tunnel *aws_secure_tunnel_new(
