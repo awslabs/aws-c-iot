@@ -370,6 +370,7 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_send_data(struct aws_allocator *allocator, void *ctx) {
+    UNUSED(allocator);
     const char *expected_payload = "Hi! I'm Paul / Some random payload\n";
     const int32_t expected_stream_id = 1;
     const int prefix_bytes = 2;
@@ -391,6 +392,7 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_send_data_stream_start(struct aws_allocator *allocator, void *ctx) {
+    UNUSED(allocator);
     const char *expected_payload = "";
     const int32_t expected_stream_id = 1;
     const int prefix_bytes = 2;
@@ -412,6 +414,7 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_send_data_stream_reset(struct aws_allocator *allocator, void *ctx) {
+    UNUSED(allocator);
     const char *expected_payload = "";
     const int32_t expected_stream_id = 1;
     const int prefix_bytes = 2;
