@@ -109,8 +109,8 @@ static int s_iot_st_encode_lengthdelim(
     return aws_byte_buf_append_dynamic_secure(buffer, &temp);
 }
 
-static int s_iot_st_encode_streamid(int32_t data, struct aws_byte_buf *buffer) {
-    return s_iot_st_encode_varint(AWS_IOT_ST_MESSAGE_STREAMID, AWS_IOT_ST_VARINT_WIRE, data, buffer);
+static int s_iot_st_encode_stream_id(int32_t data, struct aws_byte_buf *buffer) {
+    return s_iot_st_encode_varint(AWS_IOT_ST_MESSAGE_STREAM_ID, AWS_IOT_ST_VARINT_WIRE, data, buffer);
 }
 
 static int s_iot_st_encode_ignorable(int32_t data, struct aws_byte_buf *buffer) {
@@ -138,8 +138,8 @@ int aws_iot_st_msg_serialize_from_struct(
             goto cleanup;
         }
     }
-    if (message.stream_id != AWS_IOT_ST_MESSAGE_DEFAULT_STREAMID) {
-        if (s_iot_st_encode_streamid(message.stream_id, buffer) != AWS_OP_SUCCESS) {
+    if (message.stream_id != AWS_IOT_ST_MESSAGE_DEFAULT_STREAM_ID) {
+        if (s_iot_st_encode_stream_id(message.stream_id, buffer) != AWS_OP_SUCCESS) {
             goto cleanup;
         }
     }
@@ -183,7 +183,7 @@ int aws_iot_st_msg_deserialize_from_cursor(
         field_number = (*cursor->ptr) >> 3;
         aws_byte_cursor_advance(cursor, 1);
 
-        if (field_number == AWS_IOT_ST_STREAMID_FIELD_NUMBER && wire_type == AWS_IOT_ST_VARINT_WIRE) {
+        if (field_number == AWS_IOT_ST_STREAM_ID_FIELD_NUMBER && wire_type == AWS_IOT_ST_VARINT_WIRE) {
             uint32_t res = 0;
             if (s_iot_st_decode_varint_uint32_t(cursor, &res) != AWS_OP_SUCCESS) {
                 return AWS_OP_ERR;
@@ -219,10 +219,7 @@ int aws_iot_st_msg_deserialize_from_cursor(
         }
     }
     if (payload_check == 0) {
-        message->payload.allocator = NULL;
-        message->payload.buffer = NULL;
-        message->payload.capacity = 0;
-        message->payload.len = 0;
+        AWS_ZERO_STRUCT(message->payload);
     }
     return AWS_OP_SUCCESS;
 cleanup:
