@@ -31,7 +31,7 @@ static int execute_tests(
 
     struct aws_iot_st_msg c_message;
     c_message.type = (aws_iot_st_message_type)type;
-    c_message.streamId = streamid;
+    c_message.stream_id = streamid;
     c_message.ignorable = ignorable;
     c_message.payload = aws_byte_buf_from_c_str(payload.c_str());
 

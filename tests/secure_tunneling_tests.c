@@ -153,7 +153,7 @@ static int s_secure_tunneling_handle_stream_start_test(struct aws_allocator *all
     struct aws_iot_st_msg st_msg;
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_START;
-    st_msg.streamId = STREAM_ID;
+    st_msg.stream_id = STREAM_ID;
     s_on_stream_start_called = false;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
@@ -178,13 +178,13 @@ static int s_secure_tunneling_handle_data_receive_test(struct aws_allocator *all
     struct aws_iot_st_msg st_msg;
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_START;
-    st_msg.streamId = STREAM_ID;
+    st_msg.stream_id = STREAM_ID;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     /* Send data */
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = DATA;
-    st_msg.streamId = STREAM_ID;
+    st_msg.stream_id = STREAM_ID;
     st_msg.payload = aws_byte_buf_from_c_str(PAYLOAD);
     s_on_data_receive_correct_payload = false;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
@@ -210,13 +210,13 @@ static int s_secure_tunneling_handle_stream_reset_test(struct aws_allocator *all
     struct aws_iot_st_msg st_msg;
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_START;
-    st_msg.streamId = STREAM_ID;
+    st_msg.stream_id = STREAM_ID;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     /* Send StreamReset */
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_RESET;
-    st_msg.streamId = STREAM_ID;
+    st_msg.stream_id = STREAM_ID;
     s_on_stream_reset_called = false;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
@@ -241,13 +241,13 @@ static int s_secure_tunneling_handle_session_reset_test(struct aws_allocator *al
     struct aws_iot_st_msg st_msg;
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = STREAM_START;
-    st_msg.streamId = STREAM_ID;
+    st_msg.stream_id = STREAM_ID;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
     /* Send StreamReset */
     AWS_ZERO_STRUCT(st_msg);
     st_msg.type = SESSION_RESET;
-    st_msg.streamId = STREAM_ID;
+    st_msg.stream_id = STREAM_ID;
     s_on_session_reset_called = false;
     s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
 
