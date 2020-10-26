@@ -160,7 +160,7 @@ static int s_test_sent_data(
 
     struct aws_iot_st_msg message;
     message.type = type;
-    message.streamId = expected_stream_id;
+    message.stream_id = expected_stream_id;
     message.ignorable = 0;
     message.payload = aws_byte_buf_from_c_str(expected_payload);
     struct aws_byte_buf serialized_st_msg;
