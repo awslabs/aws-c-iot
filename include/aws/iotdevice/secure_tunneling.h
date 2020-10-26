@@ -58,7 +58,6 @@ struct aws_secure_tunneling_connection_config {
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
-    aws_secure_tunneling_on_close_fn *on_close;
 };
 
 struct aws_secure_tunnel {
