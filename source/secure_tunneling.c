@@ -280,7 +280,7 @@ static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
     return AWS_OP_SUCCESS;
 }
 
-void s_secure_tunneling_on_send_data_complete_callback(
+static void s_secure_tunneling_on_send_data_complete_callback(
     struct aws_websocket *websocket,
     int error_code,
     void *user_data) {
