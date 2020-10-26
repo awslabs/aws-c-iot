@@ -51,6 +51,22 @@ extern void secure_tunneling_on_send_data_complete_callback(
     int error_code,
     void *user_data);
 
+extern int secure_tunneling_init_send_frame(
+    struct aws_websocket_send_frame_options *frame_options,
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_byte_cursor *data,
+    enum aws_iot_st_message_type type);
+
+extern bool secure_tunneling_send_data_call(
+    struct aws_websocket *websocket,
+    struct aws_byte_buf *out_buf,
+    void *user_data);
+
+extern void secure_tunneling_on_send_data_complete_callback(
+    struct aws_websocket *websocket,
+    int error_code,
+    void *user_data);
+
 struct secure_tunneling_test_context {
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
     struct aws_secure_tunnel *secure_tunnel;
@@ -366,6 +382,69 @@ static int s_secure_tunneling_init_websocket_options_test(struct aws_allocator *
     }
 
     aws_http_message_release(websocket_options.handshake_request);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    secure_tunneling_handle_send_data,
+    before,
+    s_secure_tunneling_handle_send_data,
+    after,
+    &s_test_context);
+static int s_secure_tunneling_handle_send_data(struct aws_allocator *allocator, void *ctx) {
+    const char *expected_payload = "Hi! I'm Paul / Some random payload\n";
+    const int32_t expected_stream_id = 1;
+    const int prefix_bytes = 2;
+    const enum aws_iot_st_message_type type = DATA;
+
+    struct secure_tunneling_test_context *test_context = ctx;
+    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
+    test_context->secure_tunnel->stream_id = expected_stream_id;
+
+    s_test_sent_data(test_context, expected_payload, expected_stream_id, prefix_bytes, type);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    secure_tunneling_handle_send_data_stream_start,
+    before,
+    s_secure_tunneling_handle_send_data_stream_start,
+    after,
+    &s_test_context);
+static int s_secure_tunneling_handle_send_data_stream_start(struct aws_allocator *allocator, void *ctx) {
+    const char *expected_payload = "";
+    const int32_t expected_stream_id = 1;
+    const int prefix_bytes = 2;
+    const enum aws_iot_st_message_type type = STREAM_START;
+
+    struct secure_tunneling_test_context *test_context = ctx;
+    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
+    test_context->secure_tunnel->stream_id = expected_stream_id;
+
+    s_test_sent_data(test_context, expected_payload, expected_stream_id, prefix_bytes, type);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    secure_tunneling_handle_send_data_stream_reset,
+    before,
+    s_secure_tunneling_handle_send_data_stream_reset,
+    after,
+    &s_test_context);
+static int s_secure_tunneling_handle_send_data_stream_reset(struct aws_allocator *allocator, void *ctx) {
+    const char *expected_payload = "";
+    const int32_t expected_stream_id = 1;
+    const int prefix_bytes = 2;
+    const enum aws_iot_st_message_type type = STREAM_RESET;
+
+    struct secure_tunneling_test_context *test_context = ctx;
+    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
+    test_context->secure_tunnel->stream_id = expected_stream_id;
+
+    s_test_sent_data(test_context, expected_payload, expected_stream_id, prefix_bytes, type);
 
     return AWS_OP_SUCCESS;
 }
