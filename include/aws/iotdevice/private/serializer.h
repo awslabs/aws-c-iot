@@ -9,7 +9,7 @@
 #include <aws/iotdevice/exports.h>
 
 #define AWS_IOT_ST_MESSAGE_TYPEFIELD 1
-#define AWS_IOT_ST_MESSAGE_STREAMID 2
+#define AWS_IOT_ST_MESSAGE_STREAM_ID 2
 #define AWS_IOT_ST_MESSAGE_IGNORABLE 3
 #define AWS_IOT_ST_MESSAGE_PAYLOAD 4
 #define AWS_IOT_ST_VARINT_WIRE 0
@@ -17,12 +17,12 @@
 
 #define AWS_IOT_ST_FIELD_NUMBER_SHIFT 3
 
-#define AWS_IOT_ST_MESSAGE_DEFAULT_STREAMID 0
+#define AWS_IOT_ST_MESSAGE_DEFAULT_STREAM_ID 0
 #define AWS_IOT_ST_MESSAGE_DEFAULT_IGNORABLE 0
 #define AWS_IOT_ST_MESSAGE_DEFAULT_TYPE 0
 #define AWS_IOT_ST_MESSAGE_DEFAULT_PAYLOAD 0
 
-#define AWS_IOT_ST_STREAMID_FIELD_NUMBER 2
+#define AWS_IOT_ST_STREAM_ID_FIELD_NUMBER 2
 #define AWS_IOT_ST_IGNORABLE_FIELD_NUMBER 3
 #define AWS_IOT_ST_TYPE_FIELD_NUMBER 1
 #define AWS_IOT_ST_PAYLOAD_FIELD_NUMBER 4
@@ -35,7 +35,7 @@ enum aws_iot_st_message_type { UNKNOWN, DATA, STREAM_START, STREAM_RESET, SESSIO
 
 struct aws_iot_st_msg {
     enum aws_iot_st_message_type type;
-    int32_t streamId; /* TODO: stream_id */
+    int32_t stream_id;
     int ignorable;
     struct aws_byte_buf payload;
 };

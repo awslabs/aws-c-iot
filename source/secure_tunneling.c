@@ -66,8 +66,8 @@ static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struc
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "Received StreamStart in destination mode. stream_id=%d",
-            st_msg->streamId);
-        secure_tunnel->stream_id = st_msg->streamId;
+            st_msg->stream_id);
+        secure_tunnel->stream_id = st_msg->stream_id;
         secure_tunnel->config.on_stream_start(secure_tunnel);
     }
 }
@@ -78,12 +78,12 @@ static void s_reset_secure_tunnel(struct aws_secure_tunnel *secure_tunnel) {
 }
 
 static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
-    if (secure_tunnel->stream_id == INVALID_STREAM_ID || secure_tunnel->stream_id != st_msg->streamId) {
+    if (secure_tunnel->stream_id == INVALID_STREAM_ID || secure_tunnel->stream_id != st_msg->stream_id) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "Received StreamReset with stream_id different than the active stream_id. Ignoring. st_msg->stream_id=%d "
             "secure_tunnel->stream_id=%d",
-            st_msg->streamId,
+            st_msg->stream_id,
             secure_tunnel->stream_id);
         return;
     }
@@ -329,7 +329,7 @@ static int s_init_data_tunnel_pair(
     const struct aws_byte_cursor *data,
     enum aws_iot_st_message_type type) {
     struct aws_iot_st_msg message;
-    message.streamId = secure_tunnel->stream_id;
+    message.stream_id = secure_tunnel->stream_id;
     message.ignorable = 0;
     message.type = type;
     if (data != NULL) {
@@ -467,6 +467,14 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
     aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
+}
+
+int aws_secure_tunnel_connect(struct aws_secure_tunnel *secure_tunnel) {
+    return secure_tunnel->vtable.connect(secure_tunnel);
+}
+
+int aws_secure_tunnel_close(struct aws_secure_tunnel *secure_tunnel) {
+    return secure_tunnel->vtable.close(secure_tunnel);
 }
 
 int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {

@@ -86,13 +86,10 @@ AWS_IOTDEVICE_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
+int aws_secure_tunnel_connect(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel);
-
-AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
+int aws_secure_tunnel_close(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
