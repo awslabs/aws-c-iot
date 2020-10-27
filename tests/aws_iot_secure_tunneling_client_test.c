@@ -23,19 +23,21 @@ static void s_on_send_data_complete(int error_code, void *user_data) {
     aws_mutex_unlock(&mutex);
 }
 
-static void s_on_connection_complete(const struct aws_secure_tunnel *secure_tunnel) {
-    UNUSED(secure_tunnel);
+static void s_on_connection_complete(void *user_data) {
+    UNUSED(user_data);
     aws_mutex_lock(&mutex);
     aws_condition_variable_notify_one(&condition_variable);
     aws_mutex_unlock(&mutex);
 }
 
-static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+static void s_on_data_receive(const struct aws_byte_buf *data, void *user_data) {
     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received data:");
+
+    struct aws_allocator *allocator = (struct aws_allocator *)user_data;
 
     struct aws_byte_cursor data_cursor = aws_byte_cursor_from_buf(data);
     struct aws_byte_buf data_to_print;
-    aws_byte_buf_init(&data_to_print, secure_tunnel->config.allocator, data->len + 1); /* +1 for null terminator */
+    aws_byte_buf_init(&data_to_print, allocator, data->len + 1); /* +1 for null terminator */
     aws_byte_buf_append(&data_to_print, &data_cursor);
     aws_byte_buf_append_null_terminator(&data_to_print);
     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "%s", (char *)data_to_print.buffer);
@@ -43,18 +45,18 @@ static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, con
     aws_byte_buf_clean_up(&data_to_print);
 }
 
-static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
-    AWS_LOGF_INFO(
-        AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamStart. stream_id=%d", secure_tunnel->stream_id);
+static void s_on_stream_start(void *user_data) {
+    UNUSED(user_data);
+    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamStart.");
 }
 
-static void s_on_stream_reset(const struct aws_secure_tunnel *secure_tunnel) {
-    UNUSED(secure_tunnel);
+static void s_on_stream_reset(void *user_data) {
+    UNUSED(user_data);
     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamReset.");
 }
 
-static void s_on_session_reset(const struct aws_secure_tunnel *secure_tunnel) {
-    UNUSED(secure_tunnel);
+static void s_on_session_reset(void *user_data) {
+    UNUSED(user_data);
     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received SessionReset.");
 }
 
@@ -89,7 +91,8 @@ static void s_init_secure_tunneling_connection_config(
     config->on_stream_start = s_on_stream_start;
     config->on_stream_reset = s_on_stream_reset;
     config->on_session_reset = s_on_session_reset;
-    /* TODO: Initialize the rest of the callbacks */
+
+    config->user_data = allocator;
 }
 
 int main(int argc, char **argv) {

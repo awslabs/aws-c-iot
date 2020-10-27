@@ -25,15 +25,12 @@ typedef int(aws_secure_tunneling_send_stream_reset_fn)(struct aws_secure_tunnel 
 typedef int(aws_secure_tunneling_close_fn)(struct aws_secure_tunnel *secure_tunnel);
 
 /* Callbacks */
-typedef void(aws_secure_tunneling_on_connection_complete_fn)(const struct aws_secure_tunnel *secure_tunnel);
+typedef void(aws_secure_tunneling_on_connection_complete_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
-typedef void(aws_secure_tunneling_on_data_receive_fn)(
-    const struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_byte_buf *data);
-typedef void(aws_secure_tunneling_on_stream_start_fn)(const struct aws_secure_tunnel *secure_tunnel);
-typedef void(aws_secure_tunneling_on_stream_reset_fn)(const struct aws_secure_tunnel *secure_tunnel);
-typedef void(aws_secure_tunneling_on_session_reset_fn)(const struct aws_secure_tunnel *secure_tunnel);
-typedef void(aws_secure_tunneling_on_close_fn)(const struct aws_secure_tunnel *secure_tunnel, uint16_t close_code);
+typedef void(aws_secure_tunneling_on_data_receive_fn)(const struct aws_byte_buf *data, void *user_data);
+typedef void(aws_secure_tunneling_on_stream_start_fn)(void *user_data);
+typedef void(aws_secure_tunneling_on_stream_reset_fn)(void *user_data);
+typedef void(aws_secure_tunneling_on_session_reset_fn)(void *user_data);
 
 struct aws_secure_tunnel_vtable {
     aws_secure_tunneling_connect_fn *connect;
@@ -58,6 +55,8 @@ struct aws_secure_tunneling_connection_config {
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
+
+    void *user_data;
 };
 
 struct aws_secure_tunnel {

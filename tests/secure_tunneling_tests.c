@@ -34,13 +34,11 @@ extern bool on_websocket_incoming_frame_payload(
 extern void init_websocket_client_connection_options(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_websocket_client_connection_options *websocket_options);
-
 extern int secure_tunneling_init_send_frame(
     struct aws_websocket_send_frame_options *frame_options,
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *data,
     enum aws_iot_st_message_type type);
-
 extern bool secure_tunneling_send_data_call(
     struct aws_websocket *websocket,
     struct aws_byte_buf *out_buf,
@@ -53,26 +51,26 @@ struct secure_tunneling_test_context {
 static struct secure_tunneling_test_context s_test_context = {0};
 
 static bool s_on_stream_start_called = false;
-static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
-    UNUSED(secure_tunnel);
+static void s_on_stream_start(void *user_data) {
+    UNUSED(user_data);
     s_on_stream_start_called = true;
 }
 
 static bool s_on_data_receive_correct_payload = false;
-static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
-    UNUSED(secure_tunnel);
+static void s_on_data_receive(const struct aws_byte_buf *data, void *user_data) {
+    UNUSED(user_data);
     s_on_data_receive_correct_payload = aws_byte_buf_eq_c_str(data, PAYLOAD);
 }
 
 static bool s_on_stream_reset_called = false;
-static void s_on_stream_reset(const struct aws_secure_tunnel *secure_tunnel) {
-    UNUSED(secure_tunnel);
+static void s_on_stream_reset(void *user_data) {
+    UNUSED(user_data);
     s_on_stream_reset_called = true;
 }
 
 static bool s_on_session_reset_called = false;
-static void s_on_session_reset(const struct aws_secure_tunnel *secure_tunnel) {
-    UNUSED(secure_tunnel);
+static void s_on_session_reset(void *user_data) {
+    UNUSED(user_data);
     s_on_session_reset_called = true;
 }
 
