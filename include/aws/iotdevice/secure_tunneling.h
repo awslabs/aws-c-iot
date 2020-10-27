@@ -77,6 +77,8 @@ struct aws_secure_tunnel {
     struct aws_byte_buf received_data;
 };
 
+AWS_EXTERN_C_BEGIN
+
 AWS_IOTDEVICE_API
 struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunneling_connection_config *connection_config);
 
@@ -97,5 +99,7 @@ int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel);
+
+AWS_EXTERN_C_END
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_H */
