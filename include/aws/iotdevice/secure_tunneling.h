@@ -28,7 +28,7 @@ typedef int(aws_secure_tunneling_close_fn)(struct aws_secure_tunnel *secure_tunn
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_data_receive_fn)(const struct aws_byte_buf *data, void *user_data);
-typedef void(aws_secure_tunneling_on_stream_start_fn)(int32_t stream_id, void *user_data);
+typedef void(aws_secure_tunneling_on_stream_start_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_stream_reset_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_session_reset_fn)(void *user_data);
 

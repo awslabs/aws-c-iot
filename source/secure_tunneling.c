@@ -68,7 +68,7 @@ static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struc
             "Received StreamStart in destination mode. stream_id=%d",
             st_msg->stream_id);
         secure_tunnel->stream_id = st_msg->stream_id;
-        secure_tunnel->config.on_stream_start(st_msg->stream_id, secure_tunnel->config.user_data);
+        secure_tunnel->config.on_stream_start(secure_tunnel->config.user_data);
     }
 }
 

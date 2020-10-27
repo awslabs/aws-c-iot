@@ -45,9 +45,9 @@ static void s_on_data_receive(const struct aws_byte_buf *data, void *user_data) 
     aws_byte_buf_clean_up(&data_to_print);
 }
 
-static void s_on_stream_start(int32_t stream_id, void *user_data) {
+static void s_on_stream_start(void *user_data) {
     UNUSED(user_data);
-    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamStart. stream_id=%d", stream_id);
+    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamStart.");
 }
 
 static void s_on_stream_reset(void *user_data) {
