@@ -37,7 +37,7 @@ static void s_on_websocket_setup(
 
     secure_tunnel->stream_id++;
     secure_tunnel->websocket = websocket;
-    secure_tunnel->config.on_connection_complete(secure_tunnel, secure_tunnel->config.user_data);
+    secure_tunnel->config.on_connection_complete(secure_tunnel->config.user_data);
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
@@ -68,7 +68,7 @@ static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struc
             "Received StreamStart in destination mode. stream_id=%d",
             st_msg->stream_id);
         secure_tunnel->stream_id = st_msg->stream_id;
-        secure_tunnel->config.on_stream_start(secure_tunnel, secure_tunnel->config.user_data);
+        secure_tunnel->config.on_stream_start(st_msg->stream_id, secure_tunnel->config.user_data);
     }
 }
 
@@ -88,7 +88,7 @@ static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struc
         return;
     }
 
-    secure_tunnel->config.on_stream_reset(secure_tunnel, secure_tunnel->config.user_data);
+    secure_tunnel->config.on_stream_reset(secure_tunnel->config.user_data);
     s_reset_secure_tunnel(secure_tunnel);
 }
 
@@ -97,7 +97,7 @@ static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
         return;
     }
 
-    secure_tunnel->config.on_session_reset(secure_tunnel, secure_tunnel->config.user_data);
+    secure_tunnel->config.on_session_reset(secure_tunnel->config.user_data);
     s_reset_secure_tunnel(secure_tunnel);
 }
 
@@ -106,7 +106,7 @@ static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct
 
     switch (st_msg->type) {
         case DATA:
-            secure_tunnel->config.on_data_receive(secure_tunnel, &st_msg->payload, secure_tunnel->config.user_data);
+            secure_tunnel->config.on_data_receive(&st_msg->payload, secure_tunnel->config.user_data);
             break;
         case STREAM_START:
             s_handle_stream_start(secure_tunnel, st_msg);
