@@ -37,7 +37,7 @@ static void s_on_websocket_setup(
 
     secure_tunnel->stream_id++;
     secure_tunnel->websocket = websocket;
-    secure_tunnel->config.on_connection_complete(secure_tunnel);
+    secure_tunnel->config.on_connection_complete(secure_tunnel, secure_tunnel->config.user_data);
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
@@ -68,7 +68,7 @@ static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struc
             "Received StreamStart in destination mode. stream_id=%d",
             st_msg->stream_id);
         secure_tunnel->stream_id = st_msg->stream_id;
-        secure_tunnel->config.on_stream_start(secure_tunnel);
+        secure_tunnel->config.on_stream_start(secure_tunnel, secure_tunnel->config.user_data);
     }
 }
 
@@ -88,7 +88,7 @@ static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struc
         return;
     }
 
-    secure_tunnel->config.on_stream_reset(secure_tunnel);
+    secure_tunnel->config.on_stream_reset(secure_tunnel, secure_tunnel->config.user_data);
     s_reset_secure_tunnel(secure_tunnel);
 }
 
@@ -97,7 +97,7 @@ static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
         return;
     }
 
-    secure_tunnel->config.on_session_reset(secure_tunnel);
+    secure_tunnel->config.on_session_reset(secure_tunnel, secure_tunnel->config.user_data);
     s_reset_secure_tunnel(secure_tunnel);
 }
 
@@ -106,7 +106,7 @@ static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct
 
     switch (st_msg->type) {
         case DATA:
-            secure_tunnel->config.on_data_receive(secure_tunnel, &st_msg->payload);
+            secure_tunnel->config.on_data_receive(secure_tunnel, &st_msg->payload, secure_tunnel->config.user_data);
             break;
         case STREAM_START:
             s_handle_stream_start(secure_tunnel, st_msg);
@@ -286,7 +286,7 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     void *user_data) {
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
-    pair->secure_tunnel->config.on_send_data_complete(error_code, user_data);
+    pair->secure_tunnel->config.on_send_data_complete(error_code, pair->secure_tunnel->config.user_data);
     aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
 }
 
@@ -412,19 +412,7 @@ static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure
 static void s_copy_secure_tunneling_connection_config(
     const struct aws_secure_tunneling_connection_config *src,
     struct aws_secure_tunneling_connection_config *dest) {
-    dest->allocator = src->allocator;
-    dest->bootstrap = src->bootstrap;
-    dest->socket_options = src->socket_options;
-    dest->access_token = src->access_token; /* TODO: followup */
-    dest->local_proxy_mode = src->local_proxy_mode;
-    dest->endpoint_host = src->endpoint_host; /* TODO: followup */
-
-    dest->on_connection_complete = src->on_connection_complete;
-    dest->on_send_data_complete = src->on_send_data_complete;
-    dest->on_data_receive = src->on_data_receive;
-    dest->on_stream_start = src->on_stream_start;
-    dest->on_stream_reset = src->on_stream_reset;
-    dest->on_session_reset = src->on_session_reset;
+    *dest = *src;
 }
 
 struct aws_secure_tunnel *aws_secure_tunnel_new(

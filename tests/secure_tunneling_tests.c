@@ -53,26 +53,33 @@ struct secure_tunneling_test_context {
 static struct secure_tunneling_test_context s_test_context = {0};
 
 static bool s_on_stream_start_called = false;
-static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel) {
+static void s_on_stream_start(const struct aws_secure_tunnel *secure_tunnel, void *user_data) {
     UNUSED(secure_tunnel);
+    UNUSED(user_data);
     s_on_stream_start_called = true;
 }
 
 static bool s_on_data_receive_correct_payload = false;
-static void s_on_data_receive(const struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_buf *data) {
+static void s_on_data_receive(
+    const struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_byte_buf *data,
+    void *user_data) {
     UNUSED(secure_tunnel);
+    UNUSED(user_data);
     s_on_data_receive_correct_payload = aws_byte_buf_eq_c_str(data, PAYLOAD);
 }
 
 static bool s_on_stream_reset_called = false;
-static void s_on_stream_reset(const struct aws_secure_tunnel *secure_tunnel) {
+static void s_on_stream_reset(const struct aws_secure_tunnel *secure_tunnel, void *user_data) {
     UNUSED(secure_tunnel);
+    UNUSED(user_data);
     s_on_stream_reset_called = true;
 }
 
 static bool s_on_session_reset_called = false;
-static void s_on_session_reset(const struct aws_secure_tunnel *secure_tunnel) {
+static void s_on_session_reset(const struct aws_secure_tunnel *secure_tunnel, void *user_data) {
     UNUSED(secure_tunnel);
+    UNUSED(user_data);
     s_on_session_reset_called = true;
 }
 
@@ -348,8 +355,8 @@ static int s_secure_tunneling_init_websocket_options_test(struct aws_allocator *
     ASSERT_TRUE(aws_byte_cursor_eq_c_str(&path, "/tunnel?local-proxy-mode=source"));
 
     /* Verify headers */
-    const char *expected_headers[][2] = {{"Sec-WebSocket-Protocol", "aws.iot.securetunneling-1.0"},
-                                         {"access-token", ACCESS_TOKEN}};
+    const char *expected_headers[][2] = {
+        {"Sec-WebSocket-Protocol", "aws.iot.securetunneling-1.0"}, {"access-token", ACCESS_TOKEN}};
     const struct aws_http_headers *headers = aws_http_message_get_const_headers(websocket_options.handshake_request);
     for (size_t i = 0; i < sizeof(expected_headers) / sizeof(expected_headers[0]); i++) {
         struct aws_byte_cursor name = aws_byte_cursor_from_c_str(expected_headers[i][0]);
