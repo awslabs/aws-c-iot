@@ -40,14 +40,20 @@ struct aws_iot_st_msg {
     struct aws_byte_buf payload;
 };
 
+AWS_EXTERN_C_BEGIN
+
 AWS_IOTDEVICE_API
 int aws_iot_st_msg_serialize_from_struct(
     struct aws_byte_buf *buffer,
     struct aws_allocator *allocator,
     struct aws_iot_st_msg message);
+
 AWS_IOTDEVICE_API
 int aws_iot_st_msg_deserialize_from_cursor(
     struct aws_iot_st_msg *message,
     struct aws_byte_cursor *cursor,
     struct aws_allocator *allocator);
+
+AWS_EXTERN_C_END
+
 #endif
