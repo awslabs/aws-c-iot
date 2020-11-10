@@ -13,6 +13,10 @@
 /* TODO: Remove me */
 #define UNUSED(x) (void)(x)
 
+#ifdef _MSC_VER
+#    pragma warning(disable : 4204)
+#endif
+
 static void s_on_websocket_setup(
     struct aws_websocket *websocket,
     int error_code,
