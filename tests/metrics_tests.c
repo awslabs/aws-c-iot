@@ -264,7 +264,6 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     struct aws_string *publish_topic = NULL;
     struct aws_byte_cursor payload;
     AWS_ZERO_STRUCT(payload);
-    aws_mutex_lock(&state_test_data->mqtt_connection->synced_data.lock);
     for (struct aws_linked_list_node *iter =
              aws_linked_list_begin(&state_test_data->mqtt_connection->synced_data.pending_requests_list);
          iter != aws_linked_list_end(&state_test_data->mqtt_connection->synced_data.pending_requests_list);
@@ -287,7 +286,6 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
 
         count++;
     }
-    aws_mutex_unlock(&state_test_data->mqtt_connection->synced_data.lock);
 
     ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestSuccessThing/defender/metrics/json"));
     aws_string_destroy(publish_topic);
