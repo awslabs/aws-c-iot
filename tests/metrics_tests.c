@@ -260,32 +260,20 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_iotdevice_defender_v1_stop_task(defender_task);
     s_wait_for_task_to_stop(state_test_data);
 
-    int count = 1;
+    // The third packet is the report publish
+    uint16_t packet_id = 3;
+    struct aws_hash_element *elem = NULL;
+    aws_mutex_lock(&state_test_data->mqtt_connection->synced_data.lock);
+    aws_hash_table_find(&state_test_data->mqtt_connection->synced_data.outstanding_requests_table, &packet_id, &elem);
+    aws_mutex_unlock(&state_test_data->mqtt_connection->synced_data.lock);
+
+    struct aws_mqtt_request *request = elem->value;
+    struct publish_task_arg pub = *(struct publish_task_arg *)request->send_request_ud;
     struct aws_string *publish_topic = NULL;
     struct aws_byte_cursor payload;
     AWS_ZERO_STRUCT(payload);
-    for (struct aws_linked_list_node *iter =
-             aws_linked_list_begin(&state_test_data->mqtt_connection->synced_data.pending_requests_list);
-         iter != aws_linked_list_end(&state_test_data->mqtt_connection->synced_data.pending_requests_list);
-         iter = aws_linked_list_next(iter)) {
-
-        struct aws_mqtt_outstanding_request *request =
-            AWS_CONTAINER_OF(iter, struct aws_mqtt_outstanding_request, list_node);
-
-        // The third packet is the report publish
-        if (count == 3) {
-            struct publish_task_arg pub = *(struct publish_task_arg *)request->send_request_ud;
-            publish_topic = aws_string_new_from_string(state_test_data->allocator, pub.topic_string);
-            payload = aws_byte_cursor_from_c_str((const char *)pub.payload.ptr);
-        }
-
-        // Since there's no real connection, complete the requests for cleanup
-        request->on_complete(
-            request->connection, request->packet_id, AWS_ERROR_MQTT_CONNECTION_DESTROYED, request->on_complete_ud);
-        request->completed = true;
-
-        count++;
-    }
+    publish_topic = aws_string_new_from_string(state_test_data->allocator, pub.topic_string);
+    payload = aws_byte_cursor_from_c_str((const char *)pub.payload.ptr);
 
     ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestSuccessThing/defender/metrics/json"));
     aws_string_destroy(publish_topic);
