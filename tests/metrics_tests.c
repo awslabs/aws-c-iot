@@ -2,10 +2,12 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#include "mqtt_mock_structs.h"
+#include <aws/common/condition_variable.h>
+#include <aws/common/mutex.h>
 #include <aws/iotdevice/device_defender.h>
 #include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/private/network.h>
+#include <aws/mqtt/private/mqtt_client_test_helper.h>
 #include <aws/testing/aws_test_harness.h>
 
 static int validate_devicedefender_record(const char *value) {
@@ -262,21 +264,17 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
 
     // The third packet is the report publish
     uint16_t packet_id = 3;
-    struct aws_hash_element *elem = NULL;
-    aws_mutex_lock(&state_test_data->mqtt_connection->synced_data.lock);
-    aws_hash_table_find(&state_test_data->mqtt_connection->synced_data.outstanding_requests_table, &packet_id, &elem);
-    aws_mutex_unlock(&state_test_data->mqtt_connection->synced_data.lock);
-
-    struct aws_mqtt_request *request = elem->value;
-    struct publish_task_arg pub = *(struct publish_task_arg *)request->send_request_ud;
-    struct aws_string *publish_topic = NULL;
     struct aws_byte_cursor payload;
     AWS_ZERO_STRUCT(payload);
-    publish_topic = aws_string_new_from_string(state_test_data->allocator, pub.topic_string);
-    payload = aws_byte_cursor_from_c_str((const char *)pub.payload.ptr);
+    aws_mqtt_client_get_payload_for_outstanding_publish_packet(state_test_data->mqtt_connection, packet_id, &payload);
+
+    struct aws_string *publish_topic = NULL;
+    aws_mqtt_client_get_topic_for_outstanding_publish_packet(
+        state_test_data->mqtt_connection, packet_id, state_test_data->allocator, &publish_topic);
 
     ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestSuccessThing/defender/metrics/json"));
     aws_string_destroy(publish_topic);
+
     validate_devicedefender_record((const char *)payload.ptr);
 
     aws_condition_variable_clean_up(&test);
