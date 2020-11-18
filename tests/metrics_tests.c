@@ -4,8 +4,8 @@
  */
 #include <aws/common/condition_variable.h>
 #include <aws/common/mutex.h>
-#include <aws/io/channel_bootstrap.h>
 #include <aws/common/string.h>
+#include <aws/io/channel_bootstrap.h>
 #include <aws/io/event_loop.h>
 #include <aws/io/host_resolver.h>
 #include <aws/io/socket.h>
