@@ -4,9 +4,16 @@
  */
 #include <aws/common/condition_variable.h>
 #include <aws/common/mutex.h>
+#include <aws/io/channel_bootstrap.h>
+#include <aws/common/string.h>
+#include <aws/io/event_loop.h>
+#include <aws/io/host_resolver.h>
+#include <aws/io/socket.h>
 #include <aws/iotdevice/device_defender.h>
 #include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/private/network.h>
+#include <aws/mqtt/client.h>
+#include <aws/mqtt/mqtt.h>
 #include <aws/mqtt/private/mqtt_client_test_helper.h>
 #include <aws/testing/aws_test_harness.h>
 
