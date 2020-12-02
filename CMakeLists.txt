@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
 project(aws-c-iot)
-option(BUILD_IOT_DEPS "Builds aws common runtime dependencies as part of build, only do this if you don't want to control your dependency chain." OFF)
 
 if (POLICY CMP0069)
     cmake_policy(SET CMP0069 NEW) # Enable LTO/IPO if available in the compiler, see AwsCFlags
@@ -25,32 +24,6 @@ set(AWS_MODULE_DIR "/${CMAKE_INSTALL_LIBDIR}/cmake")
 string(REPLACE ";" "${AWS_MODULE_DIR};" AWS_MODULE_PATH "${CMAKE_PREFIX_PATH}${AWS_MODULE_DIR}")
 # Append that generated list to the module search path
 list(APPEND CMAKE_MODULE_PATH ${AWS_MODULE_PATH})
-
-if (BUILD_IOT_DEPS)
-    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/aws-common-runtime/aws-c-common/cmake")
-
-    include(AwsFindPackage)
-
-    set(IN_SOURCE_BUILD ON)
-    set(BUILD_TESTING_PREV ${BUILD_TESTING})
-    set(BUILD_TESTING OFF)
-    add_subdirectory(aws-common-runtime/aws-c-common)
-
-    if (UNIX AND NOT APPLE)
-        add_subdirectory(aws-common-runtime/s2n)
-    endif()
-
-    add_subdirectory(aws-common-runtime/aws-c-io)
-    add_subdirectory(aws-common-runtime/aws-c-compression)
-    add_subdirectory(aws-common-runtime/aws-c-http)
-    add_subdirectory(aws-common-runtime/aws-c-mqtt)
-    set(BUILD_TESTING ${BUILD_TESTING_PREV})
-else()
-    include(AwsFindPackage)
-    if (NOT BUILD_DEPS)
-        set(IN_SOURCE_BUILD OFF)
-    endif()
-endif()
 
 include(AwsCFlags)
 include(AwsCheckHeaders)
@@ -130,7 +103,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
 aws_prepare_shared_lib_exports(${PROJECT_NAME})
 
 install(FILES ${AWS_IOT_HEADERS} DESTINATION "include/aws/iotdevice" COMPONENT Development)
-#install(FILES ${AWS_MQTT_TESTING_HEADERS} DESTINATION "include/aws/testing/iotdevice" COMPONENT Development)
 
 if (BUILD_SHARED_LIBS)
    set (TARGET_DIR "shared")
