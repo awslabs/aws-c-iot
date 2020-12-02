@@ -2,35 +2,73 @@
 
 C99 implementation of AWS IoT cloud services integration with devices
 
-### Currently Included
-
-* aws-c-common: Cross-platform primitives and data structures.
-* aws-c-compression: Cross-platform implementation of compression algorithms.
-* aws-c-io: Cross-platform event-loops, non-blocking I/O, and TLS implementations.
-* aws-c-mqtt: MQTT client.
-* aws-c-http: HTTP clients.
-
-## Building
-
-The C99 libraries are already included for your convenience as submodules. If you would like to have us build them
-by default, be sure to either perform a recursive clone `git clone --recursive` or initialize the submodules via.
-`git submodule update --init`. Then, to build, specify the `-DBUILD_IOT_DEPS=ON` CMake argument.
-
-If you want to manage these dependencies manually (e.g. you're using them in other projects), simply specify
-`-DCMAKE_PREFIX_PATH` to point to the absolute path where you have them installed.
-
-The following commands can be used to build the project with a specific install directory:
-
-```bash
-git clone --recursive git@github.com:awslabs/aws-c-iot.git
-cmake -DCMAKE_PREFIX_PATH=/opt/crt -DCMAKE_INSTALL_PREFIX=/opt/crt -DBUILD_IOT_DEPS=ON -DCMAKE_BUILD_TYPE=Debug -S aws-c-iot -B aws-c-iot/build
-cmake --build aws-c-iot/build --target install
-```
-
-## Usage
-
-TODO
-
 ## License
 
 This library is licensed under the Apache 2.0 License.
+
+## Usage
+
+### Building
+
+#### Building s2n (Linux Only)
+
+If you are building on Linux, you will need to build s2n before being able to build aws-c-io, which is a dependency of aws-c-auth.  For our CRT's, we build s2n at a specific commit, and recommend doing the same when using it with this library.  That commit hash can be found [here](https://github.com/awslabs/aws-crt-cpp/tree/master/aws-common-runtime).  The commands below will build s2n using OpenSSL 1.1.1.  For using other versions of OpenSSL, there is additional information in the [s2n Usage Guide](https://github.com/awslabs/s2n/blob/master/docs/USAGE-GUIDE.md).
+
+```
+git clone git@github.com:awslabs/s2n.git
+cd s2n
+git checkout <s2n-commit-hash-used-by-aws-crt-cpp>
+
+# We keep the build artifacts in the -build directory
+cd libcrypto-build
+
+# Download the latest version of OpenSSL
+curl -LO https://www.openssl.org/source/openssl-1.1.1-latest.tar.gz
+tar -xzvf openssl-1.1.1-latest.tar.gz
+
+# Build openssl libcrypto.  Note that the install path specified here must be absolute.
+cd `tar ztf openssl-1.1.1-latest.tar.gz | head -n1 | cut -f1 -d/`
+./config -fPIC no-shared              \
+         no-md2 no-rc5 no-rfc3779 no-sctp no-ssl-trace no-zlib     \
+         no-hw no-mdc2 no-seed no-idea enable-ec_nistp_64_gcc_128 no-camellia\
+         no-bf no-ripemd no-dsa no-ssl2 no-ssl3 no-capieng                  \
+         -DSSL_FORBID_ENULL -DOPENSSL_NO_DTLS1 -DOPENSSL_NO_HEARTBEATS      \
+         --prefix=<absolute-install-path>
+make
+make install
+
+# Build s2n
+cd ../../../
+cmake -DCMAKE_PREFIX_PATH=<install-path> -DCMAKE_INSTALL_PREFIX=<install-path> -S s2n -B s2n/build
+cmake --build s2n/build --target install
+```
+
+#### Building aws-c-iot and Remaining Dependencies
+
+Note that aws-c-iot has several dependencies that need to be built.
+
+```
+git clone git@github.com:awslabs/aws-c-common.git
+cmake -DCMAKE_PREFIX_PATH=<install-path> -DCMAKE_INSTALL_PREFIX=<install-path> -S aws-c-common -B aws-c-common/build
+cmake --build aws-c-common/build --target install
+
+git clone git@github.com:awslabs/aws-c-io.git
+cmake -DCMAKE_PREFIX_PATH=<install-path> -DCMAKE_INSTALL_PREFIX=<install-path> -S aws-c-io -B aws-c-io/build
+cmake --build aws-c-io/build --target install
+
+git clone git@github.com:awslabs/aws-c-compression.git
+cmake -DCMAKE_PREFIX_PATH=<install-path> -DCMAKE_INSTALL_PREFIX=<install-path> -S aws-c-compression -B aws-c-compression/build
+cmake --build aws-c-compression/build --target install
+
+git clone git@github.com:awslabs/aws-c-http.git
+cmake -DCMAKE_PREFIX_PATH=<install-path> -DCMAKE_INSTALL_PREFIX=<install-path> -S aws-c-http -B aws-c-http/build
+cmake --build aws-c-http/build --target install
+
+git clone git@github.com:awslabs/aws-c-mqtt.git
+cmake -DCMAKE_PREFIX_PATH=<install-path> -DCMAKE_INSTALL_PREFIX=<install-path> -S aws-c-mqtt -B aws-c-mqtt/build
+cmake --build aws-c-mqtt/build --target install
+
+git clone git@github.com:awslabs/aws-c-iot.git
+cmake -DCMAKE_PREFIX_PATH=<install-path> -DCMAKE_INSTALL_PREFIX=<install-path> -S aws-c-iot -B aws-c-iot/build
+cmake --build aws-c-iot/build --target install
+```
