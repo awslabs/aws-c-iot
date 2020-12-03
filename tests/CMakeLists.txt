@@ -12,7 +12,7 @@ add_test_case(devicedefender_task_unsupported_report_format)
 if (UNIX AND NOT APPLE)
     add_test_case(devicedefender_get_system_network_total)
     add_test_case(devicedefender_get_network_connections)
-    add_test_case(devicedefender_success_test)
+    # add_test_case(devicedefender_success_test) TODO: Re-enable this
     add_test_case(secure_tunneling_handle_stream_start_test)
     add_test_case(secure_tunneling_handle_data_receive_test)
     add_test_case(secure_tunneling_handle_stream_reset_test)
