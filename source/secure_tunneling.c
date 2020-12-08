@@ -10,7 +10,6 @@
 #define MAX_ST_PAYLOAD 64512
 #define PAYLOAD_BYTE_LENGTH_PREFIX 2
 
-/* TODO: Remove me */
 #define UNUSED(x) (void)(x)
 
 static void s_on_websocket_setup(
@@ -35,7 +34,6 @@ static void s_on_websocket_setup(
     aws_http_message_release(secure_tunnel->handshake_request);
     secure_tunnel->handshake_request = NULL;
 
-    secure_tunnel->stream_id++;
     secure_tunnel->websocket = websocket;
     secure_tunnel->config.on_connection_complete(secure_tunnel->config.user_data);
 }
@@ -135,8 +133,8 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
 
     uint16_t data_length = 0;
     struct aws_byte_cursor tmp_cursor =
-        cursor; // If there are at least two bytes for the data_length, but not enough
-                // data for a complete secure tunnel frame, we don't want to move `cursor`.
+        cursor; /* If there are at least two bytes for the data_length, but not enough      */
+                /* data for a complete secure tunnel frame, we don't want to move `cursor`. */
     while (aws_byte_cursor_read_be16(&tmp_cursor, &data_length) && tmp_cursor.len >= data_length) {
         cursor = tmp_cursor;
 
@@ -269,7 +267,7 @@ static int s_secure_tunneling_connect(struct aws_secure_tunnel *secure_tunnel) {
 }
 
 static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel == NULL || secure_tunnel->stream_id == INVALID_STREAM_ID) {
+    if (secure_tunnel == NULL) {
         return AWS_OP_ERR;
     }
 
@@ -396,8 +394,9 @@ static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure
         return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INCORRECT_MODE;
     }
     secure_tunnel->stream_id += 1;
-    if (secure_tunnel->stream_id == 0)
+    if (secure_tunnel->stream_id == 0) {
         secure_tunnel->stream_id += 1;
+    }
     return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_START);
 }
 
@@ -406,7 +405,10 @@ static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Invalid Stream Id");
         return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INVALID_STREAM;
     }
-    return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
+
+    int result = s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
+    s_reset_secure_tunnel(secure_tunnel);
+    return result;
 }
 
 static void s_copy_secure_tunneling_connection_config(
@@ -424,7 +426,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 
     s_copy_secure_tunneling_connection_config(connection_config, &secure_tunnel->config);
 
-    // tls
+    /* tls */
     struct aws_tls_ctx_options tls_ctx_opt;
     aws_tls_ctx_options_init_default_client(&tls_ctx_opt, connection_config->allocator);
     aws_tls_ctx_options_set_verify_peer(&tls_ctx_opt, false); /* TODO: remove me! */
