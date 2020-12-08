@@ -177,7 +177,13 @@ static int s_setup_mqtt_test_data_fn(struct aws_allocator *allocator, void *ctx)
 
     state_test_data->allocator = allocator;
     state_test_data->el_group = aws_event_loop_group_new_default(allocator, 1, NULL);
-    state_test_data->host_resolver = aws_host_resolver_new_default(allocator, 1, state_test_data->el_group, NULL);
+    struct aws_host_resolver_default_options host_resolver_default_options;
+    AWS_ZERO_STRUCT(host_resolver_default_options);
+    host_resolver_default_options.max_entries = 1;
+    host_resolver_default_options.el_group = state_test_data->el_group;
+    host_resolver_default_options.shutdown_options = NULL;
+    host_resolver_default_options.system_clock_override_fn = NULL;
+    state_test_data->host_resolver = aws_host_resolver_new_default(allocator, &host_resolver_default_options);
 
     struct aws_client_bootstrap_options bootstrap_options = {
         .event_loop_group = state_test_data->el_group,

@@ -170,9 +170,13 @@ int main(int argc, char **argv) {
     aws_logger_set(&logger);
 
     struct aws_event_loop_group *elg = aws_event_loop_group_new_default(args.allocator, 1, NULL);
-
-    struct aws_host_resolver *resolver = aws_host_resolver_new_default(args.allocator, 8, elg, NULL);
-
+    struct aws_host_resolver_default_options host_resolver_default_options;
+    AWS_ZERO_STRUCT(host_resolver_default_options);
+    host_resolver_default_options.max_entries = 8;
+    host_resolver_default_options.el_group = elg;
+    host_resolver_default_options.shutdown_options = NULL;
+    host_resolver_default_options.system_clock_override_fn = NULL;
+    struct aws_host_resolver *resolver = aws_host_resolver_new_default(args.allocator, &host_resolver_default_options);
     struct aws_client_bootstrap_options bootstrap_options = {
         .event_loop_group = elg,
         .host_resolver = resolver,
