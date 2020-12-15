@@ -140,6 +140,7 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
 
         struct aws_byte_cursor st_frame = {.len = data_length, .ptr = cursor.ptr};
         aws_byte_cursor_advance(&cursor, data_length);
+        tmp_cursor = cursor;
 
         struct aws_iot_st_msg st_msg;
         aws_iot_st_msg_deserialize_from_cursor(&st_msg, &st_frame, secure_tunnel->config.allocator);
