@@ -42,7 +42,7 @@ static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_st
         aws_event_loop_group_get_next_loop(secure_tunnel->config.bootstrap->event_loop_group);
     uint64_t now;
     aws_event_loop_current_clock_time(event_loop, &now);
-    aws_event_loop_schedule_task_future(event_loop, task, now + 20L * 1000000000);
+    aws_event_loop_schedule_task_future(event_loop, task, now + (uint64_t)20 * 1000000000);
 }
 
 static void s_on_websocket_setup(
