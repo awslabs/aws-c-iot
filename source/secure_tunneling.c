@@ -1,5 +1,7 @@
 #include <aws/http/request_response.h>
 #include <aws/http/websocket.h>
+#include <aws/io/channel_bootstrap.h>
+#include <aws/io/event_loop.h>
 #include <aws/io/tls_channel_handler.h>
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/serializer.h>
@@ -11,6 +13,37 @@
 #define PAYLOAD_BYTE_LENGTH_PREFIX 2
 
 #define UNUSED(x) (void)(x)
+
+static void s_send_websocket_ping(struct aws_secure_tunnel *secure_tunnel) {
+    if (!secure_tunnel->websocket) {
+        return;
+    }
+
+    struct aws_websocket_send_frame_options frame_options;
+    AWS_ZERO_STRUCT(frame_options);
+    frame_options.opcode = AWS_WEBSOCKET_OPCODE_PING;
+    frame_options.fin = true;
+    aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
+}
+
+static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_status task_status) {
+    AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "s_ping_task");
+
+    if (task_status != AWS_TASK_STATUS_RUN_READY) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "task_status is not ready. Do nothing.");
+        return;
+    }
+
+    struct aws_secure_tunnel *secure_tunnel = user_data;
+    s_send_websocket_ping(secure_tunnel);
+
+    // Schedule the next task
+    struct aws_event_loop *event_loop =
+        aws_event_loop_group_get_next_loop(secure_tunnel->config.bootstrap->event_loop_group);
+    uint64_t now;
+    aws_event_loop_current_clock_time(event_loop, &now);
+    aws_event_loop_schedule_task_future(event_loop, task, now + 20L * 1000000000);
+}
 
 static void s_on_websocket_setup(
     struct aws_websocket *websocket,
@@ -36,6 +69,10 @@ static void s_on_websocket_setup(
 
     secure_tunnel->websocket = websocket;
     secure_tunnel->config.on_connection_complete(secure_tunnel->config.user_data);
+
+    struct aws_event_loop *event_loop =
+        aws_event_loop_group_get_next_loop(secure_tunnel->config.bootstrap->event_loop_group);
+    aws_event_loop_schedule_task_now(event_loop, &secure_tunnel->ping_task);
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
@@ -448,6 +485,8 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 
     /* TODO: Release this buffer when there is no data to hold */
     aws_byte_buf_init(&secure_tunnel->received_data, connection_config->allocator, MAX_WEBSOCKET_PAYLOAD);
+
+    aws_task_init(&secure_tunnel->ping_task, s_ping_task, secure_tunnel, "SecureTunnelingPingTask");
 
     return secure_tunnel;
 }

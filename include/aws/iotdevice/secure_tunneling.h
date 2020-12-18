@@ -2,10 +2,10 @@
 #define AWS_IOTDEVICE_SECURE_TUNNELING_H
 
 #include <aws/common/byte_buf.h>
+#include <aws/common/task_scheduler.h>
 #include <aws/io/tls_channel_handler.h>
-#include <aws/iotdevice/iotdevice.h>
-
 #include <aws/iotdevice/exports.h>
+#include <aws/iotdevice/iotdevice.h>
 
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
@@ -75,6 +75,10 @@ struct aws_secure_tunnel {
 
     /* Stores what has been received but not processed */
     struct aws_byte_buf received_data;
+
+    /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
+     * the connection */
+    struct aws_task ping_task;
 };
 
 AWS_EXTERN_C_BEGIN
