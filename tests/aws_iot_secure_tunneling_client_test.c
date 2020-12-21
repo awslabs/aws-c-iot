@@ -74,6 +74,7 @@ static void s_init_secure_tunneling_connection_config(
     const char *access_token,
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode,
     const char *endpoint,
+    const char *root_ca,
     struct aws_secure_tunneling_connection_config *config) {
 
     AWS_ZERO_STRUCT(*config);
@@ -84,6 +85,7 @@ static void s_init_secure_tunneling_connection_config(
     config->access_token = aws_byte_cursor_from_c_str(access_token);
     config->local_proxy_mode = local_proxy_mode;
     config->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
+    config->root_ca = root_ca;
 
     config->on_connection_complete = s_on_connection_complete;
     config->on_send_data_complete = s_on_send_data_complete;
@@ -96,16 +98,17 @@ static void s_init_secure_tunneling_connection_config(
 }
 
 int main(int argc, char **argv) {
-    if (argc < 4) {
+    if (argc < 5) {
         printf(
             "3 args required, only %d passed. Usage:\n"
-            "aws-c-iot-secure_tunneling-client [endpoint] [src|dest] [access_token]\n",
+            "aws-c-iot-secure_tunneling-client [endpoint] [src|dest] [root_ca] [access_token]\n",
             argc - 1);
         return 1;
     }
     const char *endpoint = argv[1];
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode = s_local_proxy_mode_from_c_str(argv[2]);
-    const char *access_token = argv[3];
+    const char *root_ca = argv[3];
+    const char *access_token = argv[4];
 
     struct aws_allocator *allocator = aws_mem_tracer_new(aws_default_allocator(), NULL, AWS_MEMTRACE_BYTES, 0);
 
@@ -138,12 +141,12 @@ int main(int argc, char **argv) {
     AWS_ZERO_STRUCT(socket_options);
     socket_options.connect_timeout_ms = 3000;
     socket_options.type = AWS_SOCKET_STREAM;
-    socket_options.domain = AWS_SOCKET_IPV6;
+    socket_options.domain = AWS_SOCKET_IPV4;
 
     /* setup secure tunneling connection config */
     struct aws_secure_tunneling_connection_config config;
     s_init_secure_tunneling_connection_config(
-        allocator, bootstrap, &socket_options, access_token, local_proxy_mode, endpoint, &config);
+        allocator, bootstrap, &socket_options, access_token, local_proxy_mode, endpoint, root_ca, &config);
 
     /* Create a secure tunnel object and connect */
     struct aws_secure_tunnel *secure_tunnel = aws_secure_tunnel_new(&config);
@@ -170,8 +173,7 @@ int main(int argc, char **argv) {
 
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_reset(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
         ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-    }
-    if (local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+    } else if (local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         /* Wait a little for data to show up */
         aws_thread_current_sleep((uint64_t)60 * 60 * 1000000000);
     }
