@@ -85,7 +85,7 @@ static void s_init_secure_tunneling_connection_config(
     config->access_token = aws_byte_cursor_from_c_str(access_token);
     config->local_proxy_mode = local_proxy_mode;
     config->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
-    config->ca_file = root_ca;
+    config->root_ca = root_ca;
 
     config->on_connection_complete = s_on_connection_complete;
     config->on_send_data_complete = s_on_send_data_complete;

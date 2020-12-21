@@ -48,7 +48,7 @@ struct aws_secure_tunneling_connection_config {
     struct aws_byte_cursor access_token;
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
     struct aws_byte_cursor endpoint_host;
-    const char *ca_file;
+    const char *root_ca;
 
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
