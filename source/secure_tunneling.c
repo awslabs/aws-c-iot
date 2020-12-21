@@ -4,10 +4,10 @@
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/serializer.h>
 #include <aws/iotdevice/secure_tunneling.h>
+#include <math.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076
 #define INVALID_STREAM_ID 0
-#define MAX_ST_PAYLOAD 64512
 #define PAYLOAD_BYTE_LENGTH_PREFIX 2
 
 #define UNUSED(x) (void)(x)
@@ -286,27 +286,35 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
     pair->secure_tunnel->config.on_send_data_complete(error_code, pair->secure_tunnel->config.user_data);
-    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
+    aws_byte_buf_clean_up(&pair->buf);
+    aws_mem_release(pair->secure_tunnel->config.allocator, pair);
 }
 
 bool secure_tunneling_send_data_call(struct aws_websocket *websocket, struct aws_byte_buf *out_buf, void *user_data) {
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
-    struct aws_byte_buf *buffer = &pair->buf;
-    if (aws_byte_buf_write_be16(out_buf, (int16_t)pair->buf.len) == false) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing buffer length prefix to out_buf");
-        goto cleanup;
+    size_t space_available = out_buf->capacity - out_buf->len;
+    if ((pair->length_prefix_written == false) && (space_available > PAYLOAD_BYTE_LENGTH_PREFIX)) {
+        if (aws_byte_buf_write_be16(out_buf, (int16_t)pair->buf.len) == false) {
+            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing buffer length prefix to out_buf");
+            return false;
+        }
+        pair->length_prefix_written = true;
+        space_available = out_buf->capacity - out_buf->len;
     }
-    if (aws_byte_buf_write(out_buf, buffer->buffer, buffer->len) == false) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
-        goto cleanup;
+    if (pair->length_prefix_written == true) {
+        size_t bytes_max = pair->cur.len;
+        size_t amount_to_send = bytes_max < space_available ? bytes_max : space_available;
+
+        struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&pair->cur, amount_to_send);
+        if (send_cursor.len) {
+            if (aws_byte_buf_write_from_whole_cursor(out_buf, send_cursor) == false) {
+                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
+                return false;
+            }
+        }
     }
-    aws_byte_buf_clean_up(buffer);
     return true;
-cleanup:
-    aws_byte_buf_clean_up(buffer);
-    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
-    return false;
 }
 
 static void s_init_websocket_send_frame_options(
@@ -339,14 +347,16 @@ static int s_init_data_tunnel_pair(
         message.payload.len = 0;
     }
     pair->secure_tunnel = secure_tunnel;
+    pair->length_prefix_written = false;
     if (aws_iot_st_msg_serialize_from_struct(&pair->buf, secure_tunnel->config.allocator, message) != AWS_OP_SUCCESS) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
         goto cleanup;
     }
-    if (pair->buf.len > MAX_ST_PAYLOAD) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message size greater than MAX_ST_PAYLOAD");
+    if (pair->buf.len > AWS_IOT_ST_MAX_MESSAGE_SIZE_SAFE) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message size greater than AWS_IOT_ST_MAX_MESSAGE_SIZE_SAFE");
         goto cleanup;
     }
+    pair->cur = aws_byte_cursor_from_buf(&pair->buf);
     return AWS_OP_SUCCESS;
 cleanup:
     aws_byte_buf_clean_up(&pair->buf);
@@ -377,7 +387,6 @@ static int s_secure_tunneling_send(
     if (secure_tunneling_init_send_frame(&frame_options, secure_tunnel, data, type) != AWS_OP_SUCCESS) {
         return AWS_OP_ERR;
     }
-
     return aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
 }
 
@@ -386,7 +395,20 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Invalid Stream Id");
         return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INVALID_STREAM;
     }
-    return s_secure_tunneling_send(secure_tunnel, data, DATA);
+    struct aws_byte_cursor new_data = {.ptr = data->ptr, .len = data->len};
+    while (new_data.len) {
+        size_t bytes_max = new_data.len;
+        size_t amount_to_send = bytes_max < AWS_IOT_ST_SPLIT_MESSAGE_SIZE ? bytes_max : AWS_IOT_ST_SPLIT_MESSAGE_SIZE;
+
+        struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&new_data, amount_to_send);
+        if (send_cursor.len) {
+            if (s_secure_tunneling_send(secure_tunnel, &send_cursor, DATA) != AWS_OP_SUCCESS) {
+                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
+                return AWS_OP_ERR;
+            }
+        }
+    }
+    return AWS_OP_SUCCESS;
 }
 
 static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {

@@ -7,13 +7,18 @@
 
 #include <aws/iotdevice/exports.h>
 
+#define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 200
+#define AWS_IOT_ST_MAX_MESSAGE_SIZE_SAFE 64 * 1024
+
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
 struct aws_secure_tunnel;
 
 struct data_tunnel_pair {
     struct aws_byte_buf buf;
+    struct aws_byte_cursor cur;
     const struct aws_secure_tunnel *secure_tunnel;
+    bool length_prefix_written;
 };
 
 /* APIs */
