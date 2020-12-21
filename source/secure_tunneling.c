@@ -467,10 +467,14 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     /* tls */
     struct aws_tls_ctx_options tls_ctx_opt;
     aws_tls_ctx_options_init_default_client(&tls_ctx_opt, connection_config->allocator);
-    aws_tls_ctx_options_set_verify_peer(&tls_ctx_opt, false); /* TODO: remove me! */
+    aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, connection_config->ca_file);
     secure_tunnel->tls_ctx = aws_tls_client_ctx_new(connection_config->allocator, &tls_ctx_opt);
     aws_tls_ctx_options_clean_up(&tls_ctx_opt);
     aws_tls_connection_options_init_from_ctx(&secure_tunnel->tls_con_opt, secure_tunnel->tls_ctx);
+    aws_tls_connection_options_set_server_name(
+        &secure_tunnel->tls_con_opt,
+        connection_config->allocator,
+        (struct aws_byte_cursor *)&connection_config->endpoint_host);
 
     /* Setup vtable here */
     secure_tunnel->vtable.connect = s_secure_tunneling_connect;
