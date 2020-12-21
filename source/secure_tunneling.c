@@ -12,6 +12,9 @@
 
 #define UNUSED(x) (void)(x)
 
+static struct aws_mutex mutex = AWS_MUTEX_INIT;
+static struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
+
 static void s_on_websocket_setup(
     struct aws_websocket *websocket,
     int error_code,
@@ -288,13 +291,16 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     pair->secure_tunnel->config.on_send_data_complete(error_code, pair->secure_tunnel->config.user_data);
     aws_byte_buf_clean_up(&pair->buf);
     aws_mem_release(pair->secure_tunnel->config.allocator, pair);
+    aws_mutex_lock(&mutex);
+    aws_condition_variable_notify_one(&condition_variable);
+    aws_mutex_unlock(&mutex);
 }
 
 bool secure_tunneling_send_data_call(struct aws_websocket *websocket, struct aws_byte_buf *out_buf, void *user_data) {
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
     size_t space_available = out_buf->capacity - out_buf->len;
-    if ((pair->length_prefix_written == false) && (space_available > PAYLOAD_BYTE_LENGTH_PREFIX)) {
+    if ((pair->length_prefix_written == false) && (space_available >= PAYLOAD_BYTE_LENGTH_PREFIX)) {
         if (aws_byte_buf_write_be16(out_buf, (int16_t)pair->buf.len) == false) {
             AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing buffer length prefix to out_buf");
             return false;
@@ -407,6 +413,9 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
                 return AWS_OP_ERR;
             }
         }
+        aws_mutex_lock(&mutex);
+        aws_condition_variable_wait(&condition_variable, &mutex);
+        aws_mutex_unlock(&mutex);
     }
     return AWS_OP_SUCCESS;
 }

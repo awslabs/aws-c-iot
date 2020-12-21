@@ -154,18 +154,12 @@ int main(int argc, char **argv) {
     if (local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_start(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
 
-        int cLen = 18000;
+        int cLen = 64000;
         char *payload = malloc(cLen + 1);
         memset(payload, 'a', cLen);
         payload[cLen] = 0;
         struct aws_byte_cursor cur = aws_byte_cursor_from_c_str(payload);
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
-
-        payload = "Hi! I'm Paul / Some random payload\n";
-        for (size_t i = 0; i < 15; i++) {
-            AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
-            ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-        }
 
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_reset(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
         ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));

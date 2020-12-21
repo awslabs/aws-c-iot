@@ -2,12 +2,14 @@
 #define AWS_IOTDEVICE_SECURE_TUNNELING_H
 
 #include <aws/common/byte_buf.h>
+#include <aws/common/condition_variable.h>
+#include <aws/common/mutex.h>
+#include <aws/common/task_scheduler.h>
 #include <aws/io/tls_channel_handler.h>
+#include <aws/iotdevice/exports.h>
 #include <aws/iotdevice/iotdevice.h>
 
-#include <aws/iotdevice/exports.h>
-
-#define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 200
+#define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
 #define AWS_IOT_ST_MAX_MESSAGE_SIZE_SAFE 64 * 1024
 
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
