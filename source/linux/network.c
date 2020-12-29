@@ -127,8 +127,8 @@ int read_proc_net_from_file(
                 return_value = aws_error;
                 goto cleanup;
             }
-            size_hint += size_hint;
             read = fread(out_buf->buffer + out_buf->len, 1, size_hint, fp);
+            size_hint += size_hint;
         }
         if (ferror(fp)) {
             return_value = aws_translate_and_raise_io_error(errno);
