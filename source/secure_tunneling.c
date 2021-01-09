@@ -78,7 +78,9 @@ static void s_on_websocket_setup(
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
     UNUSED(websocket);
     UNUSED(error_code);
-    UNUSED(user_data);
+
+    struct aws_secure_tunnel *secure_tunnel = user_data;
+    secure_tunnel->config.on_connection_shutdown(secure_tunnel->config.user_data);
 }
 
 static bool s_on_websocket_incoming_frame_begin(

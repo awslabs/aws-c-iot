@@ -30,6 +30,10 @@ static void s_on_connection_complete(void *user_data) {
     aws_mutex_unlock(&mutex);
 }
 
+static void s_on_connection_shutdown(void *user_data) {
+    UNUSED(user_data);
+}
+
 static void s_on_data_receive(const struct aws_byte_buf *data, void *user_data) {
     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received data:");
 
@@ -88,6 +92,7 @@ static void s_init_secure_tunneling_connection_config(
     config->root_ca = root_ca;
 
     config->on_connection_complete = s_on_connection_complete;
+    config->on_connection_shutdown = s_on_connection_shutdown;
     config->on_send_data_complete = s_on_send_data_complete;
     config->on_data_receive = s_on_data_receive;
     config->on_stream_start = s_on_stream_start;
