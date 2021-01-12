@@ -105,9 +105,23 @@ static int before(struct aws_allocator *allocator, void *ctx) {
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
+    struct aws_event_loop_group *elg = aws_event_loop_group_new_default(allocator, 1, NULL);
+    struct aws_host_resolver_default_options host_resolver_default_options;
+    AWS_ZERO_STRUCT(host_resolver_default_options);
+    host_resolver_default_options.max_entries = 8;
+    host_resolver_default_options.el_group = elg;
+    host_resolver_default_options.shutdown_options = NULL;
+    host_resolver_default_options.system_clock_override_fn = NULL;
+    struct aws_host_resolver *resolver = aws_host_resolver_new_default(allocator, &host_resolver_default_options);
+    struct aws_client_bootstrap_options bootstrap_options = {
+        .event_loop_group = elg,
+        .host_resolver = resolver,
+    };
+    struct aws_client_bootstrap *bootstrap = aws_client_bootstrap_new(allocator, &bootstrap_options);
+
     struct aws_secure_tunneling_connection_config config;
     s_init_secure_tunneling_connection_config(
-        allocator, NULL, NULL, ACCESS_TOKEN, test_context->local_proxy_mode, ENDPOINT, &config);
+        allocator, bootstrap, NULL, ACCESS_TOKEN, test_context->local_proxy_mode, ENDPOINT, &config);
 
     test_context->secure_tunnel = aws_secure_tunnel_new(&config);
 
@@ -115,11 +129,16 @@ static int before(struct aws_allocator *allocator, void *ctx) {
 }
 
 static int after(struct aws_allocator *allocator, int setup_result, void *ctx) {
-    UNUSED(allocator);
     UNUSED(setup_result);
 
     struct secure_tunneling_test_context *test_context = ctx;
 
+    aws_host_resolver_release(test_context->secure_tunnel->config.bootstrap->host_resolver);
+    aws_event_loop_group_release(test_context->secure_tunnel->config.bootstrap->event_loop_group);
+    aws_client_bootstrap_release(test_context->secure_tunnel->config.bootstrap);
+    ASSERT_SUCCESS(aws_global_thread_creator_shutdown_wait_for(10));
+
+    aws_mem_release(allocator, test_context->secure_tunnel->ping_task_context);
     aws_secure_tunnel_release(test_context->secure_tunnel);
     aws_iotdevice_library_clean_up();
     aws_http_library_clean_up();

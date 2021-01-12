@@ -499,6 +499,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 
     struct ping_task_context *ping_task_context =
         aws_mem_acquire(connection_config->allocator, sizeof(struct ping_task_context));
+    secure_tunnel->ping_task_context = ping_task_context;
     AWS_ZERO_STRUCT(*ping_task_context);
     ping_task_context->allocator = connection_config->allocator;
     ping_task_context->event_loop = aws_event_loop_group_get_next_loop(connection_config->bootstrap->event_loop_group);
