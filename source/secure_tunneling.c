@@ -497,10 +497,11 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     /* TODO: Release this buffer when there is no data to hold */
     aws_byte_buf_init(&secure_tunnel->received_data, connection_config->allocator, MAX_WEBSOCKET_PAYLOAD);
 
-    struct ping_task_context *ping_task_context = aws_mem_acquire(connection_config->allocator, sizeof(struct ping_task_context));
+    struct ping_task_context *ping_task_context =
+        aws_mem_acquire(connection_config->allocator, sizeof(struct ping_task_context));
     AWS_ZERO_STRUCT(*ping_task_context);
     ping_task_context->allocator = connection_config->allocator;
-    ping_task_context->event_loop =  aws_event_loop_group_get_next_loop(connection_config->bootstrap->event_loop_group);
+    ping_task_context->event_loop = aws_event_loop_group_get_next_loop(connection_config->bootstrap->event_loop_group);
     aws_task_init(&secure_tunnel->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
 
     return secure_tunnel;
