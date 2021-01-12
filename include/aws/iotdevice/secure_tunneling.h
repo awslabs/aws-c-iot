@@ -62,6 +62,14 @@ struct aws_secure_tunneling_connection_config {
     void *user_data;
 };
 
+struct ping_task_context {
+    struct aws_allocator *allocator;
+    struct aws_event_loop *event_loop;
+
+    bool task_cancelled;
+    struct aws_websocket *websocket;
+};
+
 struct aws_secure_tunnel {
     /* Static settings */
     struct aws_secure_tunneling_connection_config config;
@@ -82,6 +90,7 @@ struct aws_secure_tunnel {
     /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
      * the connection */
     struct aws_task ping_task;
+    struct ping_task_context *ping_task_context;
 };
 
 AWS_EXTERN_C_BEGIN
