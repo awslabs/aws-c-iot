@@ -55,6 +55,7 @@ struct aws_secure_tunneling_connection_config {
     struct aws_byte_cursor access_token;
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
     struct aws_byte_cursor endpoint_host;
+    const char *root_ca;
 
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
@@ -82,6 +83,10 @@ struct aws_secure_tunnel {
 
     /* Stores what has been received but not processed */
     struct aws_byte_buf received_data;
+
+    /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
+     * the connection */
+    struct aws_task ping_task;
 };
 
 AWS_EXTERN_C_BEGIN
