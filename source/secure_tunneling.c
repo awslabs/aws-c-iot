@@ -520,11 +520,9 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->stream_id = INVALID_STREAM_ID;
     secure_tunnel->websocket = NULL;
 
-    struct aws_mutex mutex = AWS_MUTEX_INIT;
-    struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
     secure_tunnel->data_callback_flag = false;
-    secure_tunnel->send_data_mutex = mutex;
-    secure_tunnel->send_data_condition_variable = condition_variable;
+    aws_mutex_init(&secure_tunnel->send_data_mutex);
+    aws_condition_variable_init(&secure_tunnel->send_data_condition_variable);
 
     /* TODO: Release this buffer when there is no data to hold */
     aws_byte_buf_init(&secure_tunnel->received_data, connection_config->allocator, MAX_WEBSOCKET_PAYLOAD);
