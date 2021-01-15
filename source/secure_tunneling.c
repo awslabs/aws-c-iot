@@ -38,15 +38,18 @@ struct ping_task_context {
 static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_status task_status) {
     AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "s_ping_task");
 
-    if (task_status != AWS_TASK_STATUS_RUN_READY) {
-        AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "task_status is not ready. Do nothing.");
+    struct ping_task_context *ping_task_context = user_data;
+
+    if (task_status == AWS_TASK_STATUS_CANCELED) {
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING, "task_status is AWS_TASK_STATUS_CANCELED. Cleaning up ping task.");
+        aws_mem_release(ping_task_context->allocator, ping_task_context);
         return;
     }
 
-    struct ping_task_context *ping_task_context = user_data;
     const size_t task_cancelled = aws_atomic_load_int(&ping_task_context->task_cancelled);
     if (task_cancelled) {
-        AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "ping task is cancelled");
+        AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "task_cancelled is true. Cleaning up ping task.");
         aws_event_loop_cancel_task(ping_task_context->event_loop, task);
         aws_mem_release(ping_task_context->allocator, ping_task_context);
         return;
