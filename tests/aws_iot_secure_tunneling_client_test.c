@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
     aws_iotdevice_library_init(allocator);
 
     struct aws_logger_standard_options logger_options = {
-        .level = AWS_LL_TRACE,
+        .level = AWS_LL_INFO,
         .file = stdout,
     };
     struct aws_logger logger;

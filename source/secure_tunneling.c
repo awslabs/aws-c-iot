@@ -14,9 +14,6 @@
 
 #define UNUSED(x) (void)(x)
 
-// static struct aws_mutex send_data_mutex = AWS_MUTEX_INIT;
-// static struct aws_condition_variable send_data_condition_variable = AWS_CONDITION_VARIABLE_INIT;
-
 static void s_send_websocket_ping(struct aws_secure_tunnel *secure_tunnel) {
     if (!secure_tunnel->websocket) {
         return;
@@ -328,7 +325,8 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)pair->secure_tunnel;
     secure_tunnel->config.on_send_data_complete(error_code, pair->secure_tunnel->config.user_data);
     aws_byte_buf_clean_up(&pair->buf);
-    aws_mem_release(pair->secure_tunnel->config.allocator, pair);
+    aws_mem_release(secure_tunnel->config.allocator, pair);
+    secure_tunnel->data_callback_flag = true;
     aws_condition_variable_notify_one(&secure_tunnel->send_data_condition_variable);
 }
 
@@ -446,13 +444,16 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
 
         struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&new_data, amount_to_send);
         if (send_cursor.len) {
+            secure_tunnel->data_callback_flag = false;
             if (s_secure_tunneling_send(secure_tunnel, &send_cursor, DATA) != AWS_OP_SUCCESS) {
                 AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
                 return AWS_OP_ERR;
             }
         }
         aws_mutex_lock(&secure_tunnel->send_data_mutex);
-        aws_condition_variable_wait(&secure_tunnel->send_data_condition_variable, &secure_tunnel->send_data_mutex);
+        while (secure_tunnel->data_callback_flag == false) {
+            aws_condition_variable_wait(&secure_tunnel->send_data_condition_variable, &secure_tunnel->send_data_mutex);
+        }
         aws_mutex_unlock(&secure_tunnel->send_data_mutex);
     }
     return AWS_OP_SUCCESS;
@@ -521,6 +522,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 
     struct aws_mutex mutex = AWS_MUTEX_INIT;
     struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
+    secure_tunnel->data_callback_flag = false;
     secure_tunnel->send_data_mutex = mutex;
     secure_tunnel->send_data_condition_variable = condition_variable;
 
