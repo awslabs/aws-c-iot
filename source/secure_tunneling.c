@@ -326,7 +326,11 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     secure_tunnel->config.on_send_data_complete(error_code, pair->secure_tunnel->config.user_data);
     aws_byte_buf_clean_up(&pair->buf);
     aws_mem_release(secure_tunnel->config.allocator, pair);
-    secure_tunnel->data_callback_flag = true;
+
+    aws_mutex_lock(&secure_tunnel->send_data_mutex);
+    secure_tunnel->can_send_data = true;
+    aws_mutex_unlock(&secure_tunnel->send_data_mutex);
+
     aws_condition_variable_notify_one(&secure_tunnel->send_data_condition_variable);
 }
 
@@ -430,30 +434,36 @@ static int s_secure_tunneling_send(
     return aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
 }
 
+static bool s_can_send_data_status(void *user_data) {
+    struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)user_data;
+    bool temp = secure_tunnel->can_send_data;
+    return temp;
+}
+
 static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
     if (secure_tunnel->stream_id == INVALID_STREAM_ID) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Invalid Stream Id");
         return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INVALID_STREAM;
     }
-    struct aws_byte_cursor new_data;
-    new_data.ptr = data->ptr;
-    new_data.len = data->len;
+    struct aws_byte_cursor new_data = *data;
     while (new_data.len) {
         size_t bytes_max = new_data.len;
         size_t amount_to_send = bytes_max < AWS_IOT_ST_SPLIT_MESSAGE_SIZE ? bytes_max : AWS_IOT_ST_SPLIT_MESSAGE_SIZE;
 
         struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&new_data, amount_to_send);
         if (send_cursor.len) {
-            secure_tunnel->data_callback_flag = false;
+            secure_tunnel->can_send_data = false;
             if (s_secure_tunneling_send(secure_tunnel, &send_cursor, DATA) != AWS_OP_SUCCESS) {
                 AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
                 return AWS_OP_ERR;
             }
         }
         aws_mutex_lock(&secure_tunnel->send_data_mutex);
-        while (secure_tunnel->data_callback_flag == false) {
-            aws_condition_variable_wait(&secure_tunnel->send_data_condition_variable, &secure_tunnel->send_data_mutex);
-        }
+        aws_condition_variable_wait_pred(
+            &secure_tunnel->send_data_condition_variable,
+            &secure_tunnel->send_data_mutex,
+            s_can_send_data_status,
+            secure_tunnel);
         aws_mutex_unlock(&secure_tunnel->send_data_mutex);
     }
     return AWS_OP_SUCCESS;
@@ -520,7 +530,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->stream_id = INVALID_STREAM_ID;
     secure_tunnel->websocket = NULL;
 
-    secure_tunnel->data_callback_flag = false;
+    secure_tunnel->can_send_data = false;
     aws_mutex_init(&secure_tunnel->send_data_mutex);
     aws_condition_variable_init(&secure_tunnel->send_data_condition_variable);
 

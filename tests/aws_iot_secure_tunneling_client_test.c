@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
     if (local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_start(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
 
-        int cLen = 64000;
+        int cLen = 5000000;
         char *payload = malloc(cLen + 1);
         memset(payload, 'a', cLen);
         payload[cLen] = 0;

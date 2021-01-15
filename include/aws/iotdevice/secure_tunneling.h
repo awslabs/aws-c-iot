@@ -87,7 +87,8 @@ struct aws_secure_tunnel {
      * the connection */
     struct aws_task ping_task;
 
-    bool data_callback_flag;
+    /* Shared State, making websocket send data sync */
+    bool can_send_data;
     struct aws_mutex send_data_mutex;
     struct aws_condition_variable send_data_condition_variable;
 };
