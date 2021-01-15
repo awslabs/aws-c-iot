@@ -129,6 +129,7 @@ static int before(struct aws_allocator *allocator, void *ctx) {
 }
 
 static int after(struct aws_allocator *allocator, int setup_result, void *ctx) {
+    UNUSED(allocator);
     UNUSED(setup_result);
 
     struct secure_tunneling_test_context *test_context = ctx;
