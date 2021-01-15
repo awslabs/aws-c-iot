@@ -11,6 +11,7 @@
 #define INVALID_STREAM_ID 0
 #define MAX_ST_PAYLOAD 64512
 #define PAYLOAD_BYTE_LENGTH_PREFIX 2
+#define PING_TASK_INTERVAL ((uint64_t)20 * 1000000000)
 
 #define UNUSED(x) (void)(x)
 
@@ -26,17 +27,27 @@ static void s_send_websocket_ping(struct aws_websocket *websocket) {
     aws_websocket_send_frame(websocket, &frame_options);
 }
 
+struct ping_task_context {
+    struct aws_allocator *allocator;
+    struct aws_event_loop *event_loop;
+
+    struct aws_atomic_var task_cancelled;
+    struct aws_websocket *websocket;
+};
+
 static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_status task_status) {
     AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "s_ping_task");
 
     if (task_status != AWS_TASK_STATUS_RUN_READY) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "task_status is not ready. Do nothing.");
+        AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "task_status is not ready. Do nothing.");
         return;
     }
 
     struct ping_task_context *ping_task_context = user_data;
-    if (ping_task_context->task_cancelled) {
+    const size_t task_cancelled = aws_atomic_load_int(&ping_task_context->task_cancelled);
+    if (task_cancelled) {
         AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "ping task is cancelled");
+        aws_event_loop_cancel_task(ping_task_context->event_loop, task);
         aws_mem_release(ping_task_context->allocator, ping_task_context);
         return;
     }
@@ -46,7 +57,7 @@ static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_st
     /* Schedule the next task */
     uint64_t now;
     aws_event_loop_current_clock_time(ping_task_context->event_loop, &now);
-    aws_event_loop_schedule_task_future(ping_task_context->event_loop, task, now + (uint64_t)20 * 1000000000);
+    aws_event_loop_schedule_task_future(ping_task_context->event_loop, task, now + PING_TASK_INTERVAL);
 }
 
 static void s_on_websocket_setup(
@@ -73,9 +84,17 @@ static void s_on_websocket_setup(
     secure_tunnel->websocket = websocket;
     secure_tunnel->config.on_connection_complete(secure_tunnel->config.user_data);
 
-    secure_tunnel->ping_task_context->task_cancelled = false;
-    secure_tunnel->ping_task_context->websocket = websocket;
-    aws_event_loop_schedule_task_now(secure_tunnel->ping_task_context->event_loop, &secure_tunnel->ping_task);
+    struct ping_task_context *ping_task_context =
+        aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct ping_task_context));
+    secure_tunnel->ping_task_context = ping_task_context;
+    AWS_ZERO_STRUCT(*ping_task_context);
+    ping_task_context->allocator = secure_tunnel->config.allocator;
+    ping_task_context->event_loop = aws_event_loop_group_get_next_loop(secure_tunnel->config.bootstrap->event_loop_group);
+    aws_atomic_store_int(&ping_task_context->task_cancelled, 0);
+    ping_task_context->websocket = websocket;
+
+    aws_task_init(&secure_tunnel->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
+    aws_event_loop_schedule_task_now(ping_task_context->event_loop, &secure_tunnel->ping_task);
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
@@ -83,7 +102,7 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     UNUSED(error_code);
 
     struct aws_secure_tunnel *secure_tunnel = user_data;
-    secure_tunnel->ping_task_context->task_cancelled = true;
+    aws_atomic_store_int(&secure_tunnel->ping_task_context->task_cancelled, 1);
     secure_tunnel->ping_task_context->websocket = NULL;
     secure_tunnel->config.on_connection_shutdown(secure_tunnel->config.user_data);
 }
@@ -496,14 +515,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 
     /* TODO: Release this buffer when there is no data to hold */
     aws_byte_buf_init(&secure_tunnel->received_data, connection_config->allocator, MAX_WEBSOCKET_PAYLOAD);
-
-    struct ping_task_context *ping_task_context =
-        aws_mem_acquire(connection_config->allocator, sizeof(struct ping_task_context));
-    secure_tunnel->ping_task_context = ping_task_context;
-    AWS_ZERO_STRUCT(*ping_task_context);
-    ping_task_context->allocator = connection_config->allocator;
-    ping_task_context->event_loop = aws_event_loop_group_get_next_loop(connection_config->bootstrap->event_loop_group);
-    aws_task_init(&secure_tunnel->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
 
     return secure_tunnel;
 }

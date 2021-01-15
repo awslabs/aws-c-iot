@@ -62,13 +62,7 @@ struct aws_secure_tunneling_connection_config {
     void *user_data;
 };
 
-struct ping_task_context {
-    struct aws_allocator *allocator;
-    struct aws_event_loop *event_loop;
-
-    bool task_cancelled;
-    struct aws_websocket *websocket;
-};
+struct ping_task_context;
 
 struct aws_secure_tunnel {
     /* Static settings */
