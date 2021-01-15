@@ -89,7 +89,8 @@ static void s_on_websocket_setup(
     secure_tunnel->ping_task_context = ping_task_context;
     AWS_ZERO_STRUCT(*ping_task_context);
     ping_task_context->allocator = secure_tunnel->config.allocator;
-    ping_task_context->event_loop = aws_event_loop_group_get_next_loop(secure_tunnel->config.bootstrap->event_loop_group);
+    ping_task_context->event_loop =
+        aws_event_loop_group_get_next_loop(secure_tunnel->config.bootstrap->event_loop_group);
     aws_atomic_store_int(&ping_task_context->task_cancelled, 0);
     ping_task_context->websocket = websocket;
 
