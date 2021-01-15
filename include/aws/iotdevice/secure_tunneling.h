@@ -10,7 +10,6 @@
 #include <aws/iotdevice/iotdevice.h>
 
 #define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
-#define AWS_IOT_ST_MAX_MESSAGE_SIZE_SAFE 64 * 1024
 
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
@@ -87,6 +86,8 @@ struct aws_secure_tunnel {
     /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
      * the connection */
     struct aws_task ping_task;
+    struct aws_mutex send_data_mutex;
+    struct aws_condition_variable send_data_condition_variable;
 };
 
 AWS_EXTERN_C_BEGIN

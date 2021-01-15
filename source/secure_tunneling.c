@@ -14,8 +14,8 @@
 
 #define UNUSED(x) (void)(x)
 
-static struct aws_mutex mutex = AWS_MUTEX_INIT;
-static struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
+// static struct aws_mutex send_data_mutex = AWS_MUTEX_INIT;
+// static struct aws_condition_variable send_data_condition_variable = AWS_CONDITION_VARIABLE_INIT;
 
 static void s_send_websocket_ping(struct aws_secure_tunnel *secure_tunnel) {
     if (!secure_tunnel->websocket) {
@@ -325,12 +325,11 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     void *user_data) {
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
-    pair->secure_tunnel->config.on_send_data_complete(error_code, pair->secure_tunnel->config.user_data);
+    struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)pair->secure_tunnel;
+    secure_tunnel->config.on_send_data_complete(error_code, pair->secure_tunnel->config.user_data);
     aws_byte_buf_clean_up(&pair->buf);
     aws_mem_release(pair->secure_tunnel->config.allocator, pair);
-    aws_mutex_lock(&mutex);
-    aws_condition_variable_notify_one(&condition_variable);
-    aws_mutex_unlock(&mutex);
+    aws_condition_variable_notify_one(&secure_tunnel->send_data_condition_variable);
 }
 
 bool secure_tunneling_send_data_call(struct aws_websocket *websocket, struct aws_byte_buf *out_buf, void *user_data) {
@@ -395,8 +394,8 @@ static int s_init_data_tunnel_pair(
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
         goto cleanup;
     }
-    if (pair->buf.len > AWS_IOT_ST_MAX_MESSAGE_SIZE_SAFE) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message size greater than AWS_IOT_ST_MAX_MESSAGE_SIZE_SAFE");
+    if (pair->buf.len > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message size greater than AWS_IOT_ST_MAX_MESSAGE_SIZE");
         goto cleanup;
     }
     pair->cur = aws_byte_cursor_from_buf(&pair->buf);
@@ -438,7 +437,9 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Invalid Stream Id");
         return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INVALID_STREAM;
     }
-    struct aws_byte_cursor new_data = {.ptr = data->ptr, .len = data->len};
+    struct aws_byte_cursor new_data;
+    new_data.ptr = data->ptr;
+    new_data.len = data->len;
     while (new_data.len) {
         size_t bytes_max = new_data.len;
         size_t amount_to_send = bytes_max < AWS_IOT_ST_SPLIT_MESSAGE_SIZE ? bytes_max : AWS_IOT_ST_SPLIT_MESSAGE_SIZE;
@@ -450,9 +451,9 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
                 return AWS_OP_ERR;
             }
         }
-        aws_mutex_lock(&mutex);
-        aws_condition_variable_wait(&condition_variable, &mutex);
-        aws_mutex_unlock(&mutex);
+        aws_mutex_lock(&secure_tunnel->send_data_mutex);
+        aws_condition_variable_wait(&secure_tunnel->send_data_condition_variable, &secure_tunnel->send_data_mutex);
+        aws_mutex_unlock(&secure_tunnel->send_data_mutex);
     }
     return AWS_OP_SUCCESS;
 }
@@ -517,6 +518,11 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->stream_id = INVALID_STREAM_ID;
     secure_tunnel->websocket = NULL;
+
+    struct aws_mutex mutex = AWS_MUTEX_INIT;
+    struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
+    secure_tunnel->send_data_mutex = mutex;
+    secure_tunnel->send_data_condition_variable = condition_variable;
 
     /* TODO: Release this buffer when there is no data to hold */
     aws_byte_buf_init(&secure_tunnel->received_data, connection_config->allocator, MAX_WEBSOCKET_PAYLOAD);
