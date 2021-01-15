@@ -50,7 +50,6 @@ static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_st
     const size_t task_cancelled = aws_atomic_load_int(&ping_task_context->task_cancelled);
     if (task_cancelled) {
         AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "task_cancelled is true. Cleaning up ping task.");
-        aws_event_loop_cancel_task(ping_task_context->event_loop, task);
         aws_mem_release(ping_task_context->allocator, ping_task_context);
         return;
     }
