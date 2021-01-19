@@ -2,10 +2,14 @@
 #define AWS_IOTDEVICE_SECURE_TUNNELING_H
 
 #include <aws/common/byte_buf.h>
+#include <aws/common/condition_variable.h>
+#include <aws/common/mutex.h>
 #include <aws/common/task_scheduler.h>
 #include <aws/io/tls_channel_handler.h>
 #include <aws/iotdevice/exports.h>
 #include <aws/iotdevice/iotdevice.h>
+
+#define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
 
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
@@ -13,7 +17,9 @@ struct aws_secure_tunnel;
 
 struct data_tunnel_pair {
     struct aws_byte_buf buf;
+    struct aws_byte_cursor cur;
     const struct aws_secure_tunnel *secure_tunnel;
+    bool length_prefix_written;
 };
 
 /* APIs */
@@ -83,6 +89,12 @@ struct aws_secure_tunnel {
 
     /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
      * the connection */
+
+    /* Shared State, making websocket send data sync */
+    bool can_send_data;
+    struct aws_mutex send_data_mutex;
+    struct aws_condition_variable send_data_condition_variable;
+
     struct ping_task_context *ping_task_context;
 };
 

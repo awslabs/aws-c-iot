@@ -17,10 +17,7 @@ static int on_send_data_complete_error_code = 0;
 
 static void s_on_send_data_complete(int error_code, void *user_data) {
     UNUSED(user_data);
-    aws_mutex_lock(&mutex);
     on_send_data_complete_error_code = error_code;
-    aws_condition_variable_notify_one(&condition_variable);
-    aws_mutex_unlock(&mutex);
 }
 
 static void s_on_connection_complete(void *user_data) {
@@ -164,17 +161,13 @@ int main(int argc, char **argv) {
 
     if (local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_start(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
-        ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
 
-        char *payload = "Hi! I'm Paul / Some random payload\n";
+        int cLen = 500000;
+        char *payload = malloc(cLen + 1);
+        memset(payload, 'a', cLen);
+        payload[cLen] = 0;
         struct aws_byte_cursor cur = aws_byte_cursor_from_c_str(payload);
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
-        ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-
-        for (size_t i = 0; i < 15; i++) {
-            AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
-            ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-        }
 
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_reset(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
         ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
@@ -182,6 +175,7 @@ int main(int argc, char **argv) {
         /* Wait a little for data to show up */
         aws_thread_current_sleep((uint64_t)60 * 60 * 1000000000);
     }
+    aws_thread_current_sleep((uint64_t)60 * 60 * 1000000000);
 
     /* clean up */
     aws_secure_tunnel_close(secure_tunnel);
