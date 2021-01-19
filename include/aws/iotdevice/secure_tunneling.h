@@ -26,6 +26,7 @@ typedef int(aws_secure_tunneling_close_fn)(struct aws_secure_tunnel *secure_tunn
 
 /* Callbacks */
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(void *user_data);
+typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_data_receive_fn)(const struct aws_byte_buf *data, void *user_data);
 typedef void(aws_secure_tunneling_on_stream_start_fn)(void *user_data);
@@ -51,6 +52,7 @@ struct aws_secure_tunneling_connection_config {
     const char *root_ca;
 
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
+    aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_data_receive_fn *on_data_receive;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
@@ -59,6 +61,8 @@ struct aws_secure_tunneling_connection_config {
 
     void *user_data;
 };
+
+struct ping_task_context;
 
 struct aws_secure_tunnel {
     /* Static settings */
@@ -79,7 +83,7 @@ struct aws_secure_tunnel {
 
     /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
      * the connection */
-    struct aws_task ping_task;
+    struct ping_task_context *ping_task_context;
 };
 
 AWS_EXTERN_C_BEGIN
