@@ -31,6 +31,7 @@ struct ping_task_context {
     struct aws_allocator *allocator;
     struct aws_event_loop *event_loop;
 
+    struct aws_task ping_task;
     struct aws_atomic_var task_cancelled;
     struct aws_websocket *websocket;
 };
@@ -96,8 +97,8 @@ static void s_on_websocket_setup(
     aws_atomic_store_int(&ping_task_context->task_cancelled, 0);
     ping_task_context->websocket = websocket;
 
-    aws_task_init(&secure_tunnel->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
-    aws_event_loop_schedule_task_now(ping_task_context->event_loop, &secure_tunnel->ping_task);
+    aws_task_init(&ping_task_context->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
+    aws_event_loop_schedule_task_now(ping_task_context->event_loop, &ping_task_context->ping_task);
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {

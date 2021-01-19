@@ -83,7 +83,6 @@ struct aws_secure_tunnel {
 
     /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
      * the connection */
-    struct aws_task ping_task;
     struct ping_task_context *ping_task_context;
 };
 
