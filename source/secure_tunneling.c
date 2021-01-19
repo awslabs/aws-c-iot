@@ -447,24 +447,25 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     }
     struct aws_byte_cursor new_data = *data;
     while (new_data.len) {
-        size_t bytes_max = new_data.len;
-        size_t amount_to_send = bytes_max < AWS_IOT_ST_SPLIT_MESSAGE_SIZE ? bytes_max : AWS_IOT_ST_SPLIT_MESSAGE_SIZE;
-
-        struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&new_data, amount_to_send);
-        if (send_cursor.len) {
-            secure_tunnel->can_send_data = false;
-            if (s_secure_tunneling_send(secure_tunnel, &send_cursor, DATA) != AWS_OP_SUCCESS) {
-                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
-                return AWS_OP_ERR;
-            }
-        }
         aws_mutex_lock(&secure_tunnel->send_data_mutex);
         aws_condition_variable_wait_pred(
             &secure_tunnel->send_data_condition_variable,
             &secure_tunnel->send_data_mutex,
             s_can_send_data_status,
             secure_tunnel);
+        secure_tunnel->can_send_data = false;
         aws_mutex_unlock(&secure_tunnel->send_data_mutex);
+
+        size_t bytes_max = new_data.len;
+        size_t amount_to_send = bytes_max < AWS_IOT_ST_SPLIT_MESSAGE_SIZE ? bytes_max : AWS_IOT_ST_SPLIT_MESSAGE_SIZE;
+
+        struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&new_data, amount_to_send);
+        if (send_cursor.len) {
+            if (s_secure_tunneling_send(secure_tunnel, &send_cursor, DATA) != AWS_OP_SUCCESS) {
+                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
+                return AWS_OP_ERR;
+            }
+        }
     }
     return AWS_OP_SUCCESS;
 }
@@ -530,7 +531,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->stream_id = INVALID_STREAM_ID;
     secure_tunnel->websocket = NULL;
 
-    secure_tunnel->can_send_data = false;
+    secure_tunnel->can_send_data = true;
     aws_mutex_init(&secure_tunnel->send_data_mutex);
     aws_condition_variable_init(&secure_tunnel->send_data_condition_variable);
 
