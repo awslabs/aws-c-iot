@@ -460,6 +460,7 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
         size_t amount_to_send = bytes_max < AWS_IOT_ST_SPLIT_MESSAGE_SIZE ? bytes_max : AWS_IOT_ST_SPLIT_MESSAGE_SIZE;
 
         struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&new_data, amount_to_send);
+        AWS_FATAL_ASSERT(send_cursor.len > 0);
         if (send_cursor.len) {
             if (s_secure_tunneling_send(secure_tunnel, &send_cursor, DATA) != AWS_OP_SUCCESS) {
                 AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
