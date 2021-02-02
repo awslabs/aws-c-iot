@@ -10,6 +10,7 @@
 #include <aws/common/error.h>
 #include <aws/common/hash_table.h>
 #include <aws/common/logging.h>
+#include <aws/common/stdbool.h>
 #include <aws/common/string.h>
 #include <aws/io/io.h>
 
@@ -170,6 +171,9 @@ int get_net_connections_from_proc_buf(
     /* last line is empty */
     aws_array_list_pop_back(&lines);
 
+    bool has_local = false;
+    bool has_remote_addr = false;
+
     struct aws_byte_cursor line;
     struct aws_iotdevice_metric_net_connection *connection = NULL;
     while (AWS_OP_SUCCESS == aws_array_list_front(&lines, &line)) {
@@ -223,6 +227,7 @@ int get_net_connections_from_proc_buf(
                     (void *)ifconfig,
                     local_addr);
                 aws_mem_release(allocator, connection);
+                connection = NULL;
                 continue;
             }
 
@@ -235,6 +240,8 @@ int get_net_connections_from_proc_buf(
                     "id=%p: Could not allocate memory for connection local address",
                     (void *)ifconfig);
                 goto cleanup;
+            } else {
+                has_local = true;
             }
 
             connection->remote_address = aws_string_new_from_c_str(allocator, remote_addr);
@@ -245,6 +252,8 @@ int get_net_connections_from_proc_buf(
                     "id=%p: Could not allocate memory for connection remote address",
                     (void *)ifconfig);
                 goto cleanup;
+            } else {
+                has_remote_addr = true;
             }
             connection->protocol = protocol;
 
@@ -258,10 +267,13 @@ int get_net_connections_from_proc_buf(
     }
 
 cleanup:
-
     if (connection != NULL) {
-        aws_string_destroy(connection->local_interface);
-        aws_string_destroy(connection->remote_address);
+        if (has_local) {
+            aws_string_destroy(connection->local_interface);
+        }
+        if (has_remote_addr) {
+            aws_string_destroy(connection->remote_address);
+        }
         aws_mem_release(allocator, connection);
     }
 
