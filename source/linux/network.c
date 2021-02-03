@@ -10,7 +10,6 @@
 #include <aws/common/error.h>
 #include <aws/common/hash_table.h>
 #include <aws/common/logging.h>
-#include <aws/common/stdbool.h>
 #include <aws/common/string.h>
 #include <aws/io/io.h>
 
@@ -207,8 +206,7 @@ int get_net_connections_from_proc_buf(
                 goto cleanup;
             }
 
-            AWS_ZERO_STRUCT(connection->local_interface);
-            AWS_ZERO_STRUCT(connection->remote_address);
+            AWS_ZERO_STRUCT(*connection);
 
             char local_addr[IPV4_ADDRESS_SIZE];
             char remote_addr[IPV4_ADDRESS_SIZE];
