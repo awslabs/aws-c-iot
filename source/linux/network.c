@@ -206,6 +206,8 @@ int get_net_connections_from_proc_buf(
                 goto cleanup;
             }
 
+            AWS_ZERO_STRUCT(*connection);
+
             char local_addr[IPV4_ADDRESS_SIZE];
             char remote_addr[IPV4_ADDRESS_SIZE];
             s_hex_addr_to_ip_str(local_addr, IPV4_ADDRESS_SIZE, local_addr_h);
@@ -223,6 +225,7 @@ int get_net_connections_from_proc_buf(
                     (void *)ifconfig,
                     local_addr);
                 aws_mem_release(allocator, connection);
+                connection = NULL;
                 continue;
             }
 
@@ -258,7 +261,6 @@ int get_net_connections_from_proc_buf(
     }
 
 cleanup:
-
     if (connection != NULL) {
         aws_string_destroy(connection->local_interface);
         aws_string_destroy(connection->remote_address);
