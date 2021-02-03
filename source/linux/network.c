@@ -171,9 +171,6 @@ int get_net_connections_from_proc_buf(
     /* last line is empty */
     aws_array_list_pop_back(&lines);
 
-    bool has_local = false;
-    bool has_remote_addr = false;
-
     struct aws_byte_cursor line;
     struct aws_iotdevice_metric_net_connection *connection = NULL;
     while (AWS_OP_SUCCESS == aws_array_list_front(&lines, &line)) {
@@ -210,6 +207,9 @@ int get_net_connections_from_proc_buf(
                 goto cleanup;
             }
 
+            AWS_ZERO_STRUCT(connection->local_interface);
+            AWS_ZERO_STRUCT(connection->remote_address);
+
             char local_addr[IPV4_ADDRESS_SIZE];
             char remote_addr[IPV4_ADDRESS_SIZE];
             s_hex_addr_to_ip_str(local_addr, IPV4_ADDRESS_SIZE, local_addr_h);
@@ -240,8 +240,6 @@ int get_net_connections_from_proc_buf(
                     "id=%p: Could not allocate memory for connection local address",
                     (void *)ifconfig);
                 goto cleanup;
-            } else {
-                has_local = true;
             }
 
             connection->remote_address = aws_string_new_from_c_str(allocator, remote_addr);
@@ -252,8 +250,6 @@ int get_net_connections_from_proc_buf(
                     "id=%p: Could not allocate memory for connection remote address",
                     (void *)ifconfig);
                 goto cleanup;
-            } else {
-                has_remote_addr = true;
             }
             connection->protocol = protocol;
 
@@ -268,12 +264,8 @@ int get_net_connections_from_proc_buf(
 
 cleanup:
     if (connection != NULL) {
-        if (has_local) {
-            aws_string_destroy(connection->local_interface);
-        }
-        if (has_remote_addr) {
-            aws_string_destroy(connection->remote_address);
-        }
+        aws_string_destroy(connection->local_interface);
+        aws_string_destroy(connection->remote_address);
         aws_mem_release(allocator, connection);
     }
 
