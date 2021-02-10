@@ -18,7 +18,7 @@
 #    endif /* USE_IMPORT_EXPORT */
 
 #else
-#    if ((__GNUC__ >= 4) || defined(__clang__)) && defined(AWS_IOT_USE_IMPORT_EXPORT) && defined(AWS_IOTDEVICE_EXPORTS)
+#    if ((__GNUC__ >= 4) || defined(__clang__)) && defined(AWS_IOT_USE_IMPORT_EXPORT) && defined(AWS_IOT_EXPORTS)
 #        define AWS_IOTDEVICE_API __attribute__((visibility("default")))
 #    else
 #        define AWS_IOTDEVICE_API

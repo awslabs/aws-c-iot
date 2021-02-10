@@ -121,6 +121,15 @@ int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel);
 
+/* Making this exposed public to verify testing in the sdk layer */
+struct aws_websocket_incoming_frame;
+AWS_IOTDEVICE_API
+bool on_websocket_incoming_frame_payload(
+    struct aws_websocket *websocket,
+    const struct aws_websocket_incoming_frame *frame,
+    struct aws_byte_cursor data,
+    void *user_data);
+
 AWS_EXTERN_C_END
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_H */
