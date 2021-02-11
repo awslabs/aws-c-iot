@@ -6,6 +6,7 @@
 #define AWS_IOTDEVICE_NETWORK_H
 
 #include <aws/common/hash_table.h>
+#include <aws/iotdevice/exports.h>
 
 #include <stdbool.h>
 #include <stdint.h>
