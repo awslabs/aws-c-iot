@@ -8,8 +8,8 @@
 #include <aws/io/socket.h>
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/iotdevice_internals.h>
-#include <aws/iotdevice/private/serializer.h>
 #include <aws/iotdevice/secure_tunneling.h>
+#include <aws/iotdevice/serializer.h>
 #include <aws/testing/aws_test_harness.h>
 
 #define UNUSED(x) (void)(x)

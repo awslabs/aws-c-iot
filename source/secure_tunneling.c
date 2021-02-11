@@ -5,8 +5,8 @@
 #include <aws/io/tls_channel_handler.h>
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/iotdevice_internals.h>
-#include <aws/iotdevice/private/serializer.h>
 #include <aws/iotdevice/secure_tunneling.h>
+#include <aws/iotdevice/serializer.h>
 #include <math.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076

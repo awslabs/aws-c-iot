@@ -5,7 +5,7 @@
 #ifndef AWS_IOTDEVICE_IOTDEVICE_INTERNALS_H
 #define AWS_IOTDEVICE_IOTDEVICE_INTERNALS_H
 
-#include <aws/iotdevice/private/serializer.h>
+#include <aws/iotdevice/serializer.h>
 
 struct aws_byte_buf;
 struct aws_byte_cursor;

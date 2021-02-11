@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#include <aws/iotdevice/private/serializer.h>
+#include <aws/iotdevice/serializer.h>
 
 #include <aws/common/assert.h>
 #include <aws/common/byte_buf.h>
