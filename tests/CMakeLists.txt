@@ -3,8 +3,9 @@ include(AwsTestHarness)
 enable_testing()
 
 file(GLOB TEST_HDRS "mqtt_mock_structs.h")
+set(EXTERNAL_SRC "external/cJSON.c")
 set(TEST_SRC metrics_tests.c secure_tunneling_tests.c)
-file(GLOB TESTS ${TEST_HDRS} ${TEST_SRC})
+file(GLOB TESTS ${TEST_HDRS} ${TEST_SRC} ${EXTERNAL_SRC})
 
 add_test_case(devicedefender_task_unsupported_report_format)
 
