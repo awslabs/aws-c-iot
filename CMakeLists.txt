@@ -56,6 +56,10 @@ file(GLOB AWS_IOT_PRIV_HEADERS
         "include/aws/iotdevice/private/*.h"
         )
 
+file(GLOB AWS_IOT_PRIV_EXPOSED_HEADERS
+        "include/aws/iotdevice/private/serializer.h"
+        )
+
 file(GLOB AWS_IOT_EXTERNAL_HEADERS
         "include/aws/iotdevice/external/*.h"
         )
@@ -103,7 +107,8 @@ aws_use_package(aws-c-mqtt)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
 aws_prepare_shared_lib_exports(${PROJECT_NAME})
 
-install(FILES ${AWS_IOT_HEADERS} DESTINATION "include/aws/iotdevice" COMPONENT Development)
+install(FILES ${AWS_IOT_HEADERS}  DESTINATION "include/aws/iotdevice" COMPONENT Development)
+install(FILES ${AWS_IOT_PRIV_EXPOSED_HEADERS}  DESTINATION "include/aws/iotdevice/private" COMPONENT Development)
 
 if (BUILD_SHARED_LIBS)
    set (TARGET_DIR "shared")
