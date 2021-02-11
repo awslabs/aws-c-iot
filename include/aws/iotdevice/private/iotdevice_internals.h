@@ -2,8 +2,8 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#ifndef AWS_IOTDEVICE_IOT_TESTING_H
-#define AWS_IOTDEVICE_IOT_TESTING_H
+#ifndef AWS_IOTDEVICE_IOTDEVICE_INTERNALS_H
+#define AWS_IOTDEVICE_IOTDEVICE_INTERNALS_H
 
 #include <aws/iotdevice/private/serializer.h>
 
@@ -40,4 +40,4 @@ bool secure_tunneling_send_data_call(struct aws_websocket *websocket, struct aws
 
 AWS_EXTERN_C_END
 
-#endif /* AWS_IOTDEVICE_IOT_TESTING_H */
+#endif /* AWS_IOTDEVICE_IOTDEVICE_INTERNALS_H */
