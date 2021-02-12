@@ -437,6 +437,13 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             defender_task->previous_net_xfer.packets_out = totals.packets_out;
 
 			/* Iterate over and retreived custom metrics */
+			const size_t custom_metrics_len = aws_array_list_length(&defender_task->custom_metrics);
+			struct defender_custom_metric_data *custom_metric_data =
+			    aws_mem_acquire(allocator,
+								sizeof(struct defender_custom_metric_data) * custom_metrics_len);
+			struct aws_array_list metrics_list;
+			aws_array_list_init_static(&metrics_list, custom_metric_data, custom_metrics_len,
+									   sizeof(struct defender_custom_metric_data));
 			
 			
 
