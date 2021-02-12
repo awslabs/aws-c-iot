@@ -64,7 +64,7 @@ static int s_devicedefender_task_unsupported_report_format(struct aws_allocator 
         .task_period_ns = 0,
         .netconn_sample_period_ns = 0,
         .task_cancelled_fn = NULL,
-        .cancellation_userdata = NULL};
+        .userdata = NULL};
 
     ASSERT_NULL(aws_iotdevice_defender_v1_report_task(allocator, &config));
     ASSERT_UINT_EQUALS(AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT, aws_last_error());
@@ -254,7 +254,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_iotdevice_library_init(state_test_data->allocator);
 
     struct aws_iotdevice_defender_report_task_config task_config = {
-        .cancellation_userdata = ctx,
+        .userdata = ctx,
         .task_cancelled_fn = s_devicedefender_cb,
         .connection = state_test_data->mqtt_connection,
         .event_loop = aws_event_loop_group_get_next_loop(state_test_data->el_group),

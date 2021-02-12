@@ -71,8 +71,8 @@ struct aws_iotdevice_defender_report_task_config {
     uint64_t task_period_ns;
     uint64_t netconn_sample_period_ns;
     aws_iotdevice_defender_v1_task_cancelled_fn *task_cancelled_fn;
-    void *cancellation_userdata;
-    struct aws_array_list custom_metrics;
+    aws_iotdevice_defender_report_rejected_fn *rejected_report_fn;
+    void *userdata;
 };
 
 AWS_EXTERN_C_BEGIN
@@ -91,14 +91,13 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
 AWS_IOTDEVICE_API
 void aws_iotdevice_defender_v1_stop_task(struct aws_iotdevice_defender_v1_task *defender_task);
 
-
 /**
  * Registers a number custom metric to the Device Defender task.
  *
  * Undefined behavior if a custom metric is added while the defender task is running
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_defender_register_number_metric(struct aws_iotdevice_defender_v1_task *defender_task,
+int aws_iotdevice_defender_register_number_metric(struct aws_iotdevice_defender_v1_task *defender_task,
 												   const char *metric_name,
 		     				                       aws_iotdevice_defender_get_number_fn *supplier,
 												   void *userdata);
@@ -109,11 +108,10 @@ void aws_iotdevice_defender_register_number_metric(struct aws_iotdevice_defender
  * Undefined behavior if a custom metric is added while the defender task is running
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_defender_register_number_list_metric(struct aws_iotdevice_defender_v1_task *defender_task,
+int aws_iotdevice_defender_register_number_list_metric(struct aws_iotdevice_defender_v1_task *defender_task,
 												   const char *metric_name,
 		     				                       aws_iotdevice_defender_get_number_list_fn *supplier,
 												   void *userdata);
-
 
 /**
  * Registers a string list custom metric to the Device Defender task.
@@ -121,11 +119,10 @@ void aws_iotdevice_defender_register_number_list_metric(struct aws_iotdevice_def
  * Undefined behavior if a custom metric is added while the defender task is running
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_defender_register_string_listr_metric(struct aws_iotdevice_defender_v1_task *defender_task,
+int aws_iotdevice_defender_register_string_list_metric(struct aws_iotdevice_defender_v1_task *defender_task,
 												   const char *metric_name,
 												   aws_iotdevice_defender_get_string_list_fn *supplier,
 												   void *userdata);
-
 
 /**
  * Registers an IP list custom metric to the Device Defender task.
@@ -133,7 +130,7 @@ void aws_iotdevice_defender_register_string_listr_metric(struct aws_iotdevice_de
  * Undefined behavior if a custom metric is added while the defender task is running
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_defender_register_ip_list_metric(struct aws_iotdevice_defender_v1_task *defender_task,
+int aws_iotdevice_defender_register_ip_list_metric(struct aws_iotdevice_defender_v1_task *defender_task,
 												   const char *metric_name,
 		     				                       aws_iotdevice_defender_get_ip_list_fn *supplier,
 												   void *userdata);

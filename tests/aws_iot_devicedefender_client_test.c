@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
     struct aws_byte_cursor client_id_cur = aws_byte_cursor_from_buf(&client_id_buf);
 
     struct aws_iotdevice_defender_report_task_config task_config = {
-        .cancellation_userdata = NULL,
+        .userdata = NULL,
         .task_cancelled_fn = NULL,
         .connection = args.connection,
         .event_loop = aws_event_loop_group_get_next_loop(elg),
