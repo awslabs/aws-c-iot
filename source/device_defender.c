@@ -17,6 +17,26 @@
 #include <aws/io/event_loop.h>
 #include <aws/mqtt/client.h>
 
+/**
+ * Change name if this needs external exposure. Needed to keep track of how to
+ * interpret instantiated metrics, and cast the supplier_fn correctly. */
+enum defender_custom_metric_type {
+    NUMBER,
+    NUMBER_LIST,
+	STRING_LIST,
+	IP_LIST
+};
+
+/**
+ * Instantiation of a custom metric that needs a value to be retreived when
+ * it is time to produce a metric report.
+ */
+struct defender_custom_metric {
+    struct aws_string metric_name;
+    void *supplier_fn;
+    void *userdata;
+};
+
 struct aws_iotdevice_defender_v1_task {
     struct aws_allocator *allocator;
     struct aws_task task;
