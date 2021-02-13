@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/common/error.h>
 #include <aws/mqtt/client.h>
 #include <aws/mqtt/mqtt.h>
 
@@ -132,6 +133,15 @@ static void s_mqtt_on_disconnect(struct aws_mqtt_client_connection *connection, 
     aws_mutex_unlock(args->mutex);
 }
 
+/**
+ * Example function to get number data
+ */
+static int get_number_metric(int64_t *out, void *userdata) {
+    (void)userdata;
+    *out = 42; /* the answer to everything right? */
+	return AWS_OP_SUCCESS; /* let the caller know we wrote the data successfully */
+}
+
 int main(int argc, char **argv) {
     if (argc < 5) {
         printf(
@@ -233,6 +243,9 @@ int main(int argc, char **argv) {
         .task_period_ns = 5ul * 60ul * 1000000000ul};
     args.task_config = task_config;
 
+	aws_iotdevice_defender_register_number_metric(&task_config, allocator, "TestCustomMetricNumber",
+												  get_number_metric, NULL);
+   	
     struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
                                                        .port = 8883,
                                                        .socket_options = &socket_options,
