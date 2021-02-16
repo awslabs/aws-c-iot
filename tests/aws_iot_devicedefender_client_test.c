@@ -4,6 +4,7 @@
  */
 
 #include <aws/common/error.h>
+#include <aws/common/zero.h>
 #include <aws/mqtt/client.h>
 #include <aws/mqtt/mqtt.h>
 
@@ -242,9 +243,10 @@ int main(int argc, char **argv) {
             AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"), /* TODO: make cli arg so policies can work */
         .task_period_ns = 5ul * 60ul * 1000000000ul};
     args.task_config = task_config;
+	aws_array_list_init_dynamic(&args.task_config.custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
 
-	aws_iotdevice_defender_register_number_metric(&task_config, allocator, "TestCustomMetricNumber",
-												  get_number_metric, NULL);
+	ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(&args.task_config, allocator, "TestCustomMetricNumber",
+																 get_number_metric, NULL));
    	
     struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
                                                        .port = 8883,

@@ -61,6 +61,34 @@ typedef int(aws_iotdevice_defender_get_ip_list_fn)(struct aws_array_list *const 
 
 enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON, AWS_IDDRF_CBOR };
 
+/**
+ * Change name if this needs external exposure. Needed to keep track of how to
+ * interpret instantiated metrics, and cast the supplier_fn correctly.
+ */
+enum defender_custom_metric_type {
+    DD_METRIC_UNKNOWN,
+    DD_METRIC_NUMBER,         /* int64_t */
+    DD_METRIC_NUMBER_LIST,    /* aws_array_list: int64_t */
+	DD_METRIC_STRING_LIST,    /* aws_array_list: struct aws_string */
+	DD_METRIC_IP_LIST         /* aws_array_list: struct aws_string */
+};
+
+/**
+ * Instantiation of a custom metric that needs a value to be retreived when
+ * it is time to produce a metric report.
+ */
+struct defender_custom_metric {
+    enum defender_custom_metric_type type;
+    struct aws_string *metric_name;
+    void *userdata;
+    union {
+	  aws_iotdevice_defender_get_number_fn *get_number_fn;
+	  aws_iotdevice_defender_get_number_list_fn *get_number_list_fn;
+	  aws_iotdevice_defender_get_string_list_fn *get_string_list_fn;
+	  aws_iotdevice_defender_get_ip_list_fn *get_ip_list_fn;
+	} supplier_fn;
+};
+
 struct aws_iotdevice_defender_v1_task;
 
 struct aws_iotdevice_defender_report_task_config {
