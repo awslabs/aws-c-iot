@@ -86,9 +86,15 @@ static void s_on_report_response_rejected(
     struct aws_mqtt_client_connection *connection,
     const struct aws_byte_cursor *topic,
     const struct aws_byte_cursor *payload,
+    bool dup,
+    enum aws_mqtt_qos qos,
+    bool retain,
     void *userdata) {
     (void)connection;
     (void)payload;
+    (void)dup;
+    (void)qos;
+    (void)retain;
     AWS_LOGF_ERROR(
         AWS_LS_IOTDEVICE_DEFENDER_TASK,
         "id=%p: Report rejected from topic: " PRInSTR "\nRejection payload: " PRInSTR,
@@ -101,9 +107,15 @@ static void s_on_report_response_accepted(
     struct aws_mqtt_client_connection *connection,
     const struct aws_byte_cursor *topic,
     const struct aws_byte_cursor *payload,
+    bool dup,
+    enum aws_mqtt_qos qos,
+    bool retain,
     void *userdata) {
     (void)connection;
     (void)payload;
+    (void)dup;
+    (void)qos;
+    (void)retain;
     AWS_LOGF_DEBUG(
         AWS_LS_IOTDEVICE_DEFENDER_TASK,
         "id=%p: Report accepted on topic: " PRInSTR,
