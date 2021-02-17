@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/common/array_list.h>
 #include <aws/common/error.h>
 #include <aws/common/zero.h>
 #include <aws/mqtt/client.h>
@@ -143,6 +144,42 @@ static int get_number_metric(int64_t *out, void *userdata) {
 	return AWS_OP_SUCCESS; /* let the caller know we wrote the data successfully */
 }
 
+static int get_number_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    (void)userdata;
+	int64_t number = 64;
+	aws_array_list_push_back(to_write_list, &number);
+	number = 128;
+	aws_array_list_push_back(to_write_list, &number);
+	number = 256;
+	aws_array_list_push_back(to_write_list, &number);
+
+	return AWS_OP_SUCCESS;
+}
+
+static int get_string_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+	struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
+	aws_array_list_push_back(to_write_list, &string_value);
+	string_value = aws_string_new_from_c_str(allocator, "bar");
+	aws_array_list_push_back(to_write_list, &string_value);
+	string_value = aws_string_new_from_c_str(allocator, "donkey");
+	aws_array_list_push_back(to_write_list, &string_value);
+
+	return AWS_OP_SUCCESS;
+}
+
+static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+	struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
+	aws_array_list_push_back(to_write_list, &ip_value);
+	ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
+	aws_array_list_push_back(to_write_list, &ip_value);
+	ip_value = aws_string_new_from_c_str(allocator, "8.8.8.8");
+	aws_array_list_push_back(to_write_list, &ip_value);
+
+	return AWS_OP_SUCCESS;
+}
+
 int main(int argc, char **argv) {
     if (argc < 5) {
         printf(
@@ -246,7 +283,16 @@ int main(int argc, char **argv) {
 	aws_array_list_init_dynamic(&args.task_config.custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
 
 	ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(&args.task_config, allocator, "TestCustomMetricNumber",
-																 get_number_metric, NULL));
+																 get_number_metric, allocator));
+
+	ASSERT_SUCCESS(aws_iotdevice_defender_register_number_list_metric(&args.task_config, allocator, "TestCustomMetricNumberList",
+																	  get_number_list_metric, allocator));
+
+	ASSERT_SUCCESS(aws_iotdevice_defender_register_string_list_metric(&args.task_config, allocator, "TestCustomMetricStringList",
+																 get_string_list_metric, allocator));
+
+	ASSERT_SUCCESS(aws_iotdevice_defender_register_ip_list_metric(&args.task_config, allocator, "TestCustomMetricIpList",
+																 get_ip_list_metric, allocator));
    	
     struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
                                                        .port = 8883,
