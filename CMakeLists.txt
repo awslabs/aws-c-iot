@@ -56,6 +56,10 @@ file(GLOB AWS_IOT_PRIV_HEADERS
         "include/aws/iotdevice/private/*.h"
         )
 
+file(GLOB AWS_IOT_PRIV_EXPOSED_HEADERS
+        "include/aws/iotdevice/private/serializer.h"
+        )
+
 file(GLOB AWS_IOT_EXTERNAL_HEADERS
         "include/aws/iotdevice/external/*.h"
         )
@@ -92,6 +96,8 @@ aws_add_sanitizers(${PROJECT_NAME})
 set_target_properties(${PROJECT_NAME} PROPERTIES VERSION 1.0.0)
 set_target_properties(${PROJECT_NAME} PROPERTIES SOVERSION 0unstable)
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE -DCJSON_HIDE_SYMBOLS)
+
 target_include_directories(${PROJECT_NAME} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
@@ -101,7 +107,8 @@ aws_use_package(aws-c-mqtt)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
 aws_prepare_shared_lib_exports(${PROJECT_NAME})
 
-install(FILES ${AWS_IOT_HEADERS} DESTINATION "include/aws/iotdevice" COMPONENT Development)
+install(FILES ${AWS_IOT_HEADERS}  DESTINATION "include/aws/iotdevice" COMPONENT Development)
+install(FILES ${AWS_IOT_PRIV_EXPOSED_HEADERS}  DESTINATION "include/aws/iotdevice/private" COMPONENT Development)
 
 if (BUILD_SHARED_LIBS)
    set (TARGET_DIR "shared")

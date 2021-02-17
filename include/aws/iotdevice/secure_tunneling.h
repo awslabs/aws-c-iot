@@ -14,6 +14,8 @@
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
 struct aws_secure_tunnel;
+struct aws_websocket_incoming_frame;
+struct ping_task_context;
 
 struct data_tunnel_pair {
     struct aws_byte_buf buf;
@@ -68,8 +70,6 @@ struct aws_secure_tunneling_connection_config {
     void *user_data;
 };
 
-struct ping_task_context;
-
 struct aws_secure_tunnel {
     /* Static settings */
     struct aws_secure_tunneling_connection_config config;
@@ -120,6 +120,14 @@ int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel);
+
+/* Making this exposed public to verify testing in the sdk layer */
+AWS_IOTDEVICE_API
+bool on_websocket_incoming_frame_payload(
+    struct aws_websocket *websocket,
+    const struct aws_websocket_incoming_frame *frame,
+    struct aws_byte_cursor data,
+    void *user_data);
 
 AWS_EXTERN_C_END
 

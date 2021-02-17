@@ -6,6 +6,7 @@
 #define AWS_IOTDEVICE_NETWORK_H
 
 #include <aws/common/hash_table.h>
+#include <aws/iotdevice/exports.h>
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -42,20 +43,28 @@ struct aws_iotdevice_network_ifconfig {
     struct aws_hash_table iface_name_to_info;
 };
 
+AWS_EXTERN_C_BEGIN
+
+AWS_IOTDEVICE_API
 void get_system_network_total(
     struct aws_iotdevice_metric_network_transfer *total,
     struct aws_iotdevice_network_ifconfig *ifconfig);
 
+AWS_IOTDEVICE_API
 int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator);
 
+AWS_IOTDEVICE_API
 int get_network_connections(
     struct aws_array_list *net_conns,
     struct aws_iotdevice_network_ifconfig *ifconfig,
     struct aws_allocator *allocator);
 
+AWS_IOTDEVICE_API
 void get_network_total_delta(
     struct aws_iotdevice_metric_network_transfer *delta,
     struct aws_iotdevice_metric_network_transfer *prev_total,
     struct aws_iotdevice_metric_network_transfer *curr_total);
+
+AWS_EXTERN_C_END
 
 #endif
