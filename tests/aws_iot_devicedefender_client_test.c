@@ -140,44 +140,44 @@ static void s_mqtt_on_disconnect(struct aws_mqtt_client_connection *connection, 
  */
 static int get_number_metric(int64_t *out, void *userdata) {
     (void)userdata;
-    *out = 42; /* the answer to everything right? */
-	return AWS_OP_SUCCESS; /* let the caller know we wrote the data successfully */
+    *out = 42;             /* the answer to everything right? */
+    return AWS_OP_SUCCESS; /* let the caller know we wrote the data successfully */
 }
 
 static int get_number_list_metric(struct aws_array_list *to_write_list, void *userdata) {
     (void)userdata;
-	int64_t number = 64;
-	aws_array_list_push_back(to_write_list, &number);
-	number = 128;
-	aws_array_list_push_back(to_write_list, &number);
-	number = 256;
-	aws_array_list_push_back(to_write_list, &number);
+    int64_t number = 64;
+    aws_array_list_push_back(to_write_list, &number);
+    number = 128;
+    aws_array_list_push_back(to_write_list, &number);
+    number = 256;
+    aws_array_list_push_back(to_write_list, &number);
 
-	return AWS_OP_SUCCESS;
+    return AWS_OP_SUCCESS;
 }
 
 static int get_string_list_metric(struct aws_array_list *to_write_list, void *userdata) {
     struct aws_allocator *allocator = (struct aws_allocator *)userdata;
-	struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
-	aws_array_list_push_back(to_write_list, &string_value);
-	string_value = aws_string_new_from_c_str(allocator, "bar");
-	aws_array_list_push_back(to_write_list, &string_value);
-	string_value = aws_string_new_from_c_str(allocator, "donkey");
-	aws_array_list_push_back(to_write_list, &string_value);
+    struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
+    aws_array_list_push_back(to_write_list, &string_value);
+    string_value = aws_string_new_from_c_str(allocator, "bar");
+    aws_array_list_push_back(to_write_list, &string_value);
+    string_value = aws_string_new_from_c_str(allocator, "donkey");
+    aws_array_list_push_back(to_write_list, &string_value);
 
-	return AWS_OP_SUCCESS;
+    return AWS_OP_SUCCESS;
 }
 
 static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userdata) {
     struct aws_allocator *allocator = (struct aws_allocator *)userdata;
-	struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
-	aws_array_list_push_back(to_write_list, &ip_value);
-	ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
-	aws_array_list_push_back(to_write_list, &ip_value);
-	ip_value = aws_string_new_from_c_str(allocator, "8.8.8.8");
-	aws_array_list_push_back(to_write_list, &ip_value);
+    struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
+    aws_array_list_push_back(to_write_list, &ip_value);
+    ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
+    aws_array_list_push_back(to_write_list, &ip_value);
+    ip_value = aws_string_new_from_c_str(allocator, "8.8.8.8");
+    aws_array_list_push_back(to_write_list, &ip_value);
 
-	return AWS_OP_SUCCESS;
+    return AWS_OP_SUCCESS;
 }
 
 int main(int argc, char **argv) {
@@ -280,30 +280,32 @@ int main(int argc, char **argv) {
             AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"), /* TODO: make cli arg so policies can work */
         .task_period_ns = 5ul * 60ul * 1000000000ul};
     args.task_config = task_config;
-	aws_array_list_init_dynamic(&args.task_config.custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
+    aws_array_list_init_dynamic(
+        &args.task_config.custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
 
-	ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(&args.task_config, allocator, "TestCustomMetricNumber",
-																 get_number_metric, allocator));
+    ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(
+        &args.task_config, allocator, "TestCustomMetricNumber", get_number_metric, allocator));
 
-	ASSERT_SUCCESS(aws_iotdevice_defender_register_number_list_metric(&args.task_config, allocator, "TestCustomMetricNumberList",
-																	  get_number_list_metric, allocator));
+    ASSERT_SUCCESS(aws_iotdevice_defender_register_number_list_metric(
+        &args.task_config, allocator, "TestCustomMetricNumberList", get_number_list_metric, allocator));
 
-	ASSERT_SUCCESS(aws_iotdevice_defender_register_string_list_metric(&args.task_config, allocator, "TestCustomMetricStringList",
-																 get_string_list_metric, allocator));
+    ASSERT_SUCCESS(aws_iotdevice_defender_register_string_list_metric(
+        &args.task_config, allocator, "TestCustomMetricStringList", get_string_list_metric, allocator));
 
-	ASSERT_SUCCESS(aws_iotdevice_defender_register_ip_list_metric(&args.task_config, allocator, "TestCustomMetricIpList",
-																 get_ip_list_metric, allocator));
-   	
-    struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
-                                                       .port = 8883,
-                                                       .socket_options = &socket_options,
-                                                       .tls_options = &tls_con_opt,
-                                                       .client_id = client_id_cur,
-                                                       .keep_alive_time_secs = 0,
-                                                       .ping_timeout_ms = 0,
-                                                       .on_connection_complete = s_mqtt_on_connection_complete,
-                                                       .user_data = &args,
-                                                       .clean_session = true};
+    ASSERT_SUCCESS(aws_iotdevice_defender_register_ip_list_metric(
+        &args.task_config, allocator, "TestCustomMetricIpList", get_ip_list_metric, allocator));
+
+    struct aws_mqtt_connection_options conn_options = {
+        .host_name = host_name_cur,
+        .port = 8883,
+        .socket_options = &socket_options,
+        .tls_options = &tls_con_opt,
+        .client_id = client_id_cur,
+        .keep_alive_time_secs = 0,
+        .ping_timeout_ms = 0,
+        .on_connection_complete = s_mqtt_on_connection_complete,
+        .user_data = &args,
+        .clean_session = true};
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);
