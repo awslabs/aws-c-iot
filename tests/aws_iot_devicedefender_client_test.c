@@ -329,7 +329,6 @@ int main(int argc, char **argv) {
         .on_connection_complete = s_mqtt_on_connection_complete,
         .user_data = &args,
         .clean_session = true};
->>>>>>> 62ae838... clang-format
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);

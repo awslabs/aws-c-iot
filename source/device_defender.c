@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-#include <aws/iotdevice/iotdevice.h>
 #include <aws/common/array_list.h>
 #include <aws/common/assert.h>
 #include <aws/common/byte_buf.h>
 #include <aws/common/error.h>
 #include <aws/iotdevice/device_defender.h>
+#include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/private/network.h>
 
@@ -22,6 +22,8 @@
 #include <aws/io/event_loop.h>
 #include <aws/mqtt/client.h>
 
+
+
 /**
  * Instantation of a custom metric's data that needs to be populated into a report
  *
@@ -30,8 +32,8 @@
 struct defender_custom_metric_data {
     struct defender_custom_metric *metric;
     union {
-	    int64_t number;
-	    struct aws_array_list list;
+        int64_t number;
+        struct aws_array_list list;
     } data;
 };
 
