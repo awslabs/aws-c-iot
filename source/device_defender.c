@@ -533,9 +533,6 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 goto cleanup;
             }
 
-            /* Iterate over and retreive custom metrics */
-            const size_t custom_metrics_len = aws_array_list_length(&defender_task->config.custom_metrics);
-
             if (custom_metrics_len != 0) {
                 for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
                     aws_array_list_get_at(
