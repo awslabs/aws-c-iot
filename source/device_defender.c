@@ -995,4 +995,3 @@ int aws_iotdevice_defender_register_ip_list_metric(
 
     return AWS_OP_SUCCESS;
 }
-
