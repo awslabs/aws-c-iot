@@ -4,6 +4,7 @@
  */
 
 #include <aws/common/array_list.h>
+#include <aws/common/byte_buf.h>
 #include <aws/common/error.h>
 #include <aws/common/zero.h>
 #include <aws/mqtt/client.h>
@@ -283,17 +284,21 @@ int main(int argc, char **argv) {
     aws_array_list_init_dynamic(
         &args.task_config.custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
 
+    const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
     ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(
-        &args.task_config, allocator, "TestCustomMetricNumber", get_number_metric, allocator));
+        &args.task_config, allocator, &name_metric_number, get_number_metric, allocator));
 
+    const struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str("TestCustomMetricNumberList");
     ASSERT_SUCCESS(aws_iotdevice_defender_register_number_list_metric(
-        &args.task_config, allocator, "TestCustomMetricNumberList", get_number_list_metric, allocator));
+        &args.task_config, allocator, &name_metric_number_list, get_number_list_metric, allocator));
 
+    const struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str("TestCustomMetricStringList");
     ASSERT_SUCCESS(aws_iotdevice_defender_register_string_list_metric(
-        &args.task_config, allocator, "TestCustomMetricStringList", get_string_list_metric, allocator));
+        &args.task_config, allocator, &name_metric_string_list, get_string_list_metric, allocator));
 
+    const struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str("TestCustomMetricIpList");
     ASSERT_SUCCESS(aws_iotdevice_defender_register_ip_list_metric(
-        &args.task_config, allocator, "TestCustomMetricIpList", get_ip_list_metric, allocator));
+        &args.task_config, allocator, &name_metric_ip_list, get_ip_list_metric, allocator));
 
     struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
                                                        .port = 8883,
