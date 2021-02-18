@@ -28,12 +28,12 @@ typedef void(aws_iotdevice_defender_v1_task_cancelled_fn)(void *userdata);
  *
  * There are two possibilities for failed submission:
  *  1. The MQTT client fails to publish the message and returns an error code. In this
- *     scenario, the client_error_code will be a value other than  AWS_OP_SUCCESS. The
+ *     scenario, the client_error_code will be a value other than  AWS_ERROR_SUCCESS. The
  *     rejected_message_payload parameter will be NULL.
- *  2. After a successful publish, a reply is recieved on the respective MQTT rejected
+ *  2. After a successful publish, a reply is received on the respective MQTT rejected
  *     topic with a message. In this scenario, the client_error_code will be
- *     AWS_OP_SUCCESS, and rejected_message_payload will contain the payload of the
- *     rejected message recieved.
+ *     AWS_ERROR_SUCCESS, and rejected_message_payload will contain the payload of the
+ *     rejected message received.
  */
 typedef void(aws_iotdevice_defender_report_rejected_fn)(
     int client_error_code,
@@ -42,21 +42,29 @@ typedef void(aws_iotdevice_defender_report_rejected_fn)(
 
 /**
  * User callback type invoked to retrieve a number type custom metric
+ *
+ * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
 typedef int(aws_iotdevice_defender_get_number_fn)(int64_t *const value, void *userdata);
 
 /**
  * User callback type invoked to retrieve a number list custom metric
+ *
+ * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
 typedef int(aws_iotdevice_defender_get_number_list_fn)(struct aws_array_list *const number_list, void *userdata);
 
 /**
  * User callback type invoked to retrieve a string list custom metric
+ *
+ * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
 typedef int(aws_iotdevice_defender_get_string_list_fn)(struct aws_array_list *const string_list, void *userdata);
 
 /**
- * User callback type invoked to retrieve a ip list custom metric
+ * User callback type invoked to retrieve an ip list custom metric
+ *
+ * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
 typedef int(aws_iotdevice_defender_get_ip_list_fn)(struct aws_array_list *const ip_list, void *userdata);
 
@@ -75,7 +83,7 @@ enum defender_custom_metric_type {
 };
 
 /**
- * Instantiation of a custom metric that needs a value to be retreived when
+ * Instantiation of a custom metric that needs a value to be retrieved when
  * it is time to produce a metric report.
  */
 struct defender_custom_metric {
