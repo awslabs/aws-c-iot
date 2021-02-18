@@ -380,7 +380,12 @@ static int s_get_metric_report_json(
                     break;
                 case DD_METRIC_UNKNOWN:
                 default:
-                    /* output warning or error */
+                    AWS_LOGF_TRACE(
+                        AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                        "id=%p: Unknown custom metrics type found during report generation: %d, name %s",
+                        (void *)task,
+                        custom_metrics_data[metric_index].metric->type,
+                        aws_string_c_str(custom_metrics_data[metric_index].metric->metric_name));
                     continue;
                     break;
             }
