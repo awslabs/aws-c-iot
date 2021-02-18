@@ -136,9 +136,6 @@ static void s_mqtt_on_disconnect(struct aws_mqtt_client_connection *connection, 
     aws_mutex_unlock(args->mutex);
 }
 
-/**
- * Example function to get number data
- */
 static int get_number_metric(int64_t *out, void *userdata) {
     (void)userdata;
     *out = 42;             /* the answer to everything right? */
@@ -176,7 +173,11 @@ static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userda
     ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
     aws_array_list_push_back(to_write_list, &ip_value);
     ip_value = aws_string_new_from_c_str(allocator, "08:00:27:d1:ea:38");
-    aws_array_list_push_back(to_write_list, &ip_value);
+    /* intentionally showing different way of constructing strings is still managed correctly in report */
+    AWS_STRING_FROM_LITERAL(example_ipv6, "2001:db8:3333:4444:5555:6666:7777:8888");
+    aws_array_list_push_back(to_write_list, &example_ipv6);
+    AWS_STRING_FROM_LITERAL(ipv6, "fe80::843:a8ff:fe18:a879");
+    aws_array_list_push_back(to_write_list, &ipv6);
 
     return AWS_OP_SUCCESS;
 }
