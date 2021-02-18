@@ -125,7 +125,6 @@ static int after(struct aws_allocator *allocator, int setup_result, void *ctx) {
     aws_host_resolver_release(test_context->secure_tunnel->config.bootstrap->host_resolver);
     aws_event_loop_group_release(test_context->secure_tunnel->config.bootstrap->event_loop_group);
     aws_client_bootstrap_release(test_context->secure_tunnel->config.bootstrap);
-    ASSERT_SUCCESS(aws_global_thread_creator_shutdown_wait_for(10));
 
     aws_secure_tunnel_release(test_context->secure_tunnel);
     aws_iotdevice_library_clean_up();
