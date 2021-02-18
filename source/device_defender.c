@@ -481,10 +481,11 @@ static void s_clean_up_metric_data(
                 break;
             case DD_METRIC_STRING_LIST:
             case DD_METRIC_IP_LIST:
-              list_size = aws_array_list_length(&metrics_data[metric_index].data.list);
+                list_size = aws_array_list_length(&metrics_data[metric_index].data.list);
                 for (size_t item_index = 0; item_index < list_size; ++item_index) {
                     struct aws_string *string_or_ip_entry;
-                    aws_array_list_get_at(&metrics_data[metric_index].data.list, (void *)&string_or_ip_entry, item_index);
+                    aws_array_list_get_at(
+                        &metrics_data[metric_index].data.list, (void *)&string_or_ip_entry, item_index);
                     aws_string_destroy(string_or_ip_entry);
                 }
                 /* fall through intended */
