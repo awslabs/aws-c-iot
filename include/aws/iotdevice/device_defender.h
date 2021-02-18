@@ -138,7 +138,7 @@ AWS_IOTDEVICE_API
 int aws_iotdevice_defender_register_number_metric(
     struct aws_iotdevice_defender_report_task_config *task_config,
     struct aws_allocator *allocator,
-    const char *metric_name,
+    const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_number_fn *supplier,
     void *userdata);
 
@@ -151,7 +151,7 @@ AWS_IOTDEVICE_API
 int aws_iotdevice_defender_register_number_list_metric(
     struct aws_iotdevice_defender_report_task_config *task_config,
     struct aws_allocator *allocator,
-    const char *metric_name,
+    const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_number_list_fn *supplier,
     void *userdata);
 
@@ -164,7 +164,7 @@ AWS_IOTDEVICE_API
 int aws_iotdevice_defender_register_string_list_metric(
     struct aws_iotdevice_defender_report_task_config *task_config,
     struct aws_allocator *allocator,
-    const char *metric_name,
+    const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_string_list_fn *supplier,
     void *userdata);
 
@@ -177,7 +177,7 @@ AWS_IOTDEVICE_API
 int aws_iotdevice_defender_register_ip_list_metric(
     struct aws_iotdevice_defender_report_task_config *task_config,
     struct aws_allocator *allocator,
-    const char *metric_name,
+    const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_ip_list_fn *supplier,
     void *userdata);
 
