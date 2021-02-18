@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
 #ifndef AWS_IOTDEVICE_DEFENDER_H
 #define AWS_IOTDEVICE_DEFENDER_H
 
@@ -41,7 +42,7 @@ typedef void(aws_iotdevice_defender_report_rejected_fn)(
     void *userdata);
 
 /**
- * User callback type invoked to retrieve a number type custom metric
+ * User callback type invoked to retrieve a number type custom metric.
  *
  * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
@@ -50,6 +51,9 @@ typedef int(aws_iotdevice_defender_get_number_fn)(int64_t *const value, void *us
 /**
  * User callback type invoked to retrieve a number list custom metric
  *
+ * List provided will already be initialized and caller must push items into the list
+ * of type int64_t.
+ *
  * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
 typedef int(aws_iotdevice_defender_get_number_list_fn)(struct aws_array_list *const number_list, void *userdata);
@@ -57,12 +61,20 @@ typedef int(aws_iotdevice_defender_get_number_list_fn)(struct aws_array_list *co
 /**
  * User callback type invoked to retrieve a string list custom metric
  *
+ * List provided will already be initialized and caller must push items into the list
+ * of type (struct aws_string *). String allocated that are placed into the list are
+ * destroyed by the defender task after it is done with the list.
+ *
  * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
 typedef int(aws_iotdevice_defender_get_string_list_fn)(struct aws_array_list *const string_list, void *userdata);
 
 /**
  * User callback type invoked to retrieve an ip list custom metric
+ *
+ * List provided will already be initialized and caller must push items into the list
+ * of type (struct aws_string *). String allocated that are placed into the list are
+ * destroyed by the defender task after it is done with the list.
  *
  * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */

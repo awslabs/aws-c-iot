@@ -459,6 +459,8 @@ static int s_init_custom_metric_data(
 
 /**
  * Cleans up the memory associated with collecting metric data each defender task run
+ *
+ * Nests into list types to free memory of items if they need to be destroyed
  */
 static void s_clean_up_metric_data(
     struct defender_custom_metric_data *metrics_data,
@@ -468,12 +470,20 @@ static void s_clean_up_metric_data(
 
     const size_t custom_metrics_len = aws_array_list_length(&defender_task->config.custom_metrics);
     for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
+        size_t list_size = 0; /* set only if we have a list type */
         switch (metrics_data[metric_index].metric->type) {
             case DD_METRIC_NUMBER: /* nothing to do here */
                 break;
-            case DD_METRIC_NUMBER_LIST:
             case DD_METRIC_STRING_LIST:
             case DD_METRIC_IP_LIST:
+              list_size = aws_array_list_length(&metrics_data[metric_index].data.list);
+                for (size_t item_index = 0; item_index < list_size; ++item_index) {
+                    struct aws_string *string_or_ip_entry;
+                    aws_array_list_get_at(&metrics_data[metric_index].data.list, (void *)&string_or_ip_entry, item_index);
+                    aws_string_destroy(string_or_ip_entry);
+                }
+                /* fall through intended */
+            case DD_METRIC_NUMBER_LIST:
                 aws_array_list_clean_up(&metrics_data[metric_index].data.list);
                 break;
             case DD_METRIC_UNKNOWN:
