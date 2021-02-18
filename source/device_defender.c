@@ -449,6 +449,7 @@ static int s_init_custom_metric_data(
                 aws_array_list_init_dynamic(&custom_metric_data[metric_index].data.list, allocator, 0, sizeof(int64_t));
                 break;
             case DD_METRIC_STRING_LIST:
+                /* fall through */
             case DD_METRIC_IP_LIST:
                 aws_array_list_init_dynamic(
                     &custom_metric_data[metric_index].data.list, allocator, 0, sizeof(struct aws_string *));
@@ -480,6 +481,7 @@ static void s_clean_up_metric_data(
             case DD_METRIC_NUMBER: /* nothing to do here */
                 break;
             case DD_METRIC_STRING_LIST:
+                /* fall through */
             case DD_METRIC_IP_LIST:
                 list_size = aws_array_list_length(&metrics_data[metric_index].data.list);
                 for (size_t item_index = 0; item_index < list_size; ++item_index) {
@@ -488,7 +490,7 @@ static void s_clean_up_metric_data(
                         &metrics_data[metric_index].data.list, (void *)&string_or_ip_entry, item_index);
                     aws_string_destroy(string_or_ip_entry);
                 }
-                /* fall through intended */
+                /* fall through */
             case DD_METRIC_NUMBER_LIST:
                 aws_array_list_clean_up(&metrics_data[metric_index].data.list);
                 break;
