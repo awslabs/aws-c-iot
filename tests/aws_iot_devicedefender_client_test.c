@@ -174,7 +174,7 @@ static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userda
     aws_array_list_push_back(to_write_list, &ip_value);
     ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, "8.8.8.8");
+    ip_value = aws_string_new_from_c_str(allocator, "08:00:27:d1:ea:38");
     aws_array_list_push_back(to_write_list, &ip_value);
 
     return AWS_OP_SUCCESS;

@@ -23,7 +23,7 @@
 #include <aws/mqtt/client.h>
 
 /**
- * Instantation of a custom metric's data that needs to be populated into a report
+ * of a custom metric's data that needs to be populated into a report
  *
  * Data union only needs to physically point to a single number, and single list.
  */
@@ -33,6 +33,7 @@ struct defender_custom_metric_data {
         int64_t number;
         struct aws_array_list list;
     } data;
+    int callback_result;
 };
 
 struct aws_iotdevice_defender_v1_task {
@@ -547,37 +548,41 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                         (void *)defender_task,
                         aws_string_c_str(custom_metric_data[metric_index].metric->metric_name));
 
-                    int result = AWS_OP_SUCCESS;
                     switch (custom_metric_data[metric_index].metric->type) {
                         case DD_METRIC_NUMBER:
-                            result = custom_metric_data[metric_index].metric->supplier_fn.get_number_fn(
-                                &custom_metric_data[metric_index].data.number,
-                                custom_metric_data[metric_index].metric->userdata);
+                            custom_metric_data[metric_index].callback_result =
+                                custom_metric_data[metric_index].metric->supplier_fn.get_number_fn(
+                                    &custom_metric_data[metric_index].data.number,
+                                    custom_metric_data[metric_index].metric->userdata);
                             break;
                         case DD_METRIC_NUMBER_LIST:
-                            result = custom_metric_data[metric_index].metric->supplier_fn.get_number_list_fn(
-                                &custom_metric_data[metric_index].data.list,
-                                custom_metric_data[metric_index].metric->userdata);
+                            custom_metric_data[metric_index].callback_result =
+                                custom_metric_data[metric_index].metric->supplier_fn.get_number_list_fn(
+                                    &custom_metric_data[metric_index].data.list,
+                                    custom_metric_data[metric_index].metric->userdata);
                             break;
                         case DD_METRIC_STRING_LIST:
-                            result = custom_metric_data[metric_index].metric->supplier_fn.get_string_list_fn(
-                                &custom_metric_data[metric_index].data.list,
-                                custom_metric_data[metric_index].metric->userdata);
+                            custom_metric_data[metric_index].callback_result =
+                                custom_metric_data[metric_index].metric->supplier_fn.get_string_list_fn(
+                                    &custom_metric_data[metric_index].data.list,
+                                    custom_metric_data[metric_index].metric->userdata);
                             break;
                         case DD_METRIC_IP_LIST:
-                            result = custom_metric_data[metric_index].metric->supplier_fn.get_ip_list_fn(
-                                &custom_metric_data[metric_index].data.list,
-                                custom_metric_data[metric_index].metric->userdata);
+                            custom_metric_data[metric_index].callback_result =
+                                custom_metric_data[metric_index].metric->supplier_fn.get_ip_list_fn(
+                                    &custom_metric_data[metric_index].data.list,
+                                    custom_metric_data[metric_index].metric->userdata);
                             break;
                         case DD_METRIC_UNKNOWN:
                         default:
-                            /* output warning or error */
+                            AWS_LOGF_ERROR(
+                                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                                "id=%p: Processing unknown metric type: %d, name: %s",
+                                (void *)defender_task,
+                                custom_metric_data[metric_index].metric->type,
+                                aws_error_name(return_code));
                             continue;
                             break;
-                    }
-
-                    if (result != AWS_OP_SUCCESS) {
-                        /* TODO: bad result */
                     }
                 }
             }
@@ -754,7 +759,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
     defender_task->previous_net_xfer.packets_in = 0;
     defender_task->previous_net_xfer.packets_out = 0;
     defender_task->has_previous_net_xfer = false;
-    memcpy(&defender_task->config, config, sizeof(struct aws_iotdevice_defender_report_task_config));
+    defender_task->config = *config;
 
     aws_atomic_store_int(&defender_task->task_cancelled, 0);
 
@@ -990,3 +995,4 @@ int aws_iotdevice_defender_register_ip_list_metric(
 
     return AWS_OP_SUCCESS;
 }
+
