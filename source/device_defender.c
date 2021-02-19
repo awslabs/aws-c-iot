@@ -501,7 +501,6 @@ static void s_clean_up_metric_data(
     }
 }
 
-
 static void s_get_custom_metrics_data(
     const struct aws_iotdevice_defender_v1_task *defender_task,
     struct defender_custom_metric_data *custom_metric_data,
@@ -897,7 +896,7 @@ cleanup:
     }
 
     AWS_LOGF_TRACE(
-                   AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Scheduling defender task for first run", (void *)defender_task);
+        AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Scheduling defender task for first run", (void *)defender_task);
     aws_event_loop_schedule_task_now(defender_task->config.event_loop, &defender_task->task);
 
     return defender_task;
