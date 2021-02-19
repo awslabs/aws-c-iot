@@ -380,7 +380,7 @@ static int s_get_metric_report_json(
                     break;
                 case DD_METRIC_UNKNOWN:
                 default:
-                    AWS_LOGF_TRACE(
+                    AWS_LOGF_WARN(
                         AWS_LS_IOTDEVICE_DEFENDER_TASK,
                         "id=%p: Unknown custom metrics type found during report generation: %d, name %s",
                         (void *)task,
@@ -417,8 +417,8 @@ static uint64_t s_defender_report_id_epoch_time_ms(struct aws_iotdevice_defender
     uint64_t now;
     int return_code = 0;
     if (AWS_OP_SUCCESS != (return_code = aws_event_loop_current_clock_time(defender_task->config.event_loop, &now))) {
-        AWS_LOGF_TRACE(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK,
+        AWS_LOGF_WARN(
+                  AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Error generating report ID from aws_event_loop_current_clock_time(): %s",
             (void *)defender_task,
             aws_error_name(return_code));
@@ -501,6 +501,63 @@ static void s_clean_up_metric_data(
     }
 }
 
+
+static void s_get_custom_metrics_data(const struct aws_iotdevice_defender_v1_task *defender_task,
+                                      struct defender_custom_metric_data *custom_metric_data,
+                                      const size_t custom_metrics_len) {
+    if (custom_metrics_len != 0) {
+        for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
+            aws_array_list_get_at(
+                &defender_task->config.custom_metrics,
+                (void *)&custom_metric_data[metric_index].metric,
+                metric_index);
+
+            AWS_LOGF_DEBUG(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p Retrieving value for custom metric %s",
+                (void *)defender_task,
+                aws_string_c_str(custom_metric_data[metric_index].metric->metric_name));
+
+            switch (custom_metric_data[metric_index].metric->type) {
+                case DD_METRIC_NUMBER:
+                    custom_metric_data[metric_index].callback_result =
+                        custom_metric_data[metric_index].metric->supplier_fn.get_number_fn(
+                            &custom_metric_data[metric_index].data.number,
+                            custom_metric_data[metric_index].metric->userdata);
+                    break;
+                case DD_METRIC_NUMBER_LIST:
+                    custom_metric_data[metric_index].callback_result =
+                        custom_metric_data[metric_index].metric->supplier_fn.get_number_list_fn(
+                            &custom_metric_data[metric_index].data.list,
+                            custom_metric_data[metric_index].metric->userdata);
+                    break;
+                case DD_METRIC_STRING_LIST:
+                    custom_metric_data[metric_index].callback_result =
+                        custom_metric_data[metric_index].metric->supplier_fn.get_string_list_fn(
+                            &custom_metric_data[metric_index].data.list,
+                            custom_metric_data[metric_index].metric->userdata);
+                    break;
+                case DD_METRIC_IP_LIST:
+                    custom_metric_data[metric_index].callback_result =
+                        custom_metric_data[metric_index].metric->supplier_fn.get_ip_list_fn(
+                            &custom_metric_data[metric_index].data.list,
+                            custom_metric_data[metric_index].metric->userdata);
+                    break;
+                case DD_METRIC_UNKNOWN:
+                default:
+                    AWS_LOGF_ERROR(
+                        AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                        "id=%p: Cannot retreive metric for unknown metric type: %d, name: %s",
+                        (void *)defender_task,
+                        custom_metric_data[metric_index].metric->type,
+                        aws_string_c_str(custom_metric_data[metric_index].metric->metric_name));
+                    continue;
+                    break;
+            }
+        }
+    }
+}
+
 static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_task_status status) {
     struct aws_iotdevice_defender_v1_task *defender_task = (struct aws_iotdevice_defender_v1_task *)userdata;
     struct aws_allocator *allocator = defender_task->allocator;
@@ -516,13 +573,13 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     if (status == AWS_TASK_STATUS_RUN_READY) {
         const size_t task_cancelled = aws_atomic_load_int(&defender_task->task_cancelled);
         if (task_cancelled) {
-            AWS_LOGF_TRACE(
+            AWS_LOGF_DEBUG(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
                 "id=%p: DeviceDefender reporting task cancel requested",
                 (void *)defender_task);
             aws_event_loop_cancel_task(defender_task->config.event_loop, task);
         } else {
-            AWS_LOGF_TRACE(
+            AWS_LOGF_DEBUG(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Running DeviceDefender reporting task", (void *)defender_task);
 
             if (AWS_OP_SUCCESS != (return_code = get_network_config_and_transfer(&ifconfig, allocator))) {
@@ -553,60 +610,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 goto cleanup;
             }
 
-            if (custom_metrics_len != 0) {
-                for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
-                    aws_array_list_get_at(
-                        &defender_task->config.custom_metrics,
-                        (void *)&custom_metric_data[metric_index].metric,
-                        metric_index);
-
-                    /* TEMP checkpoint for debugging */
-                    AWS_LOGF_DEBUG(
-                        AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                        "id=%p Retrieving value for custom metric %s",
-                        (void *)defender_task,
-                        aws_string_c_str(custom_metric_data[metric_index].metric->metric_name));
-
-                    switch (custom_metric_data[metric_index].metric->type) {
-                        case DD_METRIC_NUMBER:
-                            custom_metric_data[metric_index].callback_result =
-                                custom_metric_data[metric_index].metric->supplier_fn.get_number_fn(
-                                    &custom_metric_data[metric_index].data.number,
-                                    custom_metric_data[metric_index].metric->userdata);
-                            break;
-                        case DD_METRIC_NUMBER_LIST:
-                            custom_metric_data[metric_index].callback_result =
-                                custom_metric_data[metric_index].metric->supplier_fn.get_number_list_fn(
-                                    &custom_metric_data[metric_index].data.list,
-                                    custom_metric_data[metric_index].metric->userdata);
-                            break;
-                        case DD_METRIC_STRING_LIST:
-                            custom_metric_data[metric_index].callback_result =
-                                custom_metric_data[metric_index].metric->supplier_fn.get_string_list_fn(
-                                    &custom_metric_data[metric_index].data.list,
-                                    custom_metric_data[metric_index].metric->userdata);
-                            break;
-                        case DD_METRIC_IP_LIST:
-                            custom_metric_data[metric_index].callback_result =
-                                custom_metric_data[metric_index].metric->supplier_fn.get_ip_list_fn(
-                                    &custom_metric_data[metric_index].data.list,
-                                    custom_metric_data[metric_index].metric->userdata);
-                            break;
-                        case DD_METRIC_UNKNOWN:
-                        default:
-                            AWS_LOGF_ERROR(
-                                AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                                "id=%p: Processing unknown metric type: %d, name: %s",
-                                (void *)defender_task,
-                                custom_metric_data[metric_index].metric->type,
-                                aws_error_name(return_code));
-                            continue;
-                            break;
-                    }
-                }
-            }
-
-            /* custom metrics processing end */
+            /* per metric retrieval errors do not result in failure */
+            s_get_custom_metrics_data(defender_task, custom_metric_data, custom_metrics_len);
 
             uint64_t report_id = s_defender_report_id_epoch_time_ms(defender_task);
             /* TODO: come up with something better than allocating max size of MQTT message allowed by AWS IoT */
@@ -698,7 +703,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 defender_task->config.event_loop, task, now + defender_task->config.task_period_ns);
         }
     } else if (status == AWS_TASK_STATUS_CANCELED) {
-        AWS_LOGF_TRACE(
+        AWS_LOGF_DEBUG(
             AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Reporting task cancelled, cleaning up", (void *)defender_task);
 
         struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_buf(&defender_task->report_accepted_topic_name);
@@ -843,7 +848,7 @@ struct aws_iotdevice_defender_v1_task *aws_iotdevice_defender_v1_report_task(
         s_mqtt_on_suback,
         defender_task);
     if (sub_accepted_packet_id != 0) {
-        AWS_LOGF_TRACE(
+        AWS_LOGF_DEBUG(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: subscription packet_id [%d] for accepted topic " PRInSTR,
             (void *)defender_task,
@@ -893,7 +898,7 @@ cleanup:
     }
 
     AWS_LOGF_TRACE(
-        AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Running defender task for the first time", (void *)defender_task);
+                   AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Scheduling defender task for first run", (void *)defender_task);
     aws_event_loop_schedule_task_now(defender_task->config.event_loop, &defender_task->task);
 
     return defender_task;
@@ -920,7 +925,7 @@ int aws_iotdevice_defender_register_number_metric(
     custom_metric->userdata = userdata;
 
     if (AWS_OP_SUCCESS != aws_array_list_push_back(&task_config->custom_metrics, &custom_metric)) {
-        AWS_LOGF_TRACE(
+        AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Failed to add number custom metric " PRInSTR,
             (void *)task_config,
@@ -948,7 +953,7 @@ int aws_iotdevice_defender_register_number_list_metric(
     custom_metric->userdata = userdata;
 
     if (AWS_OP_SUCCESS != aws_array_list_push_back(&task_config->custom_metrics, &custom_metric)) {
-        AWS_LOGF_TRACE(
+        AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Failed to add number list custom metric " PRInSTR,
             (void *)task_config,
@@ -976,7 +981,7 @@ int aws_iotdevice_defender_register_string_list_metric(
     custom_metric->userdata = userdata;
 
     if (AWS_OP_SUCCESS != aws_array_list_push_back(&task_config->custom_metrics, &custom_metric)) {
-        AWS_LOGF_TRACE(
+        AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Failed to add string list custom metric " PRInSTR,
             (void *)task_config,
@@ -1004,7 +1009,7 @@ int aws_iotdevice_defender_register_ip_list_metric(
     custom_metric->userdata = userdata;
 
     if (AWS_OP_SUCCESS != aws_array_list_push_back(&task_config->custom_metrics, &custom_metric)) {
-        AWS_LOGF_TRACE(
+        AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Failed to add IP list custom metric " PRInSTR,
             (void *)task_config,
