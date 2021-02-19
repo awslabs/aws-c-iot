@@ -418,7 +418,7 @@ static uint64_t s_defender_report_id_epoch_time_ms(struct aws_iotdevice_defender
     int return_code = 0;
     if (AWS_OP_SUCCESS != (return_code = aws_event_loop_current_clock_time(defender_task->config.event_loop, &now))) {
         AWS_LOGF_WARN(
-                  AWS_LS_IOTDEVICE_DEFENDER_TASK,
+            AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Error generating report ID from aws_event_loop_current_clock_time(): %s",
             (void *)defender_task,
             aws_error_name(return_code));
@@ -502,15 +502,14 @@ static void s_clean_up_metric_data(
 }
 
 
-static void s_get_custom_metrics_data(const struct aws_iotdevice_defender_v1_task *defender_task,
-                                      struct defender_custom_metric_data *custom_metric_data,
-                                      const size_t custom_metrics_len) {
+static void s_get_custom_metrics_data(
+    const struct aws_iotdevice_defender_v1_task *defender_task,
+    struct defender_custom_metric_data *custom_metric_data,
+    const size_t custom_metrics_len) {
     if (custom_metrics_len != 0) {
         for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
             aws_array_list_get_at(
-                &defender_task->config.custom_metrics,
-                (void *)&custom_metric_data[metric_index].metric,
-                metric_index);
+                &defender_task->config.custom_metrics, (void *)&custom_metric_data[metric_index].metric, metric_index);
 
             AWS_LOGF_DEBUG(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
