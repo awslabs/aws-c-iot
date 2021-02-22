@@ -76,6 +76,8 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator) {
 
 void aws_iotdevice_library_clean_up(void) {
     if (s_iotdevice_library_initialized) {
+        aws_thread_join_all_managed();
+
         s_library_allocator = NULL;
 
         aws_unregister_error_info(&s_error_list);

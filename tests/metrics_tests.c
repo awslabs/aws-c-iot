@@ -212,7 +212,6 @@ static int s_clean_up_mqtt_test_data_fn(struct aws_allocator *allocator, int set
         aws_client_bootstrap_release(state_test_data->client_bootstrap);
         aws_host_resolver_release(state_test_data->host_resolver);
         aws_event_loop_group_release(state_test_data->el_group);
-        ASSERT_SUCCESS(aws_global_thread_creator_shutdown_wait_for(10));
     }
 
     aws_mqtt_library_clean_up();
