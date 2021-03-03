@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+
 #include <aws/common/condition_variable.h>
 #include <aws/common/mutex.h>
 #include <aws/common/string.h>
@@ -16,6 +17,15 @@
 #include <aws/mqtt/mqtt.h>
 #include <aws/mqtt/private/mqtt_client_test_helper.h>
 #include <aws/testing/aws_test_harness.h>
+
+const char *TM_NUMBER = "TestMetricNumber";
+const char *TM_NUMBER_LIST = "TestMetricNumberList";
+const char *TM_STRING_LIST = "TestMetricStringList";
+const char *TM_IP_LIST = "TestMetricIpList";
+const char *TM_NUMBER_FAIL = "TestMetricNumberFail";
+const char *TM_NUMBER_LIST_FAIL = "TestMetricNumberListFail";
+const char *TM_STRING_LIST_FAIL = "TestMetricStringListFail";
+const char *TM_IP_LIST_FAIL = "TestMetricIpListFail";
 
 static int validate_devicedefender_record(const char *value) {
     cJSON *report = cJSON_Parse(value);
@@ -52,21 +62,120 @@ static int validate_devicedefender_record(const char *value) {
     return AWS_OP_SUCCESS;
 }
 
+static int validate_devicedefender_custom_record(const char *value) {
+    cJSON *report = cJSON_Parse(value);
+    ASSERT_NOT_NULL(report);
+
+    cJSON *custom_metrics = cJSON_GetObjectItemCaseSensitive(report, "custom_metrics");
+    ASSERT_TRUE(cJSON_IsObject(custom_metrics));
+
+    cJSON *number_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "");
+    (void)number_metric;
+
+    cJSON_Delete(report);
+    return AWS_OP_SUCCESS;
+}
+
+static int get_number_metric_fail(int64_t *out, void *userdata) {
+    (void)userdata;
+    *out = 42;
+    return AWS_OP_ERR;
+}
+
+static int get_number_metric(int64_t *out, void *userdata) {
+    (void)userdata;
+    *out = 42;
+    return AWS_OP_SUCCESS; /* let the caller know we wrote the data successfully */
+}
+
+static int get_number_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
+    (void)userdata;
+    int64_t number = 64;
+    aws_array_list_push_back(to_write_list, &number);
+    number = 128;
+    aws_array_list_push_back(to_write_list, &number);
+    number = 256;
+    aws_array_list_push_back(to_write_list, &number);
+
+    return AWS_OP_ERR;
+}
+
+static int get_number_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    (void)userdata;
+    int64_t number = 64;
+    aws_array_list_push_back(to_write_list, &number);
+    number = 128;
+    aws_array_list_push_back(to_write_list, &number);
+    number = 256;
+    aws_array_list_push_back(to_write_list, &number);
+
+    return AWS_OP_SUCCESS;
+}
+
+static int get_string_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
+    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
+    aws_array_list_push_back(to_write_list, &string_value);
+    string_value = aws_string_new_from_c_str(allocator, "bar");
+    aws_array_list_push_back(to_write_list, &string_value);
+    string_value = aws_string_new_from_c_str(allocator, "donkey");
+    aws_array_list_push_back(to_write_list, &string_value);
+
+    return AWS_OP_ERR;
+}
+
+static int get_string_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
+    aws_array_list_push_back(to_write_list, &string_value);
+    string_value = aws_string_new_from_c_str(allocator, "bar");
+    aws_array_list_push_back(to_write_list, &string_value);
+    string_value = aws_string_new_from_c_str(allocator, "donkey");
+    aws_array_list_push_back(to_write_list, &string_value);
+
+    return AWS_OP_SUCCESS;
+}
+
+static int get_ip_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
+    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
+    aws_array_list_push_back(to_write_list, &ip_value);
+    ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
+    aws_array_list_push_back(to_write_list, &ip_value);
+    ip_value = aws_string_new_from_c_str(allocator, "08:00:27:d1:ea:38");
+    AWS_STRING_FROM_LITERAL(example_ipv6, "2001:db8:3333:4444:5555:6666:7777:8888");
+    aws_array_list_push_back(to_write_list, &example_ipv6);
+    AWS_STRING_FROM_LITERAL(ipv6, "fe80::843:a8ff:fe18:a879");
+    aws_array_list_push_back(to_write_list, &ipv6);
+
+    return AWS_OP_ERR;
+}
+
+static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
+    aws_array_list_push_back(to_write_list, &ip_value);
+    ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
+    aws_array_list_push_back(to_write_list, &ip_value);
+    ip_value = aws_string_new_from_c_str(allocator, "08:00:27:d1:ea:38");
+    AWS_STRING_FROM_LITERAL(example_ipv6, "2001:db8:3333:4444:5555:6666:7777:8888");
+    aws_array_list_push_back(to_write_list, &example_ipv6);
+    AWS_STRING_FROM_LITERAL(ipv6, "fe80::843:a8ff:fe18:a879");
+    aws_array_list_push_back(to_write_list, &ipv6);
+
+    return AWS_OP_SUCCESS;
+}
+
 AWS_TEST_CASE(devicedefender_task_unsupported_report_format, s_devicedefender_task_unsupported_report_format);
 static int s_devicedefender_task_unsupported_report_format(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
 
-    const struct aws_iotdevice_defender_report_task_config config = {
-        .connection = NULL,
-        .thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestThing"),
-        .event_loop = NULL,
-        .report_format = AWS_IDDRF_CBOR,
-        .task_period_ns = 0,
-        .netconn_sample_period_ns = 0,
-        .task_cancelled_fn = NULL,
-        .userdata = NULL};
+    struct aws_iotdevice_defender_task_config *config = NULL;
+    struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestThing");
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&config, allocator,
+							&thing_name,
+							AWS_IDDRF_CBOR));
 
-    ASSERT_NULL(aws_iotdevice_defender_v1_report_task(allocator, &config));
     ASSERT_UINT_EQUALS(AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT, aws_last_error());
     aws_reset_error();
 
@@ -249,21 +358,20 @@ AWS_TEST_CASE_FIXTURE(
 static int s_devicedefender_success_test(struct aws_allocator *allocator, void *ctx) {
     (void)allocator;
     struct mqtt_connection_test_data *state_test_data = ctx;
-
     aws_iotdevice_library_init(state_test_data->allocator);
 
-    struct aws_iotdevice_defender_report_task_config task_config = {
-        .userdata = ctx,
-        .task_cancelled_fn = s_devicedefender_cb,
-        .connection = state_test_data->mqtt_connection,
-        .event_loop = aws_event_loop_group_get_next_loop(state_test_data->el_group),
-        .netconn_sample_period_ns = 1000000000ull,
-        .report_format = AWS_IDDRF_JSON,
-        .thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestSuccessThing"),
-        .task_period_ns = 1000000000ull};
+    struct aws_iotdevice_defender_task_config *task_config = NULL;
+    struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestSuccessThing");
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
 
-    struct aws_iotdevice_defender_v1_task *defender_task = NULL;
-    defender_task = aws_iotdevice_defender_v1_report_task(state_test_data->allocator, &task_config);
+    aws_iotdevice_defender_config_set_callback_userdata(task_config, ctx);
+    aws_iotdevice_defender_config_set_task_cancelation_fn(task_config, s_devicedefender_cb);
+    aws_iotdevice_defender_config_set_task_period_ns(task_config,1000000000UL);
+
+    struct aws_iotdevice_defender_task *defender_task = NULL;
+    ASSERT_SUCCESS(aws_iotdevice_defender_start_task(&defender_task, task_config,
+						     state_test_data->mqtt_connection,
+						     aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
     struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
@@ -271,7 +379,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     // Allow device defender agent to run
     aws_condition_variable_wait_for(&test, &lock, 500000000LL);
 
-    aws_iotdevice_defender_v1_stop_task(defender_task);
+    aws_iotdevice_defender_stop_task(defender_task);
     s_wait_for_task_to_stop(state_test_data);
 
     // The third packet is the report publish
@@ -288,6 +396,96 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_string_destroy(publish_topic);
 
     validate_devicedefender_record((const char *)payload.ptr);
+
+    aws_condition_variable_clean_up(&test);
+    aws_mutex_clean_up(&lock);
+    aws_iotdevice_library_clean_up();
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    devicedefender_custom_metrics_success_test,
+    s_setup_mqtt_test_data_fn,
+    s_devicedefender_custom_metrics_success_test,
+    s_clean_up_mqtt_test_data_fn,
+    &mqtt_test_data);
+
+static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
+    struct mqtt_connection_test_data *state_test_data = ctx;
+
+    aws_iotdevice_library_init(state_test_data->allocator);
+    struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestCustomMetricSuccessThing");
+    struct aws_iotdevice_defender_task_config *task_config = NULL;
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
+
+    aws_iotdevice_defender_config_set_callback_userdata(task_config, ctx);
+    aws_iotdevice_defender_config_set_task_cancelation_fn(task_config, s_devicedefender_cb);
+    aws_iotdevice_defender_config_set_task_period_ns(task_config, 1000000000UL);
+
+    /* register working metrics */
+    const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str(TM_NUMBER);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
+		    task_config, &name_metric_number, get_number_metric, ctx));
+
+    const struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str(TM_NUMBER_LIST);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
+        task_config, &name_metric_number_list, get_number_list_metric, ctx));
+
+    const struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str(TM_STRING_LIST);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
+        task_config, &name_metric_string_list, get_string_list_metric, ctx));
+
+    const struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str(TM_IP_LIST);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
+        task_config, &name_metric_ip_list, get_ip_list_metric, ctx));
+
+    /* register metrics with failing callbacks */
+    const struct aws_byte_cursor name_metric_number_fail = aws_byte_cursor_from_c_str(TM_NUMBER_FAIL);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
+        task_config, &name_metric_number_fail, get_number_metric_fail, ctx));
+
+    const struct aws_byte_cursor name_metric_number_list_fail = aws_byte_cursor_from_c_str(TM_NUMBER_LIST_FAIL);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
+        task_config, &name_metric_number_list_fail, get_number_list_metric_fail, ctx));
+
+    const struct aws_byte_cursor name_metric_string_list_fail = aws_byte_cursor_from_c_str(TM_STRING_LIST_FAIL);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
+        task_config, &name_metric_string_list_fail, get_string_list_metric_fail, ctx));
+
+    const struct aws_byte_cursor name_metric_ip_list_fail = aws_byte_cursor_from_c_str(TM_IP_LIST_FAIL);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
+        task_config, &name_metric_ip_list_fail, get_ip_list_metric_fail, ctx));
+
+    struct aws_iotdevice_defender_task *defender_task = NULL;
+    ASSERT_SUCCESS(aws_iotdevice_defender_start_task(&defender_task, task_config,
+						     state_test_data->mqtt_connection,
+						     aws_event_loop_group_get_next_loop(state_test_data->el_group)));
+    AWS_FATAL_ASSERT(defender_task != NULL);
+
+    struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
+    struct aws_mutex lock = AWS_MUTEX_INIT;
+    // Allow device defender agent to run
+    aws_condition_variable_wait_for(&test, &lock, 500000000UL);
+
+    aws_iotdevice_defender_stop_task(defender_task);
+    s_wait_for_task_to_stop(state_test_data);
+
+    // The third packet is the report publish
+    uint16_t packet_id = 3;
+    struct aws_byte_cursor payload;
+    AWS_ZERO_STRUCT(payload);
+    aws_mqtt_client_get_payload_for_outstanding_publish_packet(state_test_data->mqtt_connection, packet_id, &payload);
+
+    struct aws_string *publish_topic = NULL;
+    aws_mqtt_client_get_topic_for_outstanding_publish_packet(
+        state_test_data->mqtt_connection, packet_id, state_test_data->allocator, &publish_topic);
+
+    ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestSuccessThing/defender/metrics/json"));
+    aws_string_destroy(publish_topic);
+
+    validate_devicedefender_custom_record((const char *)payload.ptr);
 
     aws_condition_variable_clean_up(&test);
     aws_mutex_clean_up(&lock);

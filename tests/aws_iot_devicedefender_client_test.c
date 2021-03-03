@@ -39,7 +39,7 @@
 #    include <unistd.h>
 #endif
 
-struct aws_iotdevice_defender_v1_task *defender_task = NULL;
+struct aws_iotdevice_defender_task *defender_task = NULL;
 
 const char s_client_id_prefix[] = "c-defender-agent-reference";
 
@@ -51,7 +51,8 @@ struct connection_args {
 
     struct aws_mqtt_client_connection *connection;
 
-    struct aws_iotdevice_defender_report_task_config task_config;
+    struct aws_iotdevice_defender_task_config *task_config;
+    struct aws_event_loop *defender_event_loop;
 };
 
 static void s_mqtt_on_connection_complete(
@@ -73,7 +74,8 @@ static void s_mqtt_on_connection_complete(
 
     printf("Client connected...");
 
-    defender_task = aws_iotdevice_defender_v1_report_task(connection_args->allocator, &connection_args->task_config);
+    AWS_ASSERT(AWS_OP_SUCCESS == aws_iotdevice_defender_start_task(&defender_task, connection_args->task_config,
+								   connection, connection_args->defender_event_loop));
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
@@ -220,6 +222,9 @@ int main(int argc, char **argv) {
     aws_logger_set(&logger);
 
     struct aws_event_loop_group *elg = aws_event_loop_group_new_default(args.allocator, 1, NULL);
+    /* defender task explicitly gets told which event loop to work on */
+    args.defender_event_loop = aws_event_loop_group_get_next_loop(elg);
+
     struct aws_host_resolver_default_options host_resolver_default_options;
     AWS_ZERO_STRUCT(host_resolver_default_options);
     host_resolver_default_options.max_entries = 8;
@@ -271,18 +276,12 @@ int main(int argc, char **argv) {
 
     struct aws_byte_cursor client_id_cur = aws_byte_cursor_from_buf(&client_id_buf);
 
-    struct aws_iotdevice_defender_report_task_config task_config = {
-        .userdata = NULL,
-        .task_cancelled_fn = NULL,
-        .connection = args.connection,
-        .event_loop = aws_event_loop_group_get_next_loop(elg),
-        .netconn_sample_period_ns = 5ull * 60ull * 1000000000ull,
-        .report_format = AWS_IDDRF_JSON,
-        .thing_name =
-            AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"), /* TODO: make cli arg so policies can work */
-        .task_period_ns = 5ull * 60ull * 1000000000ull};
+    struct aws_iotdevice_defender_task_config *task_config = NULL;
+    AWS_ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config,
+                                allocator,
+                                AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"), /* TODO: make cli arg so policies can work */
+                                                            AWS_IDDRF_JSON));
     args.task_config = task_config;
-    aws_array_list_init_dynamic(&args.task_config.custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
 
     ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(&args.task_config, allocator, "TestCustomMetricNumber",
                                                                                                                                 get_number_metric, allocator));
@@ -307,22 +306,23 @@ int main(int argc, char **argv) {
                                                        .clean_session = true};
     aws_array_list_init_dynamic(
         &args.task_config.custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
+    */
 
     const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
-    ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(
-        &args.task_config, allocator, &name_metric_number, get_number_metric, allocator));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
+	task_config, &name_metric_number, get_number_metric, &args));
 
     const struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str("TestCustomMetricNumberList");
-    ASSERT_SUCCESS(aws_iotdevice_defender_register_number_list_metric(
-        &args.task_config, allocator, &name_metric_number_list, get_number_list_metric, allocator));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
+        task_config, &name_metric_number_list, get_number_list_metric, &args));
 
     const struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str("TestCustomMetricStringList");
-    ASSERT_SUCCESS(aws_iotdevice_defender_register_string_list_metric(
-        &args.task_config, allocator, &name_metric_string_list, get_string_list_metric, allocator));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
+	task_config, &name_metric_string_list, get_string_list_metric, &args));
 
     const struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str("TestCustomMetricIpList");
-    ASSERT_SUCCESS(aws_iotdevice_defender_register_ip_list_metric(
-        &args.task_config, allocator, &name_metric_ip_list, get_ip_list_metric, allocator));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
+        task_config, &name_metric_ip_list, get_ip_list_metric, &args));
 
     struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
                                                        .port = 8883,
