@@ -31,7 +31,6 @@
  */
 struct aws_iotdevice_defender_task_config {
     struct aws_allocator *allocator;
-    struct aws_mqtt_client_connection *connection;
     struct aws_string *thing_name;
     struct aws_array_list custom_metrics;
     size_t custom_metrics_len;
@@ -474,7 +473,7 @@ static int s_init_custom_metric_data(
     AWS_PRECONDITION(custom_metric_data != NULL);
     AWS_PRECONDITION(defender_task != NULL);
     struct aws_allocator *allocator = defender_task->allocator;
-    const size_t custom_metrics_len = aws_array_list_length(&defender_task->config.custom_metrics);
+    const size_t custom_metrics_len = defender_task->config.custom_metrics_len;
     for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
         struct defender_custom_metric_data *metric_data = &custom_metric_data[metric_index];
         aws_array_list_get_at(&defender_task->config.custom_metrics, (void *)&metric_data->metric, metric_index);
@@ -511,8 +510,7 @@ static void s_clean_up_metric_data(
     struct aws_iotdevice_defender_task *defender_task) {
     AWS_PRECONDITION(metrics_data != NULL);
     AWS_PRECONDITION(defender_task != NULL);
-
-    const size_t custom_metrics_len = aws_array_list_length(&defender_task->config.custom_metrics);
+    const size_t custom_metrics_len = defender_task->config.custom_metrics_len;
     for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
         size_t list_size = 0; /* set only if we have a list type */
         switch (metrics_data[metric_index].metric->type) {
@@ -601,7 +599,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     AWS_ZERO_STRUCT(ifconfig);
     const size_t custom_metrics_len = aws_array_list_length(&defender_task->config.custom_metrics);
     struct defender_custom_metric_data *custom_metric_data =
-        aws_mem_acquire(allocator, sizeof(struct defender_custom_metric_data) * custom_metrics_len);
+      aws_mem_calloc(allocator, custom_metrics_len, sizeof(struct defender_custom_metric_data));
     struct aws_byte_buf json_report;
     AWS_ZERO_STRUCT(json_report);
     int return_code = 0;
@@ -694,7 +692,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 AWS_BYTE_CURSOR_PRI(report));
 
             uint16_t report_packet_id = aws_mqtt_client_connection_publish(
-                defender_task->config.connection,
+                defender_task->connection,
                 &report_topic,
                 AWS_MQTT_QOS_AT_LEAST_ONCE,
                 false,
@@ -743,9 +741,9 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Reporting task cancelled, cleaning up", (void *)defender_task);
 
         struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
-        aws_mqtt_client_connection_unsubscribe(defender_task->config.connection, &accepted_topic, NULL, NULL);
+        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &accepted_topic, NULL, NULL);
         struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
-        aws_mqtt_client_connection_unsubscribe(defender_task->config.connection, &rejected_topic, NULL, NULL);
+        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &rejected_topic, NULL, NULL);
 
         void *cancel_userdata = defender_task->config.callback_userdata;
 	aws_string_destroy(defender_task->publish_report_topic_name);
@@ -870,7 +868,6 @@ int s_copy_task_config(struct aws_iotdevice_defender_task_config *dest_config,
 
     struct aws_allocator *allocator = src_config->allocator;
     dest_config->allocator = src_config->allocator;
-    dest_config->connection = src_config->connection;
     dest_config->custom_metrics_len = src_config->custom_metrics_len;
     dest_config->thing_name = aws_string_new_from_string(src_config->allocator, src_config->thing_name);
     dest_config->report_format = src_config->report_format;
@@ -894,6 +891,7 @@ int s_copy_task_config(struct aws_iotdevice_defender_task_config *dest_config,
 	metric_dest->metric_cb_userdata = metric_src->metric_cb_userdata;
 	metric_dest->type = metric_src->type;
 	metric_dest->supplier_fn = metric_src->supplier_fn;
+	aws_array_list_push_back(&dest_config->custom_metrics, metric_dest);
     }
     return AWS_OP_SUCCESS;
 }
@@ -956,7 +954,7 @@ int aws_iotdevice_defender_start_task(
     const struct aws_byte_cursor accepted_cursor = aws_byte_cursor_from_string(defender_task->
 							report_accepted_topic_name);
     uint16_t sub_accepted_packet_id = aws_mqtt_client_connection_subscribe(
-        defender_task->config.connection,
+        defender_task->connection,
         &accepted_cursor,
         AWS_MQTT_QOS_AT_LEAST_ONCE,
         &s_on_report_response_accepted,
@@ -981,7 +979,7 @@ int aws_iotdevice_defender_start_task(
 
     const struct aws_byte_cursor rejected_cursor = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
     uint16_t sub_rejected_packet_id = aws_mqtt_client_connection_subscribe(
-        defender_task->config.connection,
+        defender_task->connection,
         &rejected_cursor,
         AWS_MQTT_QOS_AT_LEAST_ONCE,
         &s_on_report_response_rejected,

@@ -72,7 +72,7 @@ static void s_mqtt_on_connection_complete(
     AWS_FATAL_ASSERT(return_code == AWS_MQTT_CONNECT_ACCEPTED);
     AWS_FATAL_ASSERT(session_present == false);
 
-    printf("Client connected...");
+    printf("Client connected...\n");
 
     AWS_ASSERT(AWS_OP_SUCCESS == aws_iotdevice_defender_start_task(&defender_task, connection_args->task_config,
 								   connection, connection_args->defender_event_loop));
@@ -275,12 +275,10 @@ int main(int argc, char **argv) {
     aws_uuid_to_str(&uuid, &client_id_buf);
 
     struct aws_byte_cursor client_id_cur = aws_byte_cursor_from_buf(&client_id_buf);
-
+    struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi");
     struct aws_iotdevice_defender_task_config *task_config = NULL;
-    AWS_ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config,
-                                allocator,
-                                AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"), /* TODO: make cli arg so policies can work */
-                                                            AWS_IDDRF_JSON));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name,
+							AWS_IDDRF_JSON));
     args.task_config = task_config;
 
     ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(&args.task_config, allocator, "TestCustomMetricNumber",
