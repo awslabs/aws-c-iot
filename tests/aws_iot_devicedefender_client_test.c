@@ -226,23 +226,25 @@ int main(int argc, char **argv) {
         .task_cancelled_fn = NULL,
         .connection = args.connection,
         .event_loop = aws_event_loop_group_get_next_loop(elg),
-        .netconn_sample_period_ns = 5ul * 60ul * 1000000000ul,
+        .netconn_sample_period_ns = 5ull * 60ull * 1000000000ull,
         .report_format = AWS_IDDRF_JSON,
         .thing_name =
             AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"), /* TODO: make cli arg so policies can work */
-        .task_period_ns = 5ul * 60ul * 1000000000ul};
+        .task_period_ns = 5ull * 60ull * 1000000000ull};
     args.task_config = task_config;
 
-    struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
-                                                       .port = 8883,
-                                                       .socket_options = &socket_options,
-                                                       .tls_options = &tls_con_opt,
-                                                       .client_id = client_id_cur,
-                                                       .keep_alive_time_secs = 0,
-                                                       .ping_timeout_ms = 0,
-                                                       .on_connection_complete = s_mqtt_on_connection_complete,
-                                                       .user_data = &args,
-                                                       .clean_session = true};
+    struct aws_mqtt_connection_options conn_options = {
+        .host_name = host_name_cur,
+        .port = 8883,
+        .socket_options = &socket_options,
+        .tls_options = &tls_con_opt,
+        .client_id = client_id_cur,
+        .keep_alive_time_secs = 0,
+        .ping_timeout_ms = 0,
+        .on_connection_complete = s_mqtt_on_connection_complete,
+        .user_data = &args,
+        .clean_session = true,
+    };
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);
