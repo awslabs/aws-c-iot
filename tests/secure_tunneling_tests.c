@@ -24,14 +24,6 @@
  * The tests here call these functions directly.
  */
 
-/* Callback when websocket gets data */
-struct aws_websocket_incoming_frame;
-extern bool on_websocket_incoming_frame_payload(
-    struct aws_websocket *websocket,
-    const struct aws_websocket_incoming_frame *frame,
-    struct aws_byte_cursor data,
-    void *user_data);
-
 struct secure_tunneling_test_context {
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
     struct aws_secure_tunnel *secure_tunnel;
