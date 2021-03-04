@@ -6,6 +6,8 @@
 #ifndef AWS_IOTDEVICE_EXPORTS_H
 #define AWS_IOTDEVICE_EXPORTS_H
 
+
+/* clang-format off */
 #if defined(USE_WINDOWS_DLL_SEMANTICS) || defined(_WIN32)
 #    ifdef AWS_IOTDEVICE_USE_IMPORT_EXPORT
 #        ifdef AWS_IOTDEVICE_EXPORTS
@@ -25,5 +27,6 @@
 #    endif /* __GNUC__ >= 4 || defined(__clang__) */
 
 #endif /* defined(USE_WINDOWS_DLL_SEMANTICS) || defined(_WIN32) */
+/* clang-format on */
 
 #endif /* AWS_IOTDEVICE_EXPORTS_H */
