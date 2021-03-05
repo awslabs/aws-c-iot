@@ -73,8 +73,7 @@ static void s_mqtt_on_connection_complete(
 
     AWS_FATAL_ASSERT(
         AWS_OP_SUCCESS ==
-        aws_iotdevice_defender_start_task(
-            &defender_task, args->task_config, connection, args->defender_event_loop));
+        aws_iotdevice_defender_start_task(&defender_task, args->task_config, connection, args->defender_event_loop));
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
