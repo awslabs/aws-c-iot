@@ -273,24 +273,6 @@ int main(int argc, char **argv) {
     struct aws_iotdevice_defender_task_config *task_config = NULL;
     ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
     args.task_config = task_config;
-    /*
-    AWS_ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config,
-                                allocator,
-                                elg,
-
-        .userdata = NULL,
-        .task_cancelled_fn = NULL,
-        .connection = args.connection,
-        .event_loop = aws_event_loop_group_get_next_loop(elg),
-        .netconn_sample_period_ns = 5ul * 60ul * 1000000000ul,
-        .report_format = AWS_IDDRF_JSON,
-        .thing_name =
-            AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"),
-        .task_period_ns = 5ul * 60ul * 1000000000ul};
-    args.task_config = task_config;
-    aws_array_list_init_dynamic(
-        &args.task_config.custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
-    */
 
     const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
@@ -317,7 +299,6 @@ int main(int argc, char **argv) {
         .keep_alive_time_secs = 0,
         .ping_timeout_ms = 0,
         .on_connection_complete = s_mqtt_on_connection_complete,
-        .user_data = &args,
         .clean_session = true};
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);

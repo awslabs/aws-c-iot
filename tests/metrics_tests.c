@@ -382,7 +382,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
     struct aws_mutex lock = AWS_MUTEX_INIT;
     // Allow device defender agent to run
-    aws_condition_variable_wait_for(&test, &lock, 500000000UL);
+    aws_condition_variable_wait_for(&test, &lock, 500000000LL);
 
     aws_iotdevice_defender_stop_task(defender_task);
     s_wait_for_task_to_stop(state_test_data);

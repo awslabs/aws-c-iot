@@ -24,14 +24,6 @@
  * The tests here call these functions directly.
  */
 
-/* Callback when websocket gets data */
-struct aws_websocket_incoming_frame;
-extern bool on_websocket_incoming_frame_payload(
-    struct aws_websocket *websocket,
-    const struct aws_websocket_incoming_frame *frame,
-    struct aws_byte_cursor data,
-    void *user_data);
-
 struct secure_tunneling_test_context {
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
     struct aws_secure_tunnel *secure_tunnel;
@@ -181,7 +173,8 @@ static int s_test_sent_data(
     struct aws_byte_buf out_buf;
     ASSERT_INT_EQUALS(
         AWS_OP_SUCCESS,
-        aws_byte_buf_init(&out_buf, test_context->secure_tunnel->config.allocator, frame_options.payload_length));
+        aws_byte_buf_init(
+            &out_buf, test_context->secure_tunnel->config.allocator, (size_t)frame_options.payload_length));
 
     ASSERT_TRUE(secure_tunneling_send_data_call(NULL, &out_buf, frame_options.user_data));
     struct aws_byte_cursor out_buf_cur = aws_byte_cursor_from_buf(&out_buf);
@@ -352,8 +345,9 @@ static int s_secure_tunneling_init_websocket_options_test(struct aws_allocator *
     ASSERT_TRUE(aws_byte_cursor_eq_c_str(&path, "/tunnel?local-proxy-mode=source"));
 
     /* Verify headers */
-    const char *expected_headers[][2] = {
-        {"Sec-WebSocket-Protocol", "aws.iot.securetunneling-1.0"}, {"access-token", ACCESS_TOKEN}};
+    const char *expected_headers[][2] = {{"Sec-WebSocket-Protocol", "aws.iot.securetunneling-1.0"},
+					 {"access-token", ACCESS_TOKEN}};
+
     const struct aws_http_headers *headers = aws_http_message_get_const_headers(websocket_options.handshake_request);
     for (size_t i = 0; i < sizeof(expected_headers) / sizeof(expected_headers[0]); i++) {
         struct aws_byte_cursor name = aws_byte_cursor_from_c_str(expected_headers[i][0]);
