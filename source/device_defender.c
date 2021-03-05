@@ -470,32 +470,34 @@ static uint64_t s_defender_report_id_epoch_time_ms(struct aws_iotdevice_defender
 static int s_init_custom_metric_data(
     struct defender_custom_metric_data *custom_metric_data,
     struct aws_iotdevice_defender_task *defender_task) {
-    AWS_PRECONDITION(custom_metric_data != NULL);
     AWS_PRECONDITION(defender_task != NULL);
-    struct aws_allocator *allocator = defender_task->allocator;
-    const size_t custom_metrics_len = defender_task->config.custom_metrics_len;
 
-    for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
-        struct defender_custom_metric_data *metric_data = &custom_metric_data[metric_index];
-        aws_array_list_get_at(&defender_task->config.custom_metrics, (void **)&metric_data->metric, metric_index);
+    if (custom_metric_data) {
+	struct aws_allocator *allocator = defender_task->allocator;
+	const size_t custom_metrics_len = defender_task->config.custom_metrics_len;
 
-        struct defender_custom_metric *metric = metric_data->metric;
-        switch (metric->type) {
-            case DD_METRIC_NUMBER: /* nothing to do here */
-                break;
-            case DD_METRIC_NUMBER_LIST:
-                aws_array_list_init_dynamic(&custom_metric_data[metric_index].data.list, allocator, 0, sizeof(int64_t));
-                break;
-            case DD_METRIC_STRING_LIST:
-                /* fall through */
-            case DD_METRIC_IP_LIST:
-                aws_array_list_init_dynamic(
-                    &custom_metric_data[metric_index].data.list, allocator, 0, sizeof(struct aws_string *));
-                break;
-            case DD_METRIC_UNKNOWN:
-            default:
-                return aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_UNKNOWN_CUSTOM_METRIC_TYPE);
-        }
+	for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
+	    struct defender_custom_metric_data *metric_data = &custom_metric_data[metric_index];
+	    aws_array_list_get_at(&defender_task->config.custom_metrics, (void **)&metric_data->metric, metric_index);
+
+	    struct defender_custom_metric *metric = metric_data->metric;
+	    switch (metric->type) {
+		case DD_METRIC_NUMBER: /* nothing to do here */
+		    break;
+		case DD_METRIC_NUMBER_LIST:
+		    aws_array_list_init_dynamic(&custom_metric_data[metric_index].data.list, allocator, 0, sizeof(int64_t));
+		    break;
+		case DD_METRIC_STRING_LIST:
+		    /* fall through */
+		case DD_METRIC_IP_LIST:
+		    aws_array_list_init_dynamic(
+			&custom_metric_data[metric_index].data.list, allocator, 0, sizeof(struct aws_string *));
+		    break;
+		case DD_METRIC_UNKNOWN:
+		default:
+		    return aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_UNKNOWN_CUSTOM_METRIC_TYPE);
+	    }
+	}
     }
 
     return AWS_OP_SUCCESS;
@@ -506,35 +508,42 @@ static int s_init_custom_metric_data(
  *
  * Nests into list types to free memory of items if they need to be destroyed
  */
-static void s_clean_up_metric_data(
-    struct defender_custom_metric_data *metrics_data,
-    struct aws_iotdevice_defender_task *defender_task) {
-    AWS_PRECONDITION(metrics_data != NULL);
-    AWS_PRECONDITION(defender_task != NULL);
-    const size_t custom_metrics_len = defender_task->config.custom_metrics_len;
-    for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
-        size_t list_size = 0; /* set only if we have a list type */
-        switch (metrics_data[metric_index].metric->type) {
-            case DD_METRIC_NUMBER: /* nothing to do here */
-                break;
-            case DD_METRIC_STRING_LIST:
-                /* fall through */
-            case DD_METRIC_IP_LIST:
-                list_size = aws_array_list_length(&metrics_data[metric_index].data.list);
-                for (size_t item_index = 0; item_index < list_size; ++item_index) {
-                    struct aws_string *string_or_ip_entry;
-                    aws_array_list_get_at(
-                        &metrics_data[metric_index].data.list, (void *)&string_or_ip_entry, item_index);
-                    aws_string_destroy(string_or_ip_entry);
-                }
-                /* fall through */
-            case DD_METRIC_NUMBER_LIST:
-                aws_array_list_clean_up(&metrics_data[metric_index].data.list);
-                break;
-            case DD_METRIC_UNKNOWN:
-            default:
-                break;
-        }
+static void s_clean_up_custom_metric_data(
+    struct aws_allocator *allocator,
+    struct defender_custom_metric_data *custom_metrics_data,
+    const size_t custom_metrics_len) {
+    AWS_PRECONDITION(allocator != NULL);
+
+    if (custom_metrics_data) {
+	for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
+	    size_t list_size = 0; /* set only if we have a list type */
+	    /* if metric is a NULL ptr, then data was never populated and it is not safe to
+	       dereference pointer to metric as it is NULL */
+	    if (custom_metrics_data[metric_index].metric) {
+		switch (custom_metrics_data[metric_index].metric->type) {
+		    case DD_METRIC_NUMBER: /* nothing to do here */
+			break;
+		    case DD_METRIC_STRING_LIST:
+			/* fall through */
+		    case DD_METRIC_IP_LIST:
+			list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
+			for (size_t item_index = 0; item_index < list_size; ++item_index) {
+			    struct aws_string *string_or_ip_entry;
+			    aws_array_list_get_at(
+				&custom_metrics_data[metric_index].data.list, (void *)&string_or_ip_entry, item_index);
+			    aws_string_destroy(string_or_ip_entry);
+			}
+			/* fall through */
+		    case DD_METRIC_NUMBER_LIST:
+			aws_array_list_clean_up(&custom_metrics_data[metric_index].data.list);
+			break;
+		    case DD_METRIC_UNKNOWN:
+		    default:
+			break;
+		}
+	    }
+	}
+	aws_mem_release(allocator, custom_metrics_data);
     }
 }
 
@@ -599,8 +608,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     struct aws_iotdevice_network_ifconfig ifconfig;
     AWS_ZERO_STRUCT(ifconfig);
     const size_t custom_metrics_len = aws_array_list_length(&defender_task->config.custom_metrics);
-    struct defender_custom_metric_data *custom_metric_data =
-      aws_mem_calloc(allocator, custom_metrics_len, sizeof(struct defender_custom_metric_data));
+    struct defender_custom_metric_data *custom_metric_data = custom_metrics_len == 0 ? NULL :
+	aws_mem_calloc(allocator, custom_metrics_len, sizeof(struct defender_custom_metric_data));
     struct aws_byte_buf json_report;
     AWS_ZERO_STRUCT(json_report);
     int return_code = 0;
@@ -771,7 +780,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     goto cleanup;
 
 cleanup:
-    s_clean_up_metric_data(custom_metric_data, defender_task);
+    s_clean_up_custom_metric_data(allocator, custom_metric_data, custom_metrics_len);
 
     if (aws_hash_table_is_valid(&ifconfig.iface_name_to_info)) {
         aws_hash_table_clean_up(&ifconfig.iface_name_to_info);
@@ -815,7 +824,7 @@ int aws_iotdevice_defender_config_create(
 error_return:
     aws_mem_release(allocator, config);
 
-    return aws_last_error();
+    return AWS_OP_ERR;
 }
 
 void aws_iotdevice_defender_config_destroy(
@@ -830,7 +839,7 @@ void aws_iotdevice_defender_config_destroy(
 	aws_string_destroy(to_clean->thing_name);
 	for (size_t metrics_index = 0; metrics_index < to_clean->custom_metrics_len; ++metrics_index) {
 	    struct defender_custom_metric *metric = NULL;
-	    aws_array_list_get_at_ptr(&to_clean->custom_metrics, (void **)&metric, metrics_index);
+	    aws_array_list_get_at(&to_clean->custom_metrics, (void **)&metric, metrics_index);
 	    aws_string_destroy(metric->metric_name);
 	    aws_mem_release(to_clean->allocator, metric);
 	}

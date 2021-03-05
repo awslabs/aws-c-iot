@@ -27,6 +27,22 @@ const char *TM_NUMBER_LIST_FAIL = "TestMetricNumberListFail";
 const char *TM_STRING_LIST_FAIL = "TestMetricStringListFail";
 const char *TM_IP_LIST_FAIL = "TestMetricIpListFail";
 
+struct mqtt_connection_test_data {
+    struct aws_allocator *allocator;
+    struct aws_client_bootstrap *client_bootstrap;
+    struct aws_event_loop_group *el_group;
+    struct aws_host_resolver *host_resolver;
+    struct aws_socket_endpoint endpoint;
+    struct aws_mqtt_client *mqtt_client;
+    struct aws_mqtt_client_connection *mqtt_connection;
+    struct aws_socket_options socket_options;
+    struct aws_condition_variable cvar;
+    struct aws_mutex lock;
+    bool task_stopped;
+};
+
+static struct mqtt_connection_test_data mqtt_test_data = {0};
+
 static int validate_devicedefender_record(const char *value) {
     cJSON *report = cJSON_Parse(value);
     ASSERT_NOT_NULL(report);
@@ -69,9 +85,6 @@ static int validate_devicedefender_custom_record(const char *value) {
     cJSON *custom_metrics = cJSON_GetObjectItemCaseSensitive(report, "custom_metrics");
     ASSERT_TRUE(cJSON_IsObject(custom_metrics));
 
-    cJSON *number_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "");
-    (void)number_metric;
-
     cJSON_Delete(report);
     return AWS_OP_SUCCESS;
 }
@@ -113,7 +126,8 @@ static int get_number_list_metric(struct aws_array_list *to_write_list, void *us
 }
 
 static int get_string_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
-    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct mqtt_connection_test_data *test_data = userdata;
+    struct aws_allocator *allocator = test_data->allocator;
     struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
     aws_array_list_push_back(to_write_list, &string_value);
     string_value = aws_string_new_from_c_str(allocator, "bar");
@@ -125,7 +139,8 @@ static int get_string_list_metric_fail(struct aws_array_list *to_write_list, voi
 }
 
 static int get_string_list_metric(struct aws_array_list *to_write_list, void *userdata) {
-    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct mqtt_connection_test_data *test_data = userdata;
+    struct aws_allocator *allocator = test_data->allocator;
     struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
     aws_array_list_push_back(to_write_list, &string_value);
     string_value = aws_string_new_from_c_str(allocator, "bar");
@@ -137,7 +152,8 @@ static int get_string_list_metric(struct aws_array_list *to_write_list, void *us
 }
 
 static int get_ip_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
-    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct mqtt_connection_test_data *test_data = userdata;
+    struct aws_allocator *allocator = test_data->allocator;
     struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
     aws_array_list_push_back(to_write_list, &ip_value);
     ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
@@ -152,7 +168,8 @@ static int get_ip_list_metric_fail(struct aws_array_list *to_write_list, void *u
 }
 
 static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userdata) {
-    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct mqtt_connection_test_data *test_data = userdata;
+    struct aws_allocator *allocator = test_data->allocator;
     struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
     aws_array_list_push_back(to_write_list, &ip_value);
     ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
@@ -172,7 +189,7 @@ static int s_devicedefender_task_unsupported_report_format(struct aws_allocator 
 
     struct aws_iotdevice_defender_task_config *config = NULL;
     struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestThing");
-    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&config, allocator,
+    ASSERT_FAILS(aws_iotdevice_defender_config_create(&config, allocator,
 							&thing_name,
 							AWS_IDDRF_CBOR));
 
@@ -261,22 +278,6 @@ static int s_devicedefender_get_network_connections(struct aws_allocator *alloca
 
     return AWS_OP_SUCCESS;
 }
-
-struct mqtt_connection_test_data {
-    struct aws_allocator *allocator;
-    struct aws_client_bootstrap *client_bootstrap;
-    struct aws_event_loop_group *el_group;
-    struct aws_host_resolver *host_resolver;
-    struct aws_socket_endpoint endpoint;
-    struct aws_mqtt_client *mqtt_client;
-    struct aws_mqtt_client_connection *mqtt_connection;
-    struct aws_socket_options socket_options;
-    struct aws_condition_variable cvar;
-    struct aws_mutex lock;
-    bool task_stopped;
-};
-
-static struct mqtt_connection_test_data mqtt_test_data = {0};
 
 static int s_setup_mqtt_test_data_fn(struct aws_allocator *allocator, void *ctx) {
     aws_mqtt_library_init(allocator);
@@ -374,6 +375,10 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
 						     aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
+    /* this function also sets pointer to null */
+    aws_iotdevice_defender_config_destroy(&task_config);
+    ASSERT_NULL(task_config);
+
     struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
     struct aws_mutex lock = AWS_MUTEX_INIT;
     // Allow device defender agent to run
@@ -464,6 +469,10 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
 						     aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
+    /* this function also sets pointer to null */
+    aws_iotdevice_defender_config_destroy(&task_config);
+    ASSERT_NULL(task_config);
+
     struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
     struct aws_mutex lock = AWS_MUTEX_INIT;
     // Allow device defender agent to run
@@ -482,7 +491,7 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
     aws_mqtt_client_get_topic_for_outstanding_publish_packet(
         state_test_data->mqtt_connection, packet_id, state_test_data->allocator, &publish_topic);
 
-    ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestSuccessThing/defender/metrics/json"));
+    ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestCustomMetricSuccessThing/defender/metrics/json"));
     aws_string_destroy(publish_topic);
 
     validate_devicedefender_custom_record((const char *)payload.ptr);
