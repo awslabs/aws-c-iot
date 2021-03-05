@@ -71,8 +71,10 @@ static void s_mqtt_on_connection_complete(
     AWS_FATAL_ASSERT(return_code == AWS_MQTT_CONNECT_ACCEPTED);
     AWS_FATAL_ASSERT(session_present == false);
 
-    AWS_ASSERT(AWS_OP_SUCCESS == aws_iotdevice_defender_start_task(&defender_task, connection_args->task_config,
-								   connection, connection_args->defender_event_loop));
+    AWS_ASSERT(
+        AWS_OP_SUCCESS ==
+        aws_iotdevice_defender_start_task(
+            &defender_task, connection_args->task_config, connection, connection_args->defender_event_loop));
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
@@ -269,8 +271,7 @@ int main(int argc, char **argv) {
     struct aws_byte_cursor client_id_cur = aws_byte_cursor_from_buf(&client_id_buf);
     struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi");
     struct aws_iotdevice_defender_task_config *task_config = NULL;
-    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name,
-							AWS_IDDRF_JSON));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
     args.task_config = task_config;
     /*
     AWS_ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config,
@@ -293,7 +294,7 @@ int main(int argc, char **argv) {
 
     const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
-	task_config, &name_metric_number, get_number_metric, &args));
+        task_config, &name_metric_number, get_number_metric, &args));
 
     const struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str("TestCustomMetricNumberList");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
@@ -301,22 +302,23 @@ int main(int argc, char **argv) {
 
     const struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str("TestCustomMetricStringList");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
-	task_config, &name_metric_string_list, get_string_list_metric, &args));
+        task_config, &name_metric_string_list, get_string_list_metric, &args));
 
     const struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str("TestCustomMetricIpList");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
         task_config, &name_metric_ip_list, get_ip_list_metric, &args));
 
-    struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
-                                                       .port = 8883,
-                                                       .socket_options = &socket_options,
-                                                       .tls_options = &tls_con_opt,
-                                                       .client_id = client_id_cur,
-                                                       .keep_alive_time_secs = 0,
-                                                       .ping_timeout_ms = 0,
-                                                       .on_connection_complete = s_mqtt_on_connection_complete,
-                                                       .user_data = &args,
-                                                       .clean_session = true};
+    struct aws_mqtt_connection_options conn_options = {
+        .host_name = host_name_cur,
+        .port = 8883,
+        .socket_options = &socket_options,
+        .tls_options = &tls_con_opt,
+        .client_id = client_id_cur,
+        .keep_alive_time_secs = 0,
+        .ping_timeout_ms = 0,
+        .on_connection_complete = s_mqtt_on_connection_complete,
+        .user_data = &args,
+        .clean_session = true};
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);

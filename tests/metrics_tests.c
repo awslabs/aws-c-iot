@@ -189,9 +189,7 @@ static int s_devicedefender_task_unsupported_report_format(struct aws_allocator 
 
     struct aws_iotdevice_defender_task_config *config = NULL;
     struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestThing");
-    ASSERT_FAILS(aws_iotdevice_defender_config_create(&config, allocator,
-							&thing_name,
-							AWS_IDDRF_CBOR));
+    ASSERT_FAILS(aws_iotdevice_defender_config_create(&config, allocator, &thing_name, AWS_IDDRF_CBOR));
 
     ASSERT_UINT_EQUALS(AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT, aws_last_error());
     aws_reset_error();
@@ -367,12 +365,14 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
 
     aws_iotdevice_defender_config_set_callback_userdata(task_config, ctx);
     aws_iotdevice_defender_config_set_task_cancelation_fn(task_config, s_devicedefender_cb);
-    aws_iotdevice_defender_config_set_task_period_ns(task_config,1000000000UL);
+    aws_iotdevice_defender_config_set_task_period_ns(task_config, 1000000000UL);
 
     struct aws_iotdevice_defender_task *defender_task = NULL;
-    ASSERT_SUCCESS(aws_iotdevice_defender_start_task(&defender_task, task_config,
-						     state_test_data->mqtt_connection,
-						     aws_event_loop_group_get_next_loop(state_test_data->el_group)));
+    ASSERT_SUCCESS(aws_iotdevice_defender_start_task(
+        &defender_task,
+        task_config,
+        state_test_data->mqtt_connection,
+        aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
     /* this function also sets pointer to null */
@@ -431,8 +431,8 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
 
     /* register working metrics */
     const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str(TM_NUMBER);
-    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
-		    task_config, &name_metric_number, get_number_metric, ctx));
+    ASSERT_SUCCESS(
+        aws_iotdevice_defender_config_register_number_metric(task_config, &name_metric_number, get_number_metric, ctx));
 
     const struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str(TM_NUMBER_LIST);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
@@ -464,9 +464,11 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
         task_config, &name_metric_ip_list_fail, get_ip_list_metric_fail, ctx));
 
     struct aws_iotdevice_defender_task *defender_task = NULL;
-    ASSERT_SUCCESS(aws_iotdevice_defender_start_task(&defender_task, task_config,
-						     state_test_data->mqtt_connection,
-						     aws_event_loop_group_get_next_loop(state_test_data->el_group)));
+    ASSERT_SUCCESS(aws_iotdevice_defender_start_task(
+        &defender_task,
+        task_config,
+        state_test_data->mqtt_connection,
+        aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
     /* this function also sets pointer to null */

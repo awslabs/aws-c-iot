@@ -41,9 +41,8 @@ typedef void(aws_iotdevice_defender_report_rejected_fn)(
  * User callback type invoked when the subscribed device defender topic for accepted
  * reports receives a message.
  */
-typedef void(aws_iotdevice_defender_report_accepted_fn)(
-    struct aws_byte_cursor *accepted_message_payload,
-    void *userdata);
+typedef void(
+    aws_iotdevice_defender_report_accepted_fn)(struct aws_byte_cursor *accepted_message_payload, void *userdata);
 
 /**
  * User callback type invoked to retrieve a number type custom metric.
@@ -130,8 +129,7 @@ int aws_iotdevice_defender_config_create(
  * @param    config    defender task configuration
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_defender_config_destroy(
-    struct aws_iotdevice_defender_task_config **config);
+void aws_iotdevice_defender_config_destroy(struct aws_iotdevice_defender_task_config **config);
 
 /**
  * Sets the task cancelation callback function to invoke when the task
