@@ -257,10 +257,10 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
         .task_cancelled_fn = s_devicedefender_cb,
         .connection = state_test_data->mqtt_connection,
         .event_loop = aws_event_loop_group_get_next_loop(state_test_data->el_group),
-        .netconn_sample_period_ns = 1000000000ul,
+        .netconn_sample_period_ns = 1000000000ull,
         .report_format = AWS_IDDRF_JSON,
         .thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestSuccessThing"),
-        .task_period_ns = 1000000000ul};
+        .task_period_ns = 1000000000ull};
 
     struct aws_iotdevice_defender_v1_task *defender_task = NULL;
     defender_task = aws_iotdevice_defender_v1_report_task(state_test_data->allocator, &task_config);
@@ -269,7 +269,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
     struct aws_mutex lock = AWS_MUTEX_INIT;
     // Allow device defender agent to run
-    aws_condition_variable_wait_for(&test, &lock, 500000000UL);
+    aws_condition_variable_wait_for(&test, &lock, 500000000LL);
 
     aws_iotdevice_defender_v1_stop_task(defender_task);
     s_wait_for_task_to_stop(state_test_data);
