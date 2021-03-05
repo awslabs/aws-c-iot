@@ -61,7 +61,6 @@ static void s_mqtt_on_connection_complete(
     enum aws_mqtt_connect_return_code return_code,
     bool session_present,
     void *userdata) {
-
     (void)connection;
     (void)error_code;
     (void)return_code;
@@ -72,18 +71,14 @@ static void s_mqtt_on_connection_complete(
     AWS_FATAL_ASSERT(return_code == AWS_MQTT_CONNECT_ACCEPTED);
     AWS_FATAL_ASSERT(session_present == false);
 
-    printf("Client connected...\n");
-
     AWS_ASSERT(AWS_OP_SUCCESS == aws_iotdevice_defender_start_task(&defender_task, connection_args->task_config,
 								   connection, connection_args->defender_event_loop));
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
 static void s_on_connection_interrupted(struct aws_mqtt_client_connection *connection, int error_code, void *userdata) {
-
     (void)connection;
     (void)userdata;
-    printf("CONNECTION INTERRUPTED error_code=%d\n", error_code);
 }
 
 static void s_on_resubscribed(
@@ -92,7 +87,6 @@ static void s_on_resubscribed(
     const struct aws_array_list *topic_subacks,
     int error_code,
     void *userdata) {
-
     (void)connection;
     (void)packet_id;
     (void)userdata;
@@ -100,11 +94,9 @@ static void s_on_resubscribed(
     AWS_FATAL_ASSERT(error_code == AWS_ERROR_SUCCESS);
 
     size_t num_topics = aws_array_list_length(topic_subacks);
-    printf("RESUBSCRIBE_COMPLETE. error_code=%d num_topics=%zu\n", error_code, num_topics);
     for (size_t i = 0; i < num_topics; ++i) {
         struct aws_mqtt_topic_subscription sub_i;
         aws_array_list_get_at(topic_subacks, &sub_i, i);
-        printf("  topic=" PRInSTR " qos=%d\n", AWS_BYTE_CURSOR_PRI(sub_i.topic), sub_i.qos);
         AWS_FATAL_ASSERT(sub_i.qos != AWS_MQTT_QOS_FAILURE);
     }
 }
@@ -114,13 +106,11 @@ static void s_on_connection_resumed(
     enum aws_mqtt_connect_return_code return_code,
     bool session_present,
     void *userdata) {
-
     (void)connection;
     (void)userdata;
+    (void)return_code;
 
-    printf("CONNECTION RESUMED return_code=%d session_present=%d\n", return_code, session_present);
     if (!session_present) {
-        printf("RESUBSCRIBING...");
         uint16_t packet_id = aws_mqtt_resubscribe_existing_topics(connection, s_on_resubscribed, NULL);
         AWS_FATAL_ASSERT(packet_id);
     }
