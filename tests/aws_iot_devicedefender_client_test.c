@@ -157,7 +157,8 @@ static int get_number_list_metric(struct aws_array_list *to_write_list, void *us
 }
 
 static int get_string_list_metric(struct aws_array_list *to_write_list, void *userdata) {
-    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct connection_args *args = userdata;
+    struct aws_allocator *allocator = args->allocator;
     struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
     aws_array_list_push_back(to_write_list, &string_value);
     string_value = aws_string_new_from_c_str(allocator, "bar");
@@ -169,7 +170,8 @@ static int get_string_list_metric(struct aws_array_list *to_write_list, void *us
 }
 
 static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userdata) {
-    struct aws_allocator *allocator = (struct aws_allocator *)userdata;
+    struct connection_args *args = userdata;
+    struct aws_allocator *allocator = args->allocator;
     struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
     aws_array_list_push_back(to_write_list, &ip_value);
     ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
