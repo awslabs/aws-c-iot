@@ -65,7 +65,7 @@ static void s_mqtt_on_connection_complete(
     (void)error_code;
     (void)return_code;
     (void)session_present;
-    struct connection_args *connection_args = (struct connection_args *)userdata;
+    struct connection_args *args = (struct connection_args *)userdata;
 
     AWS_FATAL_ASSERT(error_code == AWS_ERROR_SUCCESS);
     AWS_FATAL_ASSERT(return_code == AWS_MQTT_CONNECT_ACCEPTED);
@@ -74,13 +74,14 @@ static void s_mqtt_on_connection_complete(
     AWS_ASSERT(
         AWS_OP_SUCCESS ==
         aws_iotdevice_defender_start_task(
-            &defender_task, connection_args->task_config, connection, connection_args->defender_event_loop));
+            &defender_task, args->task_config, connection, args->defender_event_loop));
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
 static void s_on_connection_interrupted(struct aws_mqtt_client_connection *connection, int error_code, void *userdata) {
     (void)connection;
     (void)userdata;
+    (void)error_code;
 }
 
 static void s_on_resubscribed(
