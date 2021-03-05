@@ -290,16 +290,15 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
         task_config, &name_metric_ip_list, get_ip_list_metric, &args));
 
-    struct aws_mqtt_connection_options conn_options = {
-        .host_name = host_name_cur,
-        .port = 8883,
-        .socket_options = &socket_options,
-        .tls_options = &tls_con_opt,
-        .client_id = client_id_cur,
-        .keep_alive_time_secs = 0,
-        .ping_timeout_ms = 0,
-        .on_connection_complete = s_mqtt_on_connection_complete,
-        .clean_session = true};
+    struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
+                                                       .port = 8883,
+                                                       .socket_options = &socket_options,
+                                                       .tls_options = &tls_con_opt,
+                                                       .client_id = client_id_cur,
+                                                       .keep_alive_time_secs = 0,
+                                                       .ping_timeout_ms = 0,
+                                                       .on_connection_complete = s_mqtt_on_connection_complete,
+                                                       .clean_session = true};
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);
