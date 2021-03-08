@@ -818,7 +818,7 @@ int aws_iotdevice_defender_config_create(
     config->rejected_report_fn = NULL;
     config->accepted_report_fn = NULL;
     /* defaults here will be consistent across any language on top */
-    config->task_period_ns = 5UL * 60UL * 1000000000UL;
+    config->task_period_ns = 5ULL * 60ULL * 1000000000ULL;
     aws_array_list_init_dynamic(&config->custom_metrics, allocator, 0, sizeof(struct defender_custom_metric *));
     config->custom_metrics_len = 0;
 
