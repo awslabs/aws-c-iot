@@ -129,7 +129,7 @@ int aws_iotdevice_defender_config_create(
  * @param    config    defender task configuration
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_defender_config_destroy(struct aws_iotdevice_defender_task_config **config);
+void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config **config);
 
 /**
  * Sets the task cancelation callback function to invoke when the task
@@ -292,6 +292,8 @@ int aws_iotdevice_defender_config_register_ip_list_metric(
  * @param    event_loop    IoT device thing name used to determine the MQTT
  *                         topic to publish the report to and listen for accepted
  *                         or rejected responses
+ * @returns AWS_OP_SUCCESS if the task has been created successfully and is scheduled
+ *          to run
  */
 AWS_IOTDEVICE_API
 int aws_iotdevice_defender_start_task(
@@ -301,7 +303,11 @@ int aws_iotdevice_defender_start_task(
     struct aws_event_loop *event_loop);
 
 /**
- * Cancels the running task reporting Device Defender metrics
+ * Cancels the running task reporting Device Defender metrics and cleans up.
+ * If the task is currently running, it will block until the task has been
+ * canceled and cleaned up successfully.
+ *
+ * @param    defender_task running task to stop and clean up
  */
 AWS_IOTDEVICE_API
 void aws_iotdevice_defender_stop_task(struct aws_iotdevice_defender_task *defender_task);

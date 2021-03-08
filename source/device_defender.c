@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/common/condition_variable.h>
+#include <aws/common/mutex.h>
 #include <aws/iotdevice/device_defender.h>
 #include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/iotdevice.h>
@@ -83,7 +85,9 @@ struct aws_iotdevice_defender_task {
     struct aws_string *report_accepted_topic_name;
     struct aws_string *report_rejected_topic_name;
     bool has_previous_net_xfer;
-    struct aws_atomic_var task_cancelled;
+    bool is_task_canceled;
+    struct aws_mutex *task_cancel_mutex;
+    struct aws_condition_variable cv_task_canceled;
 };
 
 static void s_mqtt_on_suback(
@@ -603,6 +607,26 @@ static void s_get_custom_metrics_data(
     }
 }
 
+void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
+    AWS_PRECONDITION(defender_task != NULL);
+
+    struct aws_allocator *allocator = defender_task->allocator;
+    struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
+    aws_mqtt_client_connection_unsubscribe(defender_task->connection, &accepted_topic, NULL, NULL);
+    struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
+    aws_mqtt_client_connection_unsubscribe(defender_task->connection, &rejected_topic, NULL, NULL);
+
+    void *cancel_userdata = defender_task->config.callback_userdata;
+    aws_string_destroy(defender_task->publish_report_topic_name);
+    aws_string_destroy(defender_task->report_accepted_topic_name);
+    aws_string_destroy(defender_task->report_rejected_topic_name);
+
+    aws_mutex_clean_up(defender_task->cv_task_canceled);
+    aws_condition_variable_clean_up(defender_task->cv_task_canceled);
+    aws_iotdevice_defender_config_clean_up(&defender_task->config);
+    aws_mem_release(allocator, defender_task);
+}
+
 static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_task_status status) {
     struct aws_iotdevice_defender_task *defender_task = (struct aws_iotdevice_defender_task *)userdata;
     struct aws_allocator *allocator = defender_task->allocator;
@@ -618,157 +642,137 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
     int return_code = 0;
 
     if (status == AWS_TASK_STATUS_RUN_READY) {
-        const size_t task_cancelled = aws_atomic_load_int(&defender_task->task_cancelled);
-        if (task_cancelled) {
-            AWS_LOGF_DEBUG(
+        AWS_LOGF_DEBUG(
+            AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Running DeviceDefender reporting task", (void *)defender_task);
+
+        if (AWS_OP_SUCCESS != (return_code = get_network_config_and_transfer(&ifconfig, allocator))) {
+            AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: DeviceDefender reporting task cancel requested",
-                (void *)defender_task);
-            aws_event_loop_cancel_task(defender_task->event_loop, task);
-        } else {
-            AWS_LOGF_DEBUG(
-                AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Running DeviceDefender reporting task", (void *)defender_task);
-
-            if (AWS_OP_SUCCESS != (return_code = get_network_config_and_transfer(&ifconfig, allocator))) {
-                AWS_LOGF_ERROR(
-                    AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                    "id=%p: Failed to retrieve network configuration: %s",
-                    (void *)defender_task,
-                    aws_error_name(return_code));
-                goto cleanup;
-            }
-            struct aws_iotdevice_metric_network_transfer totals = {
-                .bytes_in = 0, .bytes_out = 0, .packets_in = 0, .packets_out = 0};
-            get_system_network_total(&totals, &ifconfig);
-
-            struct aws_array_list net_conns;
-            AWS_ZERO_STRUCT(net_conns);
-            aws_array_list_init_dynamic(&net_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
-            if (AWS_OP_SUCCESS != (return_code = get_network_connections(&net_conns, &ifconfig, allocator))) {
-                AWS_LOGF_ERROR(
-                    AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                    "id=%p: Failed to get network connection data: %s",
-                    (void *)defender_task,
-                    aws_error_name(return_code));
-                goto cleanup;
-            }
-
-            if (AWS_OP_SUCCESS != s_init_custom_metric_data(custom_metric_data, defender_task)) {
-                goto cleanup;
-            }
-
-            /* per metric retrieval errors do not result in failure */
-            s_get_custom_metrics_data(defender_task, custom_metric_data, custom_metrics_len);
-
-            uint64_t report_id = s_defender_report_id_epoch_time_ms(defender_task);
-            /* TODO: come up with something better than allocating max size of MQTT message allowed by AWS IoT */
-            uint8_t json_buffer_space[262144];
-            json_report = aws_byte_buf_from_empty_array(json_buffer_space, 262144);
-            struct aws_iotdevice_metric_network_transfer *ptr_delta_xfer = NULL;
-            struct aws_iotdevice_metric_network_transfer delta_xfer;
-            AWS_ZERO_STRUCT(delta_xfer);
-
-            if (defender_task->has_previous_net_xfer) {
-                delta_xfer.bytes_in = 0;
-                delta_xfer.bytes_out = 0;
-                delta_xfer.packets_in = 0;
-                delta_xfer.packets_out = 0;
-
-                get_network_total_delta(&delta_xfer, &defender_task->previous_net_xfer, &totals);
-                ptr_delta_xfer = &delta_xfer;
-
-            } else {
-                defender_task->has_previous_net_xfer = true;
-            }
-            if (AWS_OP_SUCCESS != s_get_metric_report_json(
-                                      &json_report,
-                                      defender_task,
-                                      report_id,
-                                      ptr_delta_xfer,
-                                      &net_conns,
-                                      custom_metrics_len,
-                                      custom_metric_data)) {
-            }
-
-            defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
-            defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
-            defender_task->previous_net_xfer.packets_in = totals.packets_in;
-            defender_task->previous_net_xfer.packets_out = totals.packets_out;
-
-            struct aws_byte_cursor report_topic = aws_byte_cursor_from_string(defender_task->publish_report_topic_name);
-            struct aws_byte_cursor report = aws_byte_cursor_from_buf(&json_report);
-
-            AWS_LOGF_TRACE(
-                AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Full report: " PRInSTR,
+                "id=%p: Failed to retrieve network configuration: %s",
                 (void *)defender_task,
-                AWS_BYTE_CURSOR_PRI(report));
-
-            uint16_t report_packet_id = aws_mqtt_client_connection_publish(
-                defender_task->connection,
-                &report_topic,
-                AWS_MQTT_QOS_AT_LEAST_ONCE,
-                false,
-                &report,
-                s_on_report_puback,
-                defender_task);
-
-            if (report_packet_id != 0) {
-                AWS_LOGF_DEBUG(
-                    AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                    "id=%p: Report packet_id %d published on topic " PRInSTR,
-                    (void *)defender_task,
-                    report_packet_id,
-                    AWS_BYTE_CURSOR_PRI(report_topic));
-            } else {
-                AWS_LOGF_ERROR(
-                    AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                    "id=%p: Report failed to publish on topic " PRInSTR,
-                    (void *)defender_task,
-                    AWS_BYTE_CURSOR_PRI(report_topic));
-                defender_task->config.rejected_report_fn(
-                    aws_last_error(), NULL, defender_task->config.callback_userdata);
-            }
-
-            for (size_t i = 0; i < net_conns.length; ++i) {
-                struct aws_iotdevice_metric_net_connection *con = NULL;
-                if (aws_array_list_get_at_ptr(&net_conns, (void **)&con, i)) {
-                    continue;
-                }
-                if (con->local_interface) {
-                    aws_string_destroy(con->local_interface);
-                }
-                if (con->remote_address) {
-                    aws_string_destroy(con->remote_address);
-                }
-            }
-            aws_array_list_clean_up(&net_conns);
-            aws_hash_table_clean_up(&ifconfig.iface_name_to_info);
-
-            uint64_t now;
-            aws_event_loop_current_clock_time(defender_task->event_loop, &now);
-            aws_event_loop_schedule_task_future(
-                defender_task->event_loop, task, now + defender_task->config.task_period_ns);
+                aws_error_name(return_code));
+            goto cleanup;
         }
+        struct aws_iotdevice_metric_network_transfer totals = {
+            .bytes_in = 0, .bytes_out = 0, .packets_in = 0, .packets_out = 0};
+        get_system_network_total(&totals, &ifconfig);
+
+        struct aws_array_list net_conns;
+        AWS_ZERO_STRUCT(net_conns);
+        aws_array_list_init_dynamic(&net_conns, allocator, 5, sizeof(struct aws_iotdevice_metric_net_connection));
+        if (AWS_OP_SUCCESS != (return_code = get_network_connections(&net_conns, &ifconfig, allocator))) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to get network connection data: %s",
+                (void *)defender_task,
+                aws_error_name(return_code));
+            goto cleanup;
+        }
+
+        if (AWS_OP_SUCCESS != s_init_custom_metric_data(custom_metric_data, defender_task)) {
+            goto cleanup;
+        }
+
+        /* per metric retrieval errors do not result in failure */
+        s_get_custom_metrics_data(defender_task, custom_metric_data, custom_metrics_len);
+
+        uint64_t report_id = s_defender_report_id_epoch_time_ms(defender_task);
+        /* TODO: come up with something better than allocating max size of MQTT message allowed by AWS IoT */
+        uint8_t json_buffer_space[262144];
+        json_report = aws_byte_buf_from_empty_array(json_buffer_space, 262144);
+        struct aws_iotdevice_metric_network_transfer *ptr_delta_xfer = NULL;
+        struct aws_iotdevice_metric_network_transfer delta_xfer;
+        AWS_ZERO_STRUCT(delta_xfer);
+
+        if (defender_task->has_previous_net_xfer) {
+            delta_xfer.bytes_in = 0;
+            delta_xfer.bytes_out = 0;
+            delta_xfer.packets_in = 0;
+            delta_xfer.packets_out = 0;
+
+            get_network_total_delta(&delta_xfer, &defender_task->previous_net_xfer, &totals);
+            ptr_delta_xfer = &delta_xfer;
+
+        } else {
+            defender_task->has_previous_net_xfer = true;
+        }
+        if (AWS_OP_SUCCESS != s_get_metric_report_json(
+                                    &json_report,
+                                    defender_task,
+                                    report_id,
+                                    ptr_delta_xfer,
+                                    &net_conns,
+                                    custom_metrics_len,
+                                    custom_metric_data)) {
+        }
+
+        defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
+        defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
+        defender_task->previous_net_xfer.packets_in = totals.packets_in;
+        defender_task->previous_net_xfer.packets_out = totals.packets_out;
+
+        struct aws_byte_cursor report_topic = aws_byte_cursor_from_string(defender_task->publish_report_topic_name);
+        struct aws_byte_cursor report = aws_byte_cursor_from_buf(&json_report);
+
+        AWS_LOGF_TRACE(
+            AWS_LS_IOTDEVICE_DEFENDER_TASK,
+            "id=%p: Full report: " PRInSTR,
+            (void *)defender_task,
+            AWS_BYTE_CURSOR_PRI(report));
+
+        uint16_t report_packet_id = aws_mqtt_client_connection_publish(
+            defender_task->connection,
+            &report_topic,
+            AWS_MQTT_QOS_AT_LEAST_ONCE,
+            false,
+            &report,
+            s_on_report_puback,
+            defender_task);
+
+        if (report_packet_id != 0) {
+            AWS_LOGF_DEBUG(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Report packet_id %d published on topic " PRInSTR,
+                (void *)defender_task,
+                report_packet_id,
+                AWS_BYTE_CURSOR_PRI(report_topic));
+        } else {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Report failed to publish on topic " PRInSTR,
+                (void *)defender_task,
+                AWS_BYTE_CURSOR_PRI(report_topic));
+            defender_task->config.rejected_report_fn(
+                aws_last_error(), NULL, defender_task->config.callback_userdata);
+        }
+
+        for (size_t i = 0; i < net_conns.length; ++i) {
+            struct aws_iotdevice_metric_net_connection *con = NULL;
+            if (aws_array_list_get_at_ptr(&net_conns, (void **)&con, i)) {
+                continue;
+            }
+            if (con->local_interface) {
+                aws_string_destroy(con->local_interface);
+            }
+            if (con->remote_address) {
+                aws_string_destroy(con->remote_address);
+            }
+        }
+        aws_array_list_clean_up(&net_conns);
+        aws_hash_table_clean_up(&ifconfig.iface_name_to_info);
+
+        uint64_t now;
+        aws_event_loop_current_clock_time(defender_task->event_loop, &now);
+        aws_event_loop_schedule_task_future(
+            defender_task->event_loop, task, now + defender_task->config.task_period_ns);
     } else if (status == AWS_TASK_STATUS_CANCELED) {
         AWS_LOGF_DEBUG(
             AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Reporting task cancelled, cleaning up", (void *)defender_task);
 
-        struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
-        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &accepted_topic, NULL, NULL);
-        struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
-        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &rejected_topic, NULL, NULL);
-
-        void *cancel_userdata = defender_task->config.callback_userdata;
-        aws_string_destroy(defender_task->publish_report_topic_name);
-        aws_string_destroy(defender_task->report_accepted_topic_name);
-        aws_string_destroy(defender_task->report_rejected_topic_name);
-
         if (defender_task->config.task_cancelled_fn != NULL) {
-            defender_task->config.task_cancelled_fn(cancel_userdata);
+            defender_task->config.task_cancelled_fn(defender_task->config.callback_userdata);
         }
-
-        aws_mem_release(allocator, defender_task);
+        /* cleanup of task memory happens in task cleanup or stop function */
     } else {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
@@ -780,8 +784,6 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         aws_event_loop_schedule_task_future(
             defender_task->event_loop, task, now + defender_task->config.task_period_ns);
     }
-
-    goto cleanup;
 
 cleanup:
     s_clean_up_custom_metric_data(allocator, custom_metric_data, custom_metrics_len);
@@ -831,7 +833,7 @@ error_return:
     return AWS_OP_ERR;
 }
 
-void aws_iotdevice_defender_config_destroy(struct aws_iotdevice_defender_task_config **config) {
+void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config **config) {
     AWS_PRECONDITION(config != NULL);
     struct aws_iotdevice_defender_task_config *to_clean = *config;
     /* assign caller ptr to NULL */
@@ -949,6 +951,14 @@ int aws_iotdevice_defender_start_task(
     defender_task->previous_net_xfer.packets_in = 0;
     defender_task->previous_net_xfer.packets_out = 0;
     defender_task->has_previous_net_xfer = false;
+    defender_task->is_task_canceled = false;
+
+    if (AWS_OP_SUCCESS != aws_mutex_init(defender_task->task_cancel_mutex)) {
+        goto cleanup;
+    }
+    if (AWS_OP_SUCCESS != aws_condition_variable_init(&defender_task->cv_task_canceled)) {
+        goto cleanup;
+    }
 
     if (AWS_OP_SUCCESS != s_copy_task_config(&defender_task->config, config)) {
         goto cleanup;
@@ -957,8 +967,6 @@ int aws_iotdevice_defender_start_task(
         aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_TASK_CONFIG);
         goto cleanup;
     }
-
-    aws_atomic_store_int(&defender_task->task_cancelled, 0);
 
     struct aws_byte_cursor prefix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("$aws/things/");
     struct aws_byte_cursor publish_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json");
@@ -1030,17 +1038,34 @@ int aws_iotdevice_defender_start_task(
 
     return_code = AWS_OP_SUCCESS;
 cleanup:
-    if (return_code == AWS_OP_ERR) {
-        if (defender_task != NULL) {
-            aws_mem_release(allocator, defender_task);
-        }
+    if (return_code == AWS_OP_ERR && defender_task != NULL) {
+        s_defender_task_clean_up(defender_task);
     }
 
     return return_code;
 }
 
+/**
+ * Function gets scheduled on the same event loop at the defender task itself so it cannot
+ * run at the same time as that task outside of the cancelled status.
+ */
+static void s_cancel_defender_task(struct aws_task *task, void *arg, enum aws_task_status task_status) {
+    (void)task_status;
+    /* unsure if it makes sense to check this cancellation task to see if it was canceled */
+    struct aws_iotdevice_defender_task *defender_task = arg;
+
+    /* proper invocation here will block and run */
+    aws_event_loop_cancel_task(defender_task->event_loop, &defender_task->task);
+
+}
+
 void aws_iotdevice_defender_stop_task(struct aws_iotdevice_defender_task *defender_task) {
-    aws_atomic_store_int(&defender_task->task_cancelled, 1);
+    aws_mutex_lock(defender_task->task_cancel_mutex);
+    if (defender_task->cv_task_canceled
+    
+    aws_condition_variable_wait
+    
+    s_defender_task_clean_up(defender_task);
 }
 
 int aws_iotdevice_defender_config_register_number_metric(
