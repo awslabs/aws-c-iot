@@ -86,7 +86,7 @@ struct aws_iotdevice_defender_task {
     struct aws_string *report_rejected_topic_name;
     bool has_previous_net_xfer;
     bool is_task_canceled;
-    struct aws_mutex *task_cancel_mutex;
+    struct aws_mutex task_cancel_mutex;
     struct aws_condition_variable cv_task_canceled;
 };
 
@@ -607,6 +607,25 @@ static void s_get_custom_metrics_data(
     }
 }
 
+/**
+ * Differs in the public version in that it only cleans up the members and not the
+ * entire structure itself. When cleaning up the defender_task internals, it must clean
+ * up the copy of the config, but the config struct is part of the defender_task
+ * so it's memory isn't freed along with the internals
+ */
+void s_defender_config_clean_up_internals(struct aws_iotdevice_defender_task_config *config) {
+    AWS_PRECONDITION(config != NULL);
+    struct aws_allocator *allocator = config->allocator;
+    AWS_ASSERT(aws_allocator_is_valid(allocator));
+    aws_string_destroy(config->thing_name);
+    for (size_t metrics_index = 0; metrics_index < config->custom_metrics_len; ++metrics_index) {
+        struct defender_custom_metric *metric = NULL;
+        aws_array_list_get_at(&config->custom_metrics, (void **)&metric, metrics_index);
+        aws_string_destroy(metric->metric_name);
+        aws_mem_release(config->allocator, metric);
+    }
+}
+
 void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
     AWS_PRECONDITION(defender_task != NULL);
 
@@ -616,14 +635,14 @@ void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task)
     struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
     aws_mqtt_client_connection_unsubscribe(defender_task->connection, &rejected_topic, NULL, NULL);
 
-    void *cancel_userdata = defender_task->config.callback_userdata;
     aws_string_destroy(defender_task->publish_report_topic_name);
     aws_string_destroy(defender_task->report_accepted_topic_name);
     aws_string_destroy(defender_task->report_rejected_topic_name);
 
-    aws_mutex_clean_up(defender_task->cv_task_canceled);
-    aws_condition_variable_clean_up(defender_task->cv_task_canceled);
-    aws_iotdevice_defender_config_clean_up(&defender_task->config);
+    aws_mutex_clean_up(&defender_task->task_cancel_mutex);
+    aws_condition_variable_clean_up(&defender_task->cv_task_canceled);
+    struct aws_iotdevice_defender_task_config *config = &defender_task->config;
+    s_defender_config_clean_up_internals(config);
     aws_mem_release(allocator, defender_task);
 }
 
@@ -836,18 +855,12 @@ error_return:
 void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config **config) {
     AWS_PRECONDITION(config != NULL);
     struct aws_iotdevice_defender_task_config *to_clean = *config;
+    struct aws_allocator *allocator = (*config)->allocator;
+    AWS_ASSERT(aws_allocator_is_valid(allocator));
     /* assign caller ptr to NULL */
     *config = NULL;
     if (to_clean) {
-        struct aws_allocator *allocator = to_clean->allocator;
-        AWS_ASSERT(aws_allocator_is_valid(allocator));
-        aws_string_destroy(to_clean->thing_name);
-        for (size_t metrics_index = 0; metrics_index < to_clean->custom_metrics_len; ++metrics_index) {
-            struct defender_custom_metric *metric = NULL;
-            aws_array_list_get_at(&to_clean->custom_metrics, (void **)&metric, metrics_index);
-            aws_string_destroy(metric->metric_name);
-            aws_mem_release(to_clean->allocator, metric);
-        }
+        s_defender_config_clean_up_internals(to_clean);
         aws_mem_release(allocator, to_clean);
     }
 }
@@ -953,7 +966,7 @@ int aws_iotdevice_defender_start_task(
     defender_task->has_previous_net_xfer = false;
     defender_task->is_task_canceled = false;
 
-    if (AWS_OP_SUCCESS != aws_mutex_init(defender_task->task_cancel_mutex)) {
+    if (AWS_OP_SUCCESS != aws_mutex_init(&defender_task->task_cancel_mutex)) {
         goto cleanup;
     }
     if (AWS_OP_SUCCESS != aws_condition_variable_init(&defender_task->cv_task_canceled)) {
@@ -1050,22 +1063,37 @@ cleanup:
  * run at the same time as that task outside of the cancelled status.
  */
 static void s_cancel_defender_task(struct aws_task *task, void *arg, enum aws_task_status task_status) {
+    (void)task;
     (void)task_status;
     /* unsure if it makes sense to check this cancellation task to see if it was canceled */
     struct aws_iotdevice_defender_task *defender_task = arg;
-
     /* proper invocation here will block and run */
+    printf("Running task cancelation...\n");
     aws_event_loop_cancel_task(defender_task->event_loop, &defender_task->task);
-
+    aws_condition_variable_notify_one(&defender_task->cv_task_canceled);
+    printf("Task cancelation finished...\n");
 }
 
 void aws_iotdevice_defender_stop_task(struct aws_iotdevice_defender_task *defender_task) {
-    aws_mutex_lock(defender_task->task_cancel_mutex);
-    if (defender_task->cv_task_canceled
-    
-    aws_condition_variable_wait
-    
-    s_defender_task_clean_up(defender_task);
+    AWS_PRECONDITION(defender_task != NULL);
+
+    aws_mutex_lock(&defender_task->task_cancel_mutex);
+    printf("Stop task lock acquired\n");
+    if (defender_task->is_task_canceled) {
+        printf("Stop task is already canceled\n");
+        aws_mutex_unlock(&defender_task->task_cancel_mutex);
+    } else {
+        printf("Scheduling stop tasking...\n");
+        struct aws_task cancel_task;
+        aws_task_init(&cancel_task, s_cancel_defender_task, defender_task, "cancel_defender_task");
+        aws_event_loop_schedule_task_now(defender_task->event_loop, &cancel_task);
+        printf("Waiting for task to be stopped...\n");
+        aws_condition_variable_wait(&defender_task->cv_task_canceled, &defender_task->task_cancel_mutex);
+        printf("Done waiting for task to be stopped...\n");
+        aws_mutex_unlock(&defender_task->task_cancel_mutex);
+        printf("Task cleaned up..\n");
+        s_defender_task_clean_up(defender_task);
+    }
 }
 
 int aws_iotdevice_defender_config_register_number_metric(

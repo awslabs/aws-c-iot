@@ -376,7 +376,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     AWS_FATAL_ASSERT(defender_task != NULL);
 
     /* this function also sets pointer to null */
-    aws_iotdevice_defender_config_destroy(&task_config);
+    aws_iotdevice_defender_config_clean_up(&task_config);
     ASSERT_NULL(task_config);
 
     struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
@@ -472,7 +472,7 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
     AWS_FATAL_ASSERT(defender_task != NULL);
 
     /* this function also sets pointer to null */
-    aws_iotdevice_defender_config_destroy(&task_config);
+    aws_iotdevice_defender_config_clean_up(&task_config);
     ASSERT_NULL(task_config);
 
     struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
