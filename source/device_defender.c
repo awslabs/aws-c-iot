@@ -1068,30 +1068,22 @@ static void s_cancel_defender_task(struct aws_task *task, void *arg, enum aws_ta
     /* unsure if it makes sense to check this cancellation task to see if it was canceled */
     struct aws_iotdevice_defender_task *defender_task = arg;
     /* proper invocation here will block and run */
-    printf("Running task cancelation...\n");
     aws_event_loop_cancel_task(defender_task->event_loop, &defender_task->task);
     aws_condition_variable_notify_one(&defender_task->cv_task_canceled);
-    printf("Task cancelation finished...\n");
 }
 
 void aws_iotdevice_defender_stop_task(struct aws_iotdevice_defender_task *defender_task) {
     AWS_PRECONDITION(defender_task != NULL);
 
     aws_mutex_lock(&defender_task->task_cancel_mutex);
-    printf("Stop task lock acquired\n");
     if (defender_task->is_task_canceled) {
-        printf("Stop task is already canceled\n");
         aws_mutex_unlock(&defender_task->task_cancel_mutex);
     } else {
-        printf("Scheduling stop tasking...\n");
         struct aws_task cancel_task;
         aws_task_init(&cancel_task, s_cancel_defender_task, defender_task, "cancel_defender_task");
         aws_event_loop_schedule_task_now(defender_task->event_loop, &cancel_task);
-        printf("Waiting for task to be stopped...\n");
         aws_condition_variable_wait(&defender_task->cv_task_canceled, &defender_task->task_cancel_mutex);
-        printf("Done waiting for task to be stopped...\n");
         aws_mutex_unlock(&defender_task->task_cancel_mutex);
-        printf("Task cleaned up..\n");
         s_defender_task_clean_up(defender_task);
     }
 }
