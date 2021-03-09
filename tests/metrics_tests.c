@@ -322,6 +322,7 @@ static int s_clean_up_mqtt_test_data_fn(struct aws_allocator *allocator, int set
         aws_event_loop_group_release(state_test_data->el_group);
     }
 
+    aws_iotdevice_library_clean_up();
     aws_mqtt_library_clean_up();
     return AWS_OP_SUCCESS;
 }
@@ -404,7 +405,6 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
 
     aws_condition_variable_clean_up(&test);
     aws_mutex_clean_up(&lock);
-    aws_iotdevice_library_clean_up();
 
     return AWS_OP_SUCCESS;
 }
@@ -500,7 +500,6 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
 
     aws_condition_variable_clean_up(&test);
     aws_mutex_clean_up(&lock);
-    aws_iotdevice_library_clean_up();
 
     return AWS_OP_SUCCESS;
 }
