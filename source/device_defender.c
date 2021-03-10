@@ -624,6 +624,7 @@ void s_defender_config_clean_up_internals(struct aws_iotdevice_defender_task_con
         aws_string_destroy(metric->metric_name);
         aws_mem_release(config->allocator, metric);
     }
+    aws_array_list_clean_up(&config->custom_metrics);
 }
 
 void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
@@ -641,8 +642,7 @@ void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task)
 
     aws_mutex_clean_up(&defender_task->task_cancel_mutex);
     aws_condition_variable_clean_up(&defender_task->cv_task_canceled);
-    struct aws_iotdevice_defender_task_config *config = &defender_task->config;
-    s_defender_config_clean_up_internals(config);
+    s_defender_config_clean_up_internals(&defender_task->config);
     aws_mem_release(allocator, defender_task);
 }
 
