@@ -615,8 +615,6 @@ static void s_get_custom_metrics_data(
  */
 void s_defender_config_clean_up_internals(struct aws_iotdevice_defender_task_config *config) {
     AWS_PRECONDITION(config != NULL);
-    struct aws_allocator *allocator = config->allocator;
-    AWS_ASSERT(aws_allocator_is_valid(allocator));
     aws_string_destroy(config->thing_name);
     for (size_t metrics_index = 0; metrics_index < config->custom_metrics_len; ++metrics_index) {
         struct defender_custom_metric *metric = NULL;
@@ -716,13 +714,13 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             defender_task->has_previous_net_xfer = true;
         }
         if (AWS_OP_SUCCESS != s_get_metric_report_json(
-                                    &json_report,
-                                    defender_task,
-                                    report_id,
-                                    ptr_delta_xfer,
-                                    &net_conns,
-                                    custom_metrics_len,
-                                    custom_metric_data)) {
+                                 &json_report,
+                                 defender_task,
+                                 report_id,
+                                 ptr_delta_xfer,
+                                 &net_conns,
+                                 custom_metrics_len,
+                                 custom_metric_data)) {
         }
 
         defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
@@ -761,8 +759,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 "id=%p: Report failed to publish on topic " PRInSTR,
                 (void *)defender_task,
                 AWS_BYTE_CURSOR_PRI(report_topic));
-            defender_task->config.rejected_report_fn(
-                aws_last_error(), NULL, defender_task->config.callback_userdata);
+            defender_task->config.rejected_report_fn(aws_last_error(), NULL, defender_task->config.callback_userdata);
         }
 
         for (size_t i = 0; i < net_conns.length; ++i) {
