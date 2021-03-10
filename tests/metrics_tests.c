@@ -158,7 +158,6 @@ static int get_ip_list_metric_fail(struct aws_array_list *to_write_list, void *u
     aws_array_list_push_back(to_write_list, &ip_value);
     ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, "08:00:27:d1:ea:38");
     AWS_STRING_FROM_LITERAL(example_ipv6, "2001:db8:3333:4444:5555:6666:7777:8888");
     aws_array_list_push_back(to_write_list, &example_ipv6);
     AWS_STRING_FROM_LITERAL(ipv6, "fe80::843:a8ff:fe18:a879");
@@ -174,7 +173,6 @@ static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userda
     aws_array_list_push_back(to_write_list, &ip_value);
     ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, "08:00:27:d1:ea:38");
     AWS_STRING_FROM_LITERAL(example_ipv6, "2001:db8:3333:4444:5555:6666:7777:8888");
     aws_array_list_push_back(to_write_list, &example_ipv6);
     AWS_STRING_FROM_LITERAL(ipv6, "fe80::843:a8ff:fe18:a879");
@@ -481,7 +479,6 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
     aws_condition_variable_wait_for(&test, &lock, 500000000UL);
 
     aws_iotdevice_defender_stop_task(defender_task);
-    s_wait_for_task_to_stop(state_test_data);
 
     // The third packet is the report publish
     uint16_t packet_id = 3;
