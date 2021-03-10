@@ -713,53 +713,56 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         } else {
             defender_task->has_previous_net_xfer = true;
         }
-        if (AWS_OP_SUCCESS != s_get_metric_report_json(
-                                 &json_report,
-                                 defender_task,
-                                 report_id,
-                                 ptr_delta_xfer,
-                                 &net_conns,
-                                 custom_metrics_len,
-                                 custom_metric_data)) {
-        }
+        if (AWS_OP_SUCCESS == s_get_metric_report_json(
+                                  &json_report,
+                                  defender_task,
+                                  report_id,
+                                  ptr_delta_xfer,
+                                  &net_conns,
+                                  custom_metrics_len,
+                                  custom_metric_data)) {
+                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                    "id=%p: Failed to generate metric report json: %s",
+                    (void *)defender_task,
+                    aws_error_name(aws_last_error()));
+            defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
+            defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
+            defender_task->previous_net_xfer.packets_in = totals.packets_in;
+            defender_task->previous_net_xfer.packets_out = totals.packets_out;
 
-        defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
-        defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
-        defender_task->previous_net_xfer.packets_in = totals.packets_in;
-        defender_task->previous_net_xfer.packets_out = totals.packets_out;
+            struct aws_byte_cursor report_topic = aws_byte_cursor_from_string(defender_task->publish_report_topic_name);
+            struct aws_byte_cursor report = aws_byte_cursor_from_buf(&json_report);
 
-        struct aws_byte_cursor report_topic = aws_byte_cursor_from_string(defender_task->publish_report_topic_name);
-        struct aws_byte_cursor report = aws_byte_cursor_from_buf(&json_report);
-
-        AWS_LOGF_TRACE(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK,
-            "id=%p: Full report: " PRInSTR,
-            (void *)defender_task,
-            AWS_BYTE_CURSOR_PRI(report));
-
-        uint16_t report_packet_id = aws_mqtt_client_connection_publish(
-            defender_task->connection,
-            &report_topic,
-            AWS_MQTT_QOS_AT_LEAST_ONCE,
-            false,
-            &report,
-            s_on_report_puback,
-            defender_task);
-
-        if (report_packet_id != 0) {
-            AWS_LOGF_DEBUG(
+            AWS_LOGF_TRACE(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Report packet_id %d published on topic " PRInSTR,
+                "id=%p: Full report: " PRInSTR,
                 (void *)defender_task,
-                report_packet_id,
-                AWS_BYTE_CURSOR_PRI(report_topic));
-        } else {
-            AWS_LOGF_ERROR(
-                AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Report failed to publish on topic " PRInSTR,
-                (void *)defender_task,
-                AWS_BYTE_CURSOR_PRI(report_topic));
-            defender_task->config.rejected_report_fn(aws_last_error(), NULL, defender_task->config.callback_userdata);
+                AWS_BYTE_CURSOR_PRI(report));
+
+            uint16_t report_packet_id = aws_mqtt_client_connection_publish(
+                defender_task->connection,
+                &report_topic,
+                AWS_MQTT_QOS_AT_LEAST_ONCE,
+                false,
+                &report,
+                s_on_report_puback,
+                defender_task);
+
+            if (report_packet_id != 0) {
+                AWS_LOGF_DEBUG(
+                    AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                    "id=%p: Report packet_id %d published on topic " PRInSTR,
+                    (void *)defender_task,
+                    report_packet_id,
+                    AWS_BYTE_CURSOR_PRI(report_topic));
+            } else {
+                AWS_LOGF_ERROR(
+                    AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                    "id=%p: Report failed to publish on topic " PRInSTR,
+                    (void *)defender_task,
+                    AWS_BYTE_CURSOR_PRI(report_topic));
+                defender_task->config.rejected_report_fn(aws_last_error(), NULL, defender_task->config.callback_userdata);
+            }
         }
 
         for (size_t i = 0; i < net_conns.length; ++i) {
@@ -774,6 +777,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                 aws_string_destroy(con->remote_address);
             }
         }
+
         aws_array_list_clean_up(&net_conns);
         aws_hash_table_clean_up(&ifconfig.iface_name_to_info);
 
