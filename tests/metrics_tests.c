@@ -78,10 +78,10 @@ static int validate_devicedefender_record(const char *value) {
     return AWS_OP_SUCCESS;
 }
 
-const int64_t number = 42;
-const int64_t number_list[] = {64, 128, 256};
-const char *string_list[] = {"foo", "bar", "donkey"};
-const char *ip_list[] = {"127.0.0.1",
+const int64_t cm_number = 42;
+const int64_t cm_number_list[] = {64, 128, 256};
+const char *cm_string_list[] = {"foo", "bar", "donkey"};
+const char *cm_ip_list[] = {"127.0.0.1",
                          "192.168.1.100",
                          "2001:db8:3333:4444:5555:6666:7777:8888",
                          "fe80::843:a8ff:fe18:a879"};
@@ -128,11 +128,11 @@ static int validate_devicedefender_custom_record(const char *json_report) {
     ASSERT_TRUE(cJSON_IsObject(string_list_metric_container));
     cJSON *string_list_array = cJSON_GetObjectItemCaseSensitive(string_list_metric_container, "string_list");
     ASSERT_TRUE(cJSON_IsArray(string_list_array));
-    ASSERT_STR_EQUALS(string_list[0], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 0)));
+    ASSERT_STR_EQUALS(cm_string_list[0], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 0)));
     cJSON_PrintPreallocated(cJSON_GetArrayItem(string_list_array, 1), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(string_list[1], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 1)));
+    ASSERT_STR_EQUALS(cm_string_list[1], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 1)));
     cJSON_PrintPreallocated(cJSON_GetArrayItem(string_list_array, 2), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(string_list[2], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 2)));
+    ASSERT_STR_EQUALS(cm_string_list[2], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 2)));
 
     cJSON *string_list_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricStringListFail");
     ASSERT_NULL(string_list_metric_fail);
@@ -143,13 +143,13 @@ static int validate_devicedefender_custom_record(const char *json_report) {
     ASSERT_TRUE(cJSON_IsObject(ip_list_metric_container));
     cJSON *ip_list_array = cJSON_GetObjectItemCaseSensitive(ip_list_metric_container, "ip_list");
     ASSERT_TRUE(cJSON_IsArray(ip_list_array));
-    ASSERT_STR_EQUALS(ip_list[0], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 0)));
+    ASSERT_STR_EQUALS(cm_ip_list[0], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 0)));
     cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 1), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(ip_list[1], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 1)));
+    ASSERT_STR_EQUALS(cm_ip_list[1], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 1)));
     cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 2), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(ip_list[2], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 2)));
+    ASSERT_STR_EQUALS(cm_ip_list[2], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 2)));
     cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 3), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(ip_list[3], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 3)));
+    ASSERT_STR_EQUALS(cm_ip_list[3], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 3)));
 
     cJSON *ip_list_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricIpListFail");
     ASSERT_NULL(ip_list_metric_fail);
@@ -160,23 +160,23 @@ static int validate_devicedefender_custom_record(const char *json_report) {
 
 static int get_number_metric_fail(int64_t *out, void *userdata) {
     (void)userdata;
-    *out = number;
+    *out = cm_number;
     return AWS_OP_ERR;
 }
 
 static int get_number_metric(int64_t *out, void *userdata) {
     (void)userdata;
-    *out = number;
+    *out = cm_number;
     return AWS_OP_SUCCESS; /* let the caller know we wrote the data successfully */
 }
 
 static int get_number_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
     (void)userdata;
-    int64_t number = number_list[0];
+    int64_t number = cm_number_list[0];
     aws_array_list_push_back(to_write_list, &number);
-    number = number_list[1];
+    number = cm_number_list[1];
     aws_array_list_push_back(to_write_list, &number);
-    number = number_list[2];
+    number = cm_number_list[2];
     aws_array_list_push_back(to_write_list, &number);
 
     return AWS_OP_ERR;
@@ -184,11 +184,11 @@ static int get_number_list_metric_fail(struct aws_array_list *to_write_list, voi
 
 static int get_number_list_metric(struct aws_array_list *to_write_list, void *userdata) {
     (void)userdata;
-    int64_t number = number_list[0];
+    int64_t number = cm_number_list[0];
     aws_array_list_push_back(to_write_list, &number);
-    number = number_list[1];
+    number = cm_number_list[1];
     aws_array_list_push_back(to_write_list, &number);
-    number = number_list[2];
+    number = cm_number_list[2];
     aws_array_list_push_back(to_write_list, &number);
 
     return AWS_OP_SUCCESS;
@@ -197,11 +197,11 @@ static int get_number_list_metric(struct aws_array_list *to_write_list, void *us
 static int get_string_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
     struct mqtt_connection_test_data *test_data = userdata;
     struct aws_allocator *allocator = test_data->allocator;
-    struct aws_string *string_value = aws_string_new_from_c_str(allocator, string_list[0]);
+    struct aws_string *string_value = aws_string_new_from_c_str(allocator, cm_string_list[0]);
     aws_array_list_push_back(to_write_list, &string_value);
-    string_value = aws_string_new_from_c_str(allocator, string_list[1]);
+    string_value = aws_string_new_from_c_str(allocator, cm_string_list[1]);
     aws_array_list_push_back(to_write_list, &string_value);
-    string_value = aws_string_new_from_c_str(allocator, string_list[2]);
+    string_value = aws_string_new_from_c_str(allocator, cm_string_list[2]);
     aws_array_list_push_back(to_write_list, &string_value);
 
     return AWS_OP_ERR;
@@ -210,11 +210,11 @@ static int get_string_list_metric_fail(struct aws_array_list *to_write_list, voi
 static int get_string_list_metric(struct aws_array_list *to_write_list, void *userdata) {
     struct mqtt_connection_test_data *test_data = userdata;
     struct aws_allocator *allocator = test_data->allocator;
-    struct aws_string *string_value = aws_string_new_from_c_str(allocator, string_list[0]);
+    struct aws_string *string_value = aws_string_new_from_c_str(allocator, cm_string_list[0]);
     aws_array_list_push_back(to_write_list, &string_value);
-    string_value = aws_string_new_from_c_str(allocator, string_list[1]);
+    string_value = aws_string_new_from_c_str(allocator, cm_string_list[1]);
     aws_array_list_push_back(to_write_list, &string_value);
-    string_value = aws_string_new_from_c_str(allocator, string_list[2]);
+    string_value = aws_string_new_from_c_str(allocator, cm_string_list[2]);
     aws_array_list_push_back(to_write_list, &string_value);
 
     return AWS_OP_SUCCESS;
@@ -223,13 +223,13 @@ static int get_string_list_metric(struct aws_array_list *to_write_list, void *us
 static int get_ip_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
     struct mqtt_connection_test_data *test_data = userdata;
     struct aws_allocator *allocator = test_data->allocator;
-    struct aws_string *ip_value = aws_string_new_from_c_str(allocator, ip_list[0]);
+    struct aws_string *ip_value = aws_string_new_from_c_str(allocator, cm_ip_list[0]);
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, ip_list[1]);
+    ip_value = aws_string_new_from_c_str(allocator, cm_ip_list[1]);
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, ip_list[2]);
+    ip_value = aws_string_new_from_c_str(allocator, cm_ip_list[2]);
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, ip_list[3]);
+    ip_value = aws_string_new_from_c_str(allocator, cm_ip_list[3]);
     aws_array_list_push_back(to_write_list, &ip_value);
 
     return AWS_OP_ERR;
@@ -238,13 +238,13 @@ static int get_ip_list_metric_fail(struct aws_array_list *to_write_list, void *u
 static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userdata) {
     struct mqtt_connection_test_data *test_data = userdata;
     struct aws_allocator *allocator = test_data->allocator;
-    struct aws_string *ip_value = aws_string_new_from_c_str(allocator, ip_list[0]);
+    struct aws_string *ip_value = aws_string_new_from_c_str(allocator, cm_ip_list[0]);
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, ip_list[1]);
+    ip_value = aws_string_new_from_c_str(allocator, cm_ip_list[1]);
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, ip_list[2]);
+    ip_value = aws_string_new_from_c_str(allocator, cm_ip_list[2]);
     aws_array_list_push_back(to_write_list, &ip_value);
-    ip_value = aws_string_new_from_c_str(allocator, ip_list[3]);
+    ip_value = aws_string_new_from_c_str(allocator, cm_ip_list[3]);
     aws_array_list_push_back(to_write_list, &ip_value);
 
     return AWS_OP_SUCCESS;
