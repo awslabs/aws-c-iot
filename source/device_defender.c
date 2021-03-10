@@ -721,10 +721,11 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                                   &net_conns,
                                   custom_metrics_len,
                                   custom_metric_data)) {
-                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                    "id=%p: Failed to generate metric report json: %s",
-                    (void *)defender_task,
-                    aws_error_name(aws_last_error()));
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to generate metric report json: %s",
+                (void *)defender_task,
+                aws_error_name(aws_last_error()));
             defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
             defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
             defender_task->previous_net_xfer.packets_in = totals.packets_in;
@@ -761,7 +762,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                     "id=%p: Report failed to publish on topic " PRInSTR,
                     (void *)defender_task,
                     AWS_BYTE_CURSOR_PRI(report_topic));
-                defender_task->config.rejected_report_fn(aws_last_error(), NULL, defender_task->config.callback_userdata);
+                defender_task->config.rejected_report_fn(
+                    aws_last_error(), NULL, defender_task->config.callback_userdata);
             }
         }
 
