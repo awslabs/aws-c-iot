@@ -357,6 +357,10 @@ static int s_get_metric_report_json(
         struct cJSON *json_list = NULL;
         struct cJSON *spurious_array_container = NULL;
         for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
+            if (custom_metrics_data[metric_index].callback_result != AWS_OP_SUCCESS) {
+                /* if the collection of a metric failed, do not output it to the report */
+                continue;
+            }
             spurious_array_container = cJSON_CreateArray();
             if (NULL == spurious_array_container) {
                 goto cleanup;

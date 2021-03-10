@@ -83,8 +83,9 @@ const int64_t number_list[] = { 64, 128, 256 };
 const char *string_list[] = { "foo", "bar", "donkey" };
 const char *ip_list[] = { "127.0.0.1", "192.168.1.100", "2001:db8:3333:4444:5555:6666:7777:8888", "fe80::843:a8ff:fe18:a879" };
 
+#define ddt_value_len 256
 static int validate_devicedefender_custom_record(const char *json_report) {
-    char * value_to_cmp = NULL;
+    char value_to_cmp[ddt_value_len];    /* increase size if we ever need larger */
     cJSON *report = cJSON_Parse(json_report);
     ASSERT_NOT_NULL(report);
 
@@ -95,11 +96,60 @@ static int validate_devicedefender_custom_record(const char *json_report) {
     ASSERT_TRUE(cJSON_IsArray(number_metric));
     cJSON *number_metric_container = cJSON_GetArrayItem(number_metric, 0);
     ASSERT_TRUE(cJSON_IsObject(number_metric_container));
-    cJSON *number_obj = cJSON_GetObjectItem(number_metric_container, "number");
-    value_to_cmp = cJSON_Print(number_obj);
+    cJSON *number_obj = cJSON_GetObjectItemCaseSensitive(number_metric_container, "number");
+    cJSON_PrintPreallocated(number_obj, value_to_cmp, ddt_value_len, cJSON_False);
     ASSERT_STR_EQUALS("42", value_to_cmp);
-    cJSON_free(value_to_cmp);
 
+    cJSON *number_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricNumberFail");
+    ASSERT_NULL(number_metric_fail);
+
+    cJSON *number_list_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricNumberList");
+    ASSERT_TRUE(cJSON_IsArray(number_list_metric));
+    cJSON *number_list_metric_container = cJSON_GetArrayItem(number_list_metric, 0);
+    ASSERT_TRUE(cJSON_IsObject(number_list_metric_container));
+    cJSON *number_list_array = cJSON_GetObjectItemCaseSensitive(number_list_metric_container, "number_list");
+    ASSERT_TRUE(cJSON_IsArray(number_list_array));
+    cJSON_PrintPreallocated(cJSON_GetArrayItem(number_list_array, 0), value_to_cmp, ddt_value_len, cJSON_False);
+    ASSERT_STR_EQUALS("64", value_to_cmp);
+    cJSON_PrintPreallocated(cJSON_GetArrayItem(number_list_array, 1), value_to_cmp, ddt_value_len, cJSON_False);
+    ASSERT_STR_EQUALS("128", value_to_cmp);
+    cJSON_PrintPreallocated(cJSON_GetArrayItem(number_list_array, 2), value_to_cmp, ddt_value_len, cJSON_False);
+    ASSERT_STR_EQUALS("256", value_to_cmp);
+
+    cJSON *number_list_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricNumberListFail");
+    ASSERT_NULL(number_list_metric_fail);
+
+    cJSON *string_list_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricStringList");
+    ASSERT_TRUE(cJSON_IsArray(string_list_metric));
+    cJSON *string_list_metric_container = cJSON_GetArrayItem(string_list_metric, 0);
+    ASSERT_TRUE(cJSON_IsObject(string_list_metric_container));
+    cJSON *string_list_array = cJSON_GetObjectItemCaseSensitive(string_list_metric_container, "string_list");
+    ASSERT_TRUE(cJSON_IsArray(string_list_array));
+    ASSERT_STR_EQUALS(string_list[0], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 0)));
+    cJSON_PrintPreallocated(cJSON_GetArrayItem(string_list_array, 1), value_to_cmp, ddt_value_len, cJSON_False);
+    ASSERT_STR_EQUALS(string_list[1], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 1)));
+    cJSON_PrintPreallocated(cJSON_GetArrayItem(string_list_array, 2), value_to_cmp, ddt_value_len, cJSON_False);
+    ASSERT_STR_EQUALS(string_list[2], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 2)));
+
+    cJSON *string_list_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricStringListFail");
+    ASSERT_NULL(string_list_metric_fail);
+
+    cJSON *ip_list_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricIpList");
+    ASSERT_TRUE(cJSON_IsArray(ip_list_metric));
+    cJSON *ip_list_metric_container = cJSON_GetArrayItem(ip_list_metric, 0);
+    ASSERT_TRUE(cJSON_IsObject(ip_list_metric_container));
+    cJSON *ip_list_array = cJSON_GetObjectItemCaseSensitive(ip_list_metric_container, "ip_list");
+    ASSERT_TRUE(cJSON_IsArray(ip_list_array));
+    ASSERT_STR_EQUALS(ip_list[0], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 0)));
+    cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 1), value_to_cmp, ddt_value_len, cJSON_False);
+    ASSERT_STR_EQUALS(ip_list[1], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 1)));
+    cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 2), value_to_cmp, ddt_value_len, cJSON_False);
+    ASSERT_STR_EQUALS(ip_list[2], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 2)));
+    cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 3), value_to_cmp, ddt_value_len, cJSON_False);
+    ASSERT_STR_EQUALS(ip_list[3], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 3)));
+
+    cJSON *ip_list_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricIpListFail");
+    ASSERT_NULL(ip_list_metric_fail);
 
     cJSON_Delete(report);
     return AWS_OP_SUCCESS;
