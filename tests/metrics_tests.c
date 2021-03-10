@@ -82,9 +82,9 @@ const int64_t cm_number = 42;
 const int64_t cm_number_list[] = {64, 128, 256};
 const char *cm_string_list[] = {"foo", "bar", "donkey"};
 const char *cm_ip_list[] = {"127.0.0.1",
-                         "192.168.1.100",
-                         "2001:db8:3333:4444:5555:6666:7777:8888",
-                         "fe80::843:a8ff:fe18:a879"};
+                            "192.168.1.100",
+                            "2001:db8:3333:4444:5555:6666:7777:8888",
+                            "fe80::843:a8ff:fe18:a879"};
 
 #define dd_value_len 256
 static int validate_devicedefender_custom_record(const char *json_report) {
