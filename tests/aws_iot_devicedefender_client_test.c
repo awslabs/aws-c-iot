@@ -320,6 +320,7 @@ int main(int argc, char **argv) {
                                                        .keep_alive_time_secs = 0,
                                                        .ping_timeout_ms = 0,
                                                        .on_connection_complete = s_mqtt_on_connection_complete,
+                                                       .user_data = &args,
                                                        .clean_session = true};
 
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
