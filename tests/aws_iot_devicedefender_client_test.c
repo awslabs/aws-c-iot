@@ -178,6 +178,21 @@ static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userda
     return AWS_OP_SUCCESS;
 }
 
+void s_report_accepted(struct aws_byte_cursor *payload, void *userdata) {
+    (void)userdata;
+    printf("Report submission accepted reply: " PRInSTR, AWS_BYTE_CURSOR_PRI(*payload));
+}
+
+void s_report_rejected(struct aws_byte_cursor *payload, void *userdata) {
+    (void)userdata;
+    printf("Report submission rejected reply: " PRInSTR, AWS_BYTE_CURSOR_PRI(*payload));
+}
+
+void s_task_failure(int error_code, void *userdata) {
+    (void)userdata;
+    printf("Task failure: %s", aws_error_name(error_code));
+}
+
 int main(int argc, char **argv) {
     if (argc < 5) {
         printf(
