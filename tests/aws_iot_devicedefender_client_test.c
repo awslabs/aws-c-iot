@@ -132,8 +132,8 @@ static void s_mqtt_on_disconnect(struct aws_mqtt_client_connection *connection, 
 
 static int get_number_metric(int64_t *out, void *userdata) {
     (void)userdata;
-    *out = 42;             /* the answer to everything right? */
-    return AWS_OP_SUCCESS; /* let the caller know we wrote the data successfully */
+    *out = 42;
+    return AWS_OP_SUCCESS;
 }
 
 static int get_number_list_metric(struct aws_array_list *to_write_list, void *userdata) {
@@ -178,19 +178,25 @@ static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userda
     return AWS_OP_SUCCESS;
 }
 
-void s_report_accepted(struct aws_byte_cursor *payload, void *userdata) {
+void s_report_accepted(const struct aws_byte_cursor *payload, void *userdata) {
     (void)userdata;
-    printf("Report submission accepted reply: " PRInSTR, AWS_BYTE_CURSOR_PRI(*payload));
+    printf("Report submission accepted reply: " PRInSTR "\n", AWS_BYTE_CURSOR_PRI(*payload));
 }
 
-void s_report_rejected(struct aws_byte_cursor *payload, void *userdata) {
+void s_report_rejected(const struct aws_byte_cursor *payload, void *userdata) {
     (void)userdata;
-    printf("Report submission rejected reply: " PRInSTR, AWS_BYTE_CURSOR_PRI(*payload));
+    printf("Report submission rejected reply: " PRInSTR "\n", AWS_BYTE_CURSOR_PRI(*payload));
 }
 
-void s_task_failure(int error_code, void *userdata) {
+struct aws_mutex stop_mutex = AWS_MUTEX_INIT;
+struct aws_condition_variable stop_cv = AWS_CONDITION_VARIABLE_INIT;
+void s_task_failure(bool is_task_stopped, int error_code, void *userdata) {
     (void)userdata;
-    printf("Task failure: %s", aws_error_name(error_code));
+    printf("Defender task failed: %s\n", aws_error_name(error_code));
+
+    if (is_task_stopped) {
+      aws_condition_variable_notify_one(&stop_cv);
+    }
 }
 
 int main(int argc, char **argv) {
@@ -289,27 +295,9 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
     args.task_config = task_config;
 
-    ASSERT_SUCCESS(aws_iotdevice_defender_register_number_metric(&args.task_config, allocator, "TestCustomMetricNumber",
-                                                                                                                                get_number_metric, allocator));
-
-    ASSERT_SUCCESS(aws_iotdevice_defender_register_number_list_metric(&args.task_config, allocator, "TestCustomMetricNumberList",
-                                                                                                                                        get_number_list_metric, allocator));
-
-    ASSERT_SUCCESS(aws_iotdevice_defender_register_string_list_metric(&args.task_config, allocator, "TestCustomMetricStringList",
-                                                                                                                                get_string_list_metric, allocator));
-
-    ASSERT_SUCCESS(aws_iotdevice_defender_register_ip_list_metric(&args.task_config, allocator, "TestCustomMetricIpList",
-																 get_ip_list_metric, allocator));
-    struct aws_mqtt_connection_options conn_options = {.host_name = host_name_cur,
-                                                       .port = 8883,
-                                                       .socket_options = &socket_options,
-                                                       .tls_options = &tls_con_opt,
-                                                       .client_id = client_id_cur,
-                                                       .keep_alive_time_secs = 0,
-                                                       .ping_timeout_ms = 0,
-                                                       .on_connection_complete = s_mqtt_on_connection_complete,
-                                                       .user_data = &args,
-                                                       .clean_session = true};
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_set_report_accepted_fn(task_config, s_report_accepted));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_set_report_rejected_fn(task_config, s_report_rejected));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_set_task_failure_fn(task_config, s_task_failure));
 
     const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
@@ -341,10 +329,9 @@ int main(int argc, char **argv) {
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);
 
-    // TODO: Revisit wait condition
-    aws_mutex_lock(&mutex);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-    aws_mutex_unlock(&mutex);
+    aws_mutex_lock(&stop_mutex);
+    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &stop_mutex));
+    aws_mutex_unlock(&stop_mutex);
 
     aws_mqtt_client_connection_disconnect(args.connection, s_mqtt_on_disconnect, &args);
 
