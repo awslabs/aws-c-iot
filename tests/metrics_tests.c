@@ -412,18 +412,6 @@ static void s_devicedefender_cb(void *userdata) {
     aws_condition_variable_notify_one(&state_test_data->cvar);
 }
 
-static bool s_is_task_stopped(void *arg) {
-    struct mqtt_connection_test_data *state_test_data = arg;
-    return state_test_data->task_stopped;
-}
-
-static void s_wait_for_task_to_stop(struct mqtt_connection_test_data *state_test_data) {
-    aws_mutex_lock(&state_test_data->lock);
-    aws_condition_variable_wait_pred(
-        &state_test_data->cvar, &state_test_data->lock, s_is_task_stopped, state_test_data);
-    aws_mutex_unlock(&state_test_data->lock);
-}
-
 AWS_TEST_CASE_FIXTURE(
     devicedefender_success_test,
     s_setup_mqtt_test_data_fn,
@@ -456,14 +444,9 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
 
-    struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
-    struct aws_mutex lock = AWS_MUTEX_INIT;
-    /* Allow device defender agent to run */
-    aws_condition_variable_wait_for(&test, &lock, 500000000LL);
-
+    /* clean up is also a cancel */
     aws_iotdevice_defender_task_clean_up(defender_task);
     defender_task = NULL;
-    s_wait_for_task_to_stop(state_test_data);
 
     /* The third packet is the report publish */
     uint16_t packet_id = 3;
@@ -479,9 +462,6 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_string_destroy(publish_topic);
 
     validate_devicedefender_record((const char *)payload.ptr);
-
-    aws_condition_variable_clean_up(&test);
-    aws_mutex_clean_up(&lock);
 
     return AWS_OP_SUCCESS;
 }
@@ -552,12 +532,9 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
 
-    struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
-    struct aws_mutex lock = AWS_MUTEX_INIT;
-    /* Allow device defender agent to run */
-    aws_condition_variable_wait_for(&test, &lock, 500000000UL);
-
     aws_iotdevice_defender_task_clean_up(defender_task);
+
+    ASSERT_TRUE(state_test_data->task_stopped);
 
     /* The third packet is the report publish */
     uint16_t packet_id = 3;
@@ -574,10 +551,12 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
 
     validate_devicedefender_custom_record((const char *)payload.ptr);
 
-    aws_condition_variable_clean_up(&test);
-    aws_mutex_clean_up(&lock);
-
     return AWS_OP_SUCCESS;
+}
+
+void s_task_cancel_callback_called(void *userdata) {
+    struct mqtt_connection_test_data *test_data = userdata;
+    test_data->task_stopped = true;
 }
 
 AWS_TEST_CASE_FIXTURE(
@@ -617,13 +596,10 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
 
-    struct aws_condition_variable test = AWS_CONDITION_VARIABLE_INIT;
-    struct aws_mutex lock = AWS_MUTEX_INIT;
-
     aws_iotdevice_defender_task_clean_up(defender_task);
     defender_task = NULL;
-    /* Allow device defender agent to run */
-    aws_condition_variable_wait_for(&test, &lock, 500000000UL);
+
+    ASSERT_TRUE(state_test_data->task_stopped);
 
     /* The third packet is the report publish */
     uint16_t packet_id = 3;
@@ -638,9 +614,6 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
     /* leave basic assertion in tact that the stop didn't prevent the publish from happening */
     ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestCustomMetricSuccessThing/defender/metrics/json"));
     aws_string_destroy(publish_topic);
-
-    aws_condition_variable_clean_up(&test);
-    aws_mutex_clean_up(&lock);
 
     return AWS_OP_SUCCESS;
 }

@@ -1259,6 +1259,15 @@ int aws_iotdevice_defender_config_set_task_cancelation_fn(
     return AWS_OP_SUCCESS;
 }
 
+int aws_iotdevice_defender_config_set_task_failure_fn(
+    struct aws_iotdevice_defender_task_config *config,
+    aws_iotdevice_defender_task_failure_fn *failure_fn) {
+    AWS_PRECONDITION(config != NULL);
+    /* allow setting to null */
+    config->task_failure_fn = failure_fn;
+    return AWS_OP_SUCCESS;
+}
+
 int aws_iotdevice_defender_config_set_report_accepted_fn(
     struct aws_iotdevice_defender_task_config *config,
     aws_iotdevice_defender_report_accepted_fn *accepted_fn) {
