@@ -38,7 +38,8 @@ struct aws_iotdevice_defender_task_config {
     size_t custom_metrics_len;
     enum aws_iotdevice_defender_report_format report_format;
     uint64_t task_period_ns;
-    aws_iotdevice_defender_task_canceled_fn *task_cancelled_fn;
+    aws_iotdevice_defender_task_canceled_fn *task_canceled_fn;
+    aws_iotdevice_defender_task_failure_fn *task_failure_fn;
     aws_iotdevice_defender_report_accepted_fn *accepted_report_fn;
     aws_iotdevice_defender_report_rejected_fn *rejected_report_fn;
     void *callback_userdata;
@@ -152,16 +153,20 @@ static void s_on_report_response_rejected(
     bool retain,
     void *userdata) {
     (void)connection;
-    (void)payload;
     (void)dup;
     (void)qos;
     (void)retain;
+    struct aws_iotdevice_defender_task *defender_task = userdata;
     AWS_LOGF_ERROR(
         AWS_LS_IOTDEVICE_DEFENDER_TASK,
-        "id=%p: Report rejected from topic: " PRInSTR "\nRejection payload: " PRInSTR,
+        "id=%p: report rejected from topic: " PRInSTR "\nRejection payload: " PRInSTR,
         userdata,
         AWS_BYTE_CURSOR_PRI(*topic),
         AWS_BYTE_CURSOR_PRI(*payload));
+    if (defender_task->config.rejected_report_fn) {
+        defender_task->config.rejected_report_fn(payload,
+                                                defender_task->config.callback_userdata);
+    }
 }
 
 static void s_on_report_response_accepted(
@@ -173,15 +178,19 @@ static void s_on_report_response_accepted(
     bool retain,
     void *userdata) {
     (void)connection;
-    (void)payload;
     (void)dup;
     (void)qos;
     (void)retain;
+    struct aws_iotdevice_defender_task *defender_task = userdata;
     AWS_LOGF_DEBUG(
         AWS_LS_IOTDEVICE_DEFENDER_TASK,
         "id=%p: Report accepted on topic: " PRInSTR,
-        userdata,
+        (void *)defender_task,
         AWS_BYTE_CURSOR_PRI(*topic));
+    if (defender_task->config.accepted_report_fn) {
+        defender_task->config.accepted_report_fn(payload,
+                                                defender_task->config.callback_userdata);
+    }
 }
 
 static int s_get_metric_report_json(
@@ -611,6 +620,17 @@ static void s_get_custom_metrics_data(
     }
 }
 
+void s_invoke_failure_callback(struct aws_iotdevice_defender_task_config *task_config,
+                                bool is_task_stopped,
+                          int error_code) {
+    AWS_PRECONDITION(task_config != NULL);
+    AWS_PRECONDITION(error_code != AWS_ERROR_SUCCESS);
+    if (task_config->task_failure_fn) {
+      task_config->task_failure_fn(is_task_stopped, error_code,
+                                            task_config->callback_userdata);
+    }
+}
+
 /**
  * Differs in the public version in that it only cleans up the members and not the
  * entire structure itself. When cleaning up the defender_task internals, it must clean
@@ -766,8 +786,9 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                     "id=%p: Report failed to publish on topic " PRInSTR,
                     (void *)defender_task,
                     AWS_BYTE_CURSOR_PRI(report_topic));
-                defender_task->config.rejected_report_fn(
-                    aws_last_error(), NULL, defender_task->config.callback_userdata);
+                s_invoke_failure_callback(&defender_task->config,
+                                          false,
+                                          AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE);
             }
         }
 
@@ -795,8 +816,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         AWS_LOGF_DEBUG(
             AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Reporting task cancelled, cleaning up", (void *)defender_task);
 
-        if (defender_task->config.task_cancelled_fn != NULL) {
-            defender_task->config.task_cancelled_fn(defender_task->config.callback_userdata);
+        if (defender_task->config.task_canceled_fn != NULL) {
+            defender_task->config.task_canceled_fn(defender_task->config.callback_userdata);
         }
         /* cleanup of task memory happens in task cleanup or stop function */
     } else {
@@ -842,7 +863,7 @@ int aws_iotdevice_defender_config_create(
     config->allocator = allocator;
     config->report_format = report_format;
     config->callback_userdata = NULL;
-    config->task_cancelled_fn = NULL;
+    config->task_canceled_fn = NULL;
     config->rejected_report_fn = NULL;
     config->accepted_report_fn = NULL;
     /* defaults here will be consistent across any language on top */
@@ -859,16 +880,14 @@ error_return:
     return AWS_OP_ERR;
 }
 
-void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config **config) {
+void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config *config) {
     AWS_PRECONDITION(config != NULL);
-    struct aws_iotdevice_defender_task_config *to_clean = *config;
-    struct aws_allocator *allocator = (*config)->allocator;
+    struct aws_allocator *allocator = config->allocator;
     AWS_ASSERT(aws_allocator_is_valid(allocator));
     /* assign caller ptr to NULL */
-    *config = NULL;
-    if (to_clean) {
-        s_defender_config_clean_up_internals(to_clean);
-        aws_mem_release(allocator, to_clean);
+    if (config) {
+        s_defender_config_clean_up_internals(config);
+        aws_mem_release(allocator, config);
     }
 }
 
@@ -909,7 +928,7 @@ int s_copy_task_config(
     dest_config->thing_name = aws_string_new_from_string(src_config->allocator, src_config->thing_name);
 
     dest_config->callback_userdata = src_config->callback_userdata;
-    dest_config->task_cancelled_fn = src_config->task_cancelled_fn;
+    dest_config->task_canceled_fn = src_config->task_canceled_fn;
     dest_config->accepted_report_fn = src_config->accepted_report_fn;
     dest_config->rejected_report_fn = src_config->rejected_report_fn;
     dest_config->task_period_ns = src_config->task_period_ns;
@@ -935,7 +954,7 @@ int s_copy_task_config(
     return AWS_OP_SUCCESS;
 }
 
-int aws_iotdevice_defender_start_task(
+int aws_iotdevice_defender_task_create(
     struct aws_iotdevice_defender_task **task_out,
     const struct aws_iotdevice_defender_task_config *config,
     struct aws_mqtt_client_connection *connection,
@@ -1079,7 +1098,7 @@ static void s_cancel_defender_task(struct aws_task *task, void *arg, enum aws_ta
     aws_condition_variable_notify_one(&defender_task->cv_task_canceled);
 }
 
-void aws_iotdevice_defender_stop_task(struct aws_iotdevice_defender_task *defender_task) {
+void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
     AWS_PRECONDITION(defender_task != NULL);
 
     aws_mutex_lock(&defender_task->task_cancel_mutex);
@@ -1236,7 +1255,7 @@ int aws_iotdevice_defender_config_set_task_cancelation_fn(
     aws_iotdevice_defender_task_canceled_fn *cancel_fn) {
     AWS_PRECONDITION(config != NULL);
     /* allow setting to null */
-    config->task_cancelled_fn = cancel_fn;
+    config->task_canceled_fn = cancel_fn;
     return AWS_OP_SUCCESS;
 }
 
