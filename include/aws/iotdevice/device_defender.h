@@ -14,9 +14,22 @@ struct aws_event_loop;
 struct aws_mqtt_client_connection;
 
 /**
+ * General callback handler for the task to report that an error occurred while
+ * running the DeviceDefender task. Error codes can only go so far in describing
+ * where/when and how the failure occur so the errors here may best communicate
+ * where/when and the how of the underlying call should be found in log output
+ *
+ * @param    is_task_stopped    flag indicating whether or not the task is unable to continue running
+ * @param    error_code         error code describing the nature of the failure
+ */
+typedef void(aws_iotdevice_defender_task_failure_fn)(bool is_task_stopped, int error_code, void *userdata);
+
+/**
  * User callback type invoked when DeviceDefender task has completed cancellation. After a request
  * to stop the task, this signals the completion of the cancellation and no further user callbacks will
  * be invoked.
+ *
+ * @param    userdata      callback userdata
  */
 typedef void(aws_iotdevice_defender_task_canceled_fn)(void *userdata);
 
@@ -31,10 +44,11 @@ typedef void(aws_iotdevice_defender_task_canceled_fn)(void *userdata);
  *     topic with a message. In this scenario, the client_error_code will be
  *     AWS_ERROR_SUCCESS, and rejected_message_payload will contain the payload of the
  *     rejected message received.
+ * @param    rejected_message_payload    response payload recieved from rejection topic
+ * @param    userdata                    callback userdata
  */
 typedef void(aws_iotdevice_defender_report_rejected_fn)(
-    int client_error_code,
-    struct aws_byte_cursor *rejected_message_payload,
+    const struct aws_byte_cursor *rejected_message_payload,
     void *userdata);
 
 /**
@@ -42,7 +56,7 @@ typedef void(aws_iotdevice_defender_report_rejected_fn)(
  * reports receives a message.
  */
 typedef void(
-    aws_iotdevice_defender_report_accepted_fn)(struct aws_byte_cursor *accepted_message_payload, void *userdata);
+    aws_iotdevice_defender_report_accepted_fn)(const struct aws_byte_cursor *accepted_message_payload, void *userdata);
 
 /**
  * User callback type invoked to retrieve a number type custom metric.
@@ -129,7 +143,25 @@ int aws_iotdevice_defender_config_create(
  * @param    config    defender task configuration
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config **config);
+void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config *config);
+
+/**
+ * Sets the task failure callback function to invoke when the running of the
+ * task encounters a failure. Though this is optional to specify, it is
+ * important to register a handler to at least monitor failure that stops
+ * the task from running
+ *
+ * The most likely scenario for task not being able to continue is failure to reschedule the task
+ *
+ * @param    config        defender task configuration
+ * @param    failure_fn    failure callback function
+ * @returns    AWS_OP_SUCCESS when the task failre callback has been
+ *             set. Returns an error if the callback was not set
+ */
+AWS_IOTDEVICE_API
+int aws_iotdevice_defender_config_set_task_failure_fn(
+    struct aws_iotdevice_defender_task_config *config,
+    aws_iotdevice_defender_task_failure_fn *failure_fn);
 
 /**
  * Sets the task cancelation callback function to invoke when the task
@@ -296,7 +328,7 @@ int aws_iotdevice_defender_config_register_ip_list_metric(
  *          to run
  */
 AWS_IOTDEVICE_API
-int aws_iotdevice_defender_start_task(
+int aws_iotdevice_defender_task_create(
     struct aws_iotdevice_defender_task **task_out,
     const struct aws_iotdevice_defender_task_config *config,
     struct aws_mqtt_client_connection *connection,
@@ -305,12 +337,12 @@ int aws_iotdevice_defender_start_task(
 /**
  * Cancels the running task reporting Device Defender metrics and cleans up.
  * If the task is currently running, it will block until the task has been
- * canceled and cleaned up successfully.
+ * canceled and cleaned up successfully
  *
  * @param    defender_task running task to stop and clean up
  */
 AWS_IOTDEVICE_API
-void aws_iotdevice_defender_stop_task(struct aws_iotdevice_defender_task *defender_task);
+void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task);
 
 AWS_EXTERN_C_END
 

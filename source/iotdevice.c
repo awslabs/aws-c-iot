@@ -41,6 +41,9 @@ static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_TASK_CONFIG,
         "Invalid configuration detected in defender reporting task config. Check prior errors"),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE,
+        "Mqtt client error while attempting to publish defender report"),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE
@@ -53,6 +56,7 @@ static struct aws_error_info_list s_error_list = {
 /* clang-format off */
         static struct aws_log_subject_info s_logging_subjects[] = {
             DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER_TASK, "iotdevice-defender", "IoT DeviceDefender"),
+            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER_TASK_CONFIG, "iotdevice-defender-config", "IoT DeviceDefender Task Config"),
             DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_NETWORK_CONFIG, "iotdevice-network", "IoT Device Network"),
             DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "iotdevice-st", "IoT Secure Tunneling"),
         };
