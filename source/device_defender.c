@@ -165,8 +165,7 @@ static void s_on_report_response_rejected(
         AWS_BYTE_CURSOR_PRI(*topic),
         AWS_BYTE_CURSOR_PRI(*payload));
     if (defender_task->config.rejected_report_fn) {
-        defender_task->config.rejected_report_fn(payload,
-                                                defender_task->config.callback_userdata);
+        defender_task->config.rejected_report_fn(payload, defender_task->config.callback_userdata);
     }
 }
 
@@ -189,19 +188,18 @@ static void s_on_report_response_accepted(
         (void *)defender_task,
         AWS_BYTE_CURSOR_PRI(*topic));
     if (defender_task->config.accepted_report_fn) {
-        defender_task->config.accepted_report_fn(payload,
-                                                defender_task->config.callback_userdata);
+        defender_task->config.accepted_report_fn(payload, defender_task->config.callback_userdata);
     }
 }
 
-void s_invoke_failure_callback(struct aws_iotdevice_defender_task_config *task_config,
-                               bool is_task_stopped,
-                               int error_code) {
+void s_invoke_failure_callback(
+    struct aws_iotdevice_defender_task_config *task_config,
+    bool is_task_stopped,
+    int error_code) {
     AWS_PRECONDITION(task_config != NULL);
     AWS_PRECONDITION(error_code != AWS_ERROR_SUCCESS);
     if (task_config->task_failure_fn) {
-      task_config->task_failure_fn(is_task_stopped, error_code,
-                                            task_config->callback_userdata);
+        task_config->task_failure_fn(is_task_stopped, error_code, task_config->callback_userdata);
     }
 }
 
@@ -462,7 +460,7 @@ static int s_get_metric_report_json(
     json_report = cJSON_Print(root);
     *json_out = aws_byte_buf_from_c_str(json_report);
     if (aws_byte_buf_is_valid(json_out)) {
-            return_value = AWS_OP_SUCCESS;
+        return_value = AWS_OP_SUCCESS;
     } else {
         /* there may be a need in the future to allow user to see the invalid report either way */
         s_invoke_failure_callback(&task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
@@ -784,9 +782,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                     "id=%p: Report failed to publish on topic " PRInSTR,
                     (void *)defender_task,
                     AWS_BYTE_CURSOR_PRI(report_topic));
-                s_invoke_failure_callback(&defender_task->config,
-                                          false,
-                                          AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE);
+                s_invoke_failure_callback(&defender_task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE);
             }
         }
 
