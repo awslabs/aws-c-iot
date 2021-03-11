@@ -26,6 +26,7 @@
 #include <aws/io/event_loop.h>
 
 #include <aws/mqtt/client.h>
+#include <string.h>
 
 /**
  * Update s_copy_task_config() and aws_iotdevice_defender_config_destroy()
@@ -193,6 +194,17 @@ static void s_on_report_response_accepted(
     }
 }
 
+void s_invoke_failure_callback(struct aws_iotdevice_defender_task_config *task_config,
+                               bool is_task_stopped,
+                               int error_code) {
+    AWS_PRECONDITION(task_config != NULL);
+    AWS_PRECONDITION(error_code != AWS_ERROR_SUCCESS);
+    if (task_config->task_failure_fn) {
+      task_config->task_failure_fn(is_task_stopped, error_code,
+                                            task_config->callback_userdata);
+    }
+}
+
 static int s_get_metric_report_json(
     struct aws_byte_buf *json_out,
     struct aws_iotdevice_defender_task *task,
@@ -202,6 +214,7 @@ static int s_get_metric_report_json(
     size_t custom_metrics_len,
     const struct defender_custom_metric_data *custom_metrics_data) {
     int return_value = AWS_OP_ERR;
+    const char *json_report = NULL;
     struct cJSON *root = cJSON_CreateObject();
     if (root == NULL) {
         goto cleanup;
@@ -446,17 +459,20 @@ static int s_get_metric_report_json(
         }
     }
 
-    const size_t remaining_capacity = json_out->capacity - json_out->len;
-    char *write_start = (char *)json_out->buffer + json_out->len;
-    if (!cJSON_PrintPreallocated(root, write_start, (int)remaining_capacity, false)) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Failed to print defender report JSON", (void *)task);
-        goto cleanup;
+    json_report = cJSON_Print(root);
+    *json_out = aws_byte_buf_from_c_str(json_report);
+    if (aws_byte_buf_is_valid(json_out)) {
+            return_value = AWS_OP_SUCCESS;
+    } else {
+        /* there may be a need in the future to allow user to see the invalid report either way */
+        s_invoke_failure_callback(&task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
+        return_value = AWS_OP_ERR;
     }
 
-    return_value = AWS_OP_SUCCESS;
-    json_out->len += strlen(write_start);
-
 cleanup:
+    if (json_report) {
+        cJSON_free((void *)json_report);
+    }
     if (root) {
         cJSON_Delete(root);
     }
@@ -620,17 +636,6 @@ static void s_get_custom_metrics_data(
     }
 }
 
-void s_invoke_failure_callback(struct aws_iotdevice_defender_task_config *task_config,
-                                bool is_task_stopped,
-                          int error_code) {
-    AWS_PRECONDITION(task_config != NULL);
-    AWS_PRECONDITION(error_code != AWS_ERROR_SUCCESS);
-    if (task_config->task_failure_fn) {
-      task_config->task_failure_fn(is_task_stopped, error_code,
-                                            task_config->callback_userdata);
-    }
-}
-
 /**
  * Differs in the public version in that it only cleans up the members and not the
  * entire structure itself. When cleaning up the defender_task internals, it must clean
@@ -716,11 +721,9 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
 
         /* per metric retrieval errors do not result in failure */
         s_get_custom_metrics_data(defender_task, custom_metric_data, custom_metrics_len);
-
+        /* TODONOW */
         uint64_t report_id = s_defender_report_id_epoch_time_ms(defender_task);
         /* TODO: come up with something better than allocating max size of MQTT message allowed by AWS IoT */
-        uint8_t json_buffer_space[262144];
-        json_report = aws_byte_buf_from_empty_array(json_buffer_space, 262144);
         struct aws_iotdevice_metric_network_transfer *ptr_delta_xfer = NULL;
         struct aws_iotdevice_metric_network_transfer delta_xfer;
         AWS_ZERO_STRUCT(delta_xfer);
@@ -745,11 +748,6 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
                                   &net_conns,
                                   custom_metrics_len,
                                   custom_metric_data)) {
-            AWS_LOGF_ERROR(
-                AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Failed to generate metric report json: %s",
-                (void *)defender_task,
-                aws_error_name(aws_last_error()));
             defender_task->previous_net_xfer.bytes_in = totals.bytes_in;
             defender_task->previous_net_xfer.bytes_out = totals.bytes_out;
             defender_task->previous_net_xfer.packets_in = totals.packets_in;
