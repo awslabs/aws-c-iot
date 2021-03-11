@@ -581,10 +581,10 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
 
     /* use a slow metric getter to ensure cancel of the stop will wait */
     const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str(TM_NUMBER);
-    ASSERT_SUCCESS(
-        aws_iotdevice_defender_config_register_number_metric(task_config, &name_metric_number, get_number_metric_slow, ctx));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
+        task_config, &name_metric_number, get_number_metric_slow, ctx));
 
-       struct aws_iotdevice_defender_task *defender_task = NULL;
+    struct aws_iotdevice_defender_task *defender_task = NULL;
     ASSERT_SUCCESS(aws_iotdevice_defender_task_create(
         &defender_task,
         task_config,

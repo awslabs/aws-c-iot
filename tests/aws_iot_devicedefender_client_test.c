@@ -195,7 +195,7 @@ void s_task_failure(bool is_task_stopped, int error_code, void *userdata) {
     printf("Defender task failed: %s\n", aws_error_name(error_code));
 
     if (is_task_stopped) {
-      aws_condition_variable_notify_one(&stop_cv);
+        aws_condition_variable_notify_one(&stop_cv);
     }
 }
 

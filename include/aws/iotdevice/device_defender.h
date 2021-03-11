@@ -47,9 +47,8 @@ typedef void(aws_iotdevice_defender_task_canceled_fn)(void *userdata);
  * @param    rejected_message_payload    response payload recieved from rejection topic
  * @param    userdata                    callback userdata
  */
-typedef void(aws_iotdevice_defender_report_rejected_fn)(
-    const struct aws_byte_cursor *rejected_message_payload,
-    void *userdata);
+typedef void(
+    aws_iotdevice_defender_report_rejected_fn)(const struct aws_byte_cursor *rejected_message_payload, void *userdata);
 
 /**
  * User callback type invoked when the subscribed device defender topic for accepted
