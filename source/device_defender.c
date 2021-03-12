@@ -719,9 +719,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
 
         /* per metric retrieval errors do not result in failure */
         s_get_custom_metrics_data(defender_task, custom_metric_data, custom_metrics_len);
-        /* TODONOW */
         uint64_t report_id = s_defender_report_id_epoch_time_ms(defender_task);
-        /* TODO: come up with something better than allocating max size of MQTT message allowed by AWS IoT */
         struct aws_iotdevice_metric_network_transfer *ptr_delta_xfer = NULL;
         struct aws_iotdevice_metric_network_transfer delta_xfer;
         AWS_ZERO_STRUCT(delta_xfer);
@@ -815,11 +813,7 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
         }
         /* cleanup of task memory happens in task cleanup or stop function */
     } else {
-        AWS_LOGF_WARN(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK,
-            "id=%p: Reporting task in unknown run state being ignored",
-            (void *)defender_task);
-        /* TODO: revise if reschedule or cancellation is appropriate here */
+        s_invoke_failure_callback(&defender_task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_UNKNOWN_TASK_STATUS);
         uint64_t now;
         aws_event_loop_current_clock_time(defender_task->event_loop, &now);
         aws_event_loop_schedule_task_future(
