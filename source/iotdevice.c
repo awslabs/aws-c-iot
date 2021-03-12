@@ -44,6 +44,9 @@ static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE,
         "Mqtt client error while attempting to publish defender report"),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+         AWS_ERROR_IOTDEVICE_DEFENDER_UNKNOWN_TASK_STATUS,
+        "Device defender task was invoked with an unknown task status"),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE
