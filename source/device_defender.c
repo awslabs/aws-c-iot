@@ -5,6 +5,7 @@
 
 #include <aws/common/condition_variable.h>
 #include <aws/common/mutex.h>
+#include <aws/common/thread.h>
 #include <aws/iotdevice/device_defender.h>
 #include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/iotdevice.h>
@@ -664,6 +665,9 @@ void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task)
     aws_string_destroy(defender_task->publish_report_topic_name);
     aws_string_destroy(defender_task->report_accepted_topic_name);
     aws_string_destroy(defender_task->report_rejected_topic_name);
+
+    /* wait for unsubscribe to complete */
+    aws_thread_current_sleep(3000000000);
 
     aws_mutex_clean_up(&defender_task->task_cancel_mutex);
     aws_condition_variable_clean_up(&defender_task->cv_task_canceled);
