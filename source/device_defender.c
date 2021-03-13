@@ -720,6 +720,10 @@ void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task)
 
     aws_mutex_clean_up(&defender_task->task_cancel_mutex);
     aws_condition_variable_clean_up(&defender_task->cv_task_canceled);
+
+    aws_mutex_clean_up(&defender_task->outstanding_publish_count_mutex);
+    aws_mutex_clean_up(&defender_task->outstanding_publish_mutex);
+    aws_condition_variable_clean_up(&defender_task->cv_outstanding_publish);
     s_defender_config_clean_up_internals(&defender_task->config);
     aws_mem_release(allocator, defender_task);
 }
@@ -1192,6 +1196,7 @@ void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *de
     aws_condition_variable_wait_pred(&defender_task->cv_outstanding_publish, &defender_task->outstanding_publish_mutex,
                                      s_wait_for_no_outstanding_publish, defender_task);
     aws_mutex_unlock(&defender_task->outstanding_publish_mutex);
+
     s_defender_task_clean_up(defender_task);
 }
 
