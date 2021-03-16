@@ -31,8 +31,8 @@ typedef int(aws_iotdevice_defender_publish_fn)(struct aws_byte_cursor report, vo
  * where/when and how the failure occur so the errors here may best communicate
  * where/when and the how of the underlying call should be found in log output
  *
- * @param    is_task_stopped    flag indicating whether or not the task is unable to continue running
- * @param    error_code         error code describing the nature of the failure
+ * \param[in]    is_task_stopped    flag indicating whether or not the task is unable to continue running
+ * \param[in]    error_code         error code describing the nature of the failure
  */
 typedef void(aws_iotdevice_defender_task_failure_fn)(bool is_task_stopped, int error_code, void *userdata);
 
@@ -41,7 +41,7 @@ typedef void(aws_iotdevice_defender_task_failure_fn)(bool is_task_stopped, int e
  * to stop the task, this signals the completion of the cancellation and no further user callbacks will
  * be invoked.
  *
- * @param    userdata      callback userdata
+ * \param[in]    userdata      callback userdata
  */
 typedef void(aws_iotdevice_defender_task_canceled_fn)(void *userdata);
 
@@ -56,8 +56,8 @@ typedef void(aws_iotdevice_defender_task_canceled_fn)(void *userdata);
  *     topic with a message. In this scenario, the client_error_code will be
  *     AWS_ERROR_SUCCESS, and rejected_message_payload will contain the payload of the
  *     rejected message received.
- * @param    rejected_message_payload    response payload recieved from rejection topic
- * @param    userdata                    callback userdata
+ * \param[in]    rejected_message_payload    response payload recieved from rejection topic
+ * \param[in]    userdata                    callback userdata
  */
 typedef void(
     aws_iotdevice_defender_report_rejected_fn)(const struct aws_byte_cursor *rejected_message_payload, void *userdata);
@@ -130,15 +130,15 @@ AWS_EXTERN_C_BEGIN
 /**
  * Creates a new reporting task config for Device Defender metrics collection
  *
- * @param    config_out     output to write a pointer to a task configuration.
+ * \param[in]    config_out     output to write a pointer to a task configuration.
  *                          Will write non-NULL if successful in creating the
  *                          the task configuration. Will write NULL if there is
  *                          an error during creation
- * @param    allocator      allocator to use for the task configuration's
+ * \param[in]    allocator      allocator to use for the task configuration's
  *                          internal data, and the task itself when started
- * @param    thing_name     thing name the task config is reporting for
- * @param    report_format  report format to produce when publishing to IoT
- * @returns  AWS_OP_SUCCESS and config_out will be non-NULL. Returns an error code
+ * \param[in]    thing_name     thing name the task config is reporting for
+ * \param[in]    report_format  report format to produce when publishing to IoT
+ * \returns  AWS_OP_SUCCESS and config_out will be non-NULL. Returns an error code
  *                          otherwise
  */
 AWS_IOTDEVICE_API
@@ -151,7 +151,7 @@ int aws_iotdevice_defender_config_create(
 /**
  * Destroys a new reporting task for Device Defender metrics
  *
- * @param    config    defender task configuration
+ * \param[in]    config    defender task configuration
  */
 AWS_IOTDEVICE_API
 void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config *config);
@@ -164,9 +164,9 @@ void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_c
  *
  * The most likely scenario for task not being able to continue is failure to reschedule the task
  *
- * @param    config        defender task configuration
- * @param    failure_fn    failure callback function
- * @returns    AWS_OP_SUCCESS when the task failure callback has been
+ * \param[in]    config        defender task configuration
+ * \param[in]    failure_fn    failure callback function
+ * \returns    AWS_OP_SUCCESS when the task failure callback has been
  *             set. Returns an error if the callback was not set
  */
 AWS_IOTDEVICE_API
@@ -180,9 +180,9 @@ int aws_iotdevice_defender_config_set_task_failure_fn(
  * of when it is OK to close or free resources kept around while the task
  * is running.
  *
- * @param    config       defender task configuration
- * @param    cancel_fn    cancelation callback function
- * @returns    AWS_OP_SUCCESS when the task cancelation callback has been
+ * \param[in]    config       defender task configuration
+ * \param[in]    cancel_fn    cancelation callback function
+ * \returns    AWS_OP_SUCCESS when the task cancelation callback has been
  *             set. Returns an error if the callback was not set
  */
 AWS_IOTDEVICE_API
@@ -196,9 +196,9 @@ int aws_iotdevice_defender_config_set_task_cancelation_fn(
  * of when it is OK to close or free resources kept around while the task
  * is running.
  *
- * @param    config         defender task configuration
- * @param    accepted_fn    accepted report callback function
- * @returns    AWS_OP_SUCCESS when the report accepted callback has been
+ * \param[in]    config         defender task configuration
+ * \param[in]    accepted_fn    accepted report callback function
+ * \returns    AWS_OP_SUCCESS when the report accepted callback has been
  *             set. Returns an error if the callback was not set
  */
 AWS_IOTDEVICE_API
@@ -212,9 +212,9 @@ int aws_iotdevice_defender_config_set_report_accepted_fn(
  * of when it is OK to close or free resources kept around while the task
  * is running.
  *
- * @param    config         defender task configuration
- * @param    rejected_fn    rejected report callback function
- * @returns    AWS_OP_SUCCESS when the report rejected callback has been
+ * \param[in]    config         defender task configuration
+ * \param[in]    rejected_fn    rejected report callback function
+ * \returns    AWS_OP_SUCCESS when the report rejected callback has been
  *             set. Returns an error if the callback was not set
  */
 AWS_IOTDEVICE_API
@@ -225,10 +225,10 @@ int aws_iotdevice_defender_config_set_report_rejected_fn(
 /**
  * Sets the period of the device defender task
  *
- * @param    config            defender task configuration
- * @param    task_period_ns    how much time in nanoseconds between defender
+ * \param[in]    config            defender task configuration
+ * \param[in]    task_period_ns    how much time in nanoseconds between defender
  *                             task runs
- * @returns   AWS_OP_SUCCESS when the property has been set properly. Returns
+ * \returns   AWS_OP_SUCCESS when the property has been set properly. Returns
  *            an error code if the value was not able to be set.
  */
 AWS_IOTDEVICE_API
@@ -239,10 +239,10 @@ int aws_iotdevice_defender_config_set_task_period_ns(
 /**
  * Sets the userdata for the device defender task's callback functions
  *
- * @param    config      defender task configuration
- * @param    userdata    how much time in nanoseconds between defender
+ * \param[in]    config      defender task configuration
+ * \param[in]    userdata    how much time in nanoseconds between defender
  *                       task runs
- * @returns   AWS_OP_SUCCESS when the property has been set properly. Returns
+ * \returns   AWS_OP_SUCCESS when the property has been set properly. Returns
  *            an error code if the value was not able to be set
  */
 AWS_IOTDEVICE_API
@@ -254,12 +254,12 @@ int aws_iotdevice_defender_config_set_callback_userdata(
  * Adds number custom metric to the Device Defender task configuration.
  * Has no impact on a defender task already started using the configuration.
  *
- * @param    task_config    the defender task configuration to register the metric to
- * @param    metric_name    UTF8 byte string of the metric name
- * @param    supplier       callback function to produce the metric value when
+ * \param[in]    task_config    the defender task configuration to register the metric to
+ * \param[in]    metric_name    UTF8 byte string of the metric name
+ * \param[in]    supplier       callback function to produce the metric value when
  *                          requested at report generation time
- * @param    userdata       specific callback data for the supplier callback function
- * @returns    AWS_OP_SUCCESS if the custom metric has been associated with the
+ * \param[in]    userdata       specific callback data for the supplier callback function
+ * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
  *             task configuration successfully
  */
 AWS_IOTDEVICE_API
@@ -273,12 +273,12 @@ int aws_iotdevice_defender_config_register_number_metric(
  * Adds number list custom metric to the Device Defender task configuration.
  * Has no impact on a defender task already started using the configuration.
  *
- * @param    task_config    the defender task configuration to register the metric to
- * @param    metric_name    UTF8 byte string of the metric name
- * @param    supplier       callback function to produce the metric value when
+ * \param[in]    task_config    the defender task configuration to register the metric to
+ * \param[in]    metric_name    UTF8 byte string of the metric name
+ * \param[in]    supplier       callback function to produce the metric value when
  *                          requested at report generation time
- * @param    userdata       specific callback data for the supplier callback function
- * @returns    AWS_OP_SUCCESS if the custom metric has been associated with the
+ * \param[in]    userdata       specific callback data for the supplier callback function
+ * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
  *             task configuration successfully
  */
 AWS_IOTDEVICE_API
@@ -292,12 +292,12 @@ int aws_iotdevice_defender_config_register_number_list_metric(
  * Adds string list custom metric to the Device Defender task configuration.
  * Has no impact on a defender task already started using the configuration.
  *
- * @param    task_config    the defender task configuration to register the metric to
- * @param    metric_name    UTF8 byte string of the metric name
- * @param    supplier       callback function to produce the metric value when
+ * \param[in]    task_config    the defender task configuration to register the metric to
+ * \param[in]    metric_name    UTF8 byte string of the metric name
+ * \param[in]    supplier       callback function to produce the metric value when
  *                          requested at report generation time
- * @param    userdata       specific callback data for the supplier callback function
- * @returns    AWS_OP_SUCCESS if the custom metric has been associated with the
+ * \param[in]    userdata       specific callback data for the supplier callback function
+ * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
  *             task configuration successfully
  */
 AWS_IOTDEVICE_API
@@ -311,12 +311,12 @@ int aws_iotdevice_defender_config_register_string_list_metric(
  * Adds IP list custom metric to the Device Defender task configuration.
  * Has no impact on a defender task already started using the configuration.
  *
- * @param    task_config    the defender task configuration to register the metric to
- * @param    metric_name    UTF8 byte string of the metric name
- * @param    supplier       callback function to produce the metric value when
+ * \param[in]    task_config    the defender task configuration to register the metric to
+ * \param[in]    metric_name    UTF8 byte string of the metric name
+ * \param[in]    supplier       callback function to produce the metric value when
  *                          requested at report generation time
- * @param    userdata       specific callback data for the supplier callback function
- * @returns    AWS_OP_SUCCESS if the custom metric has been associated with the
+ * \param[in]    userdata       specific callback data for the supplier callback function
+ * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
  *             task configuration successfully
  */
 AWS_IOTDEVICE_API
@@ -329,13 +329,13 @@ int aws_iotdevice_defender_config_register_ip_list_metric(
 /**
  * Creates and starts a new Device Defender reporting task
  *
- * @param    task_out      output parameter to set to point to the defender task
- * @param    config        defender task configuration to use to start the task
- * @param    connection    mqtt connection to use to publish reports to
- * @param    event_loop    IoT device thing name used to determine the MQTT
+ * \param[out]    task_out      output parameter to set to point to the defender task
+ * \param[in]    config        defender task configuration to use to start the task
+ * \param[in]    connection    mqtt connection to use to publish reports to
+ * \param[in]    event_loop    IoT device thing name used to determine the MQTT
  *                         topic to publish the report to and listen for accepted
  *                         or rejected responses
- * @returns AWS_OP_SUCCESS if the task has been created successfully and is scheduled
+ * \returns AWS_OP_SUCCESS if the task has been created successfully and is scheduled
  *          to run
  */
 AWS_IOTDEVICE_API
@@ -349,14 +349,14 @@ int aws_iotdevice_defender_task_create(
  * Creates and starts a new Device Defender reporting task with the ability to define
  * a function to accept/handle each report when the task needs to publish.
  *
- * @param    task_out      output parameter to set to point to the defender task
- * @param    config        defender task configuration to use to start the task
- * @param    publish_fn    callback to handle reports generated by the task. The
+ * \param[out]    task_out      output parameter to set to point to the defender task
+ * \param[in]    config        defender task configuration to use to start the task
+ * \param[in]    publish_fn    callback to handle reports generated by the task. The
  *                         userdata comes from the task config
- * @param    event_loop    IoT device thing name used to determine the MQTT
+ * \param[in]    event_loop    IoT device thing name used to determine the MQTT
  *                         topic to publish the report to and listen for accepted
  *                         or rejected responses
- * @returns AWS_OP_SUCCESS if the task has been created successfully and is scheduled
+ * \returns AWS_OP_SUCCESS if the task has been created successfully and is scheduled
  *          to run
  */
 AWS_IOTDEVICE_API
@@ -371,7 +371,7 @@ int aws_iotdevice_defender_task_create_ex(
  * If the task is currently running, it will block until the task has been
  * canceled and cleaned up successfully
  *
- * @param    defender_task running task to stop and clean up
+ * \param[in]    defender_task running task to stop and clean up
  */
 AWS_IOTDEVICE_API
 void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task);
