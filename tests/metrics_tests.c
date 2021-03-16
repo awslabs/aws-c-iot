@@ -428,13 +428,10 @@ AWS_TEST_CASE_FIXTURE(
     s_clean_up_mqtt_test_data_fn,
     &mqtt_test_data);
 
-static int s_publish_fn_copy_report(struct aws_byte_cursor payload,
-                                void *userdata) {
+static int s_publish_fn_copy_report(struct aws_byte_cursor payload, void *userdata) {
     struct mqtt_connection_test_data *state_test_data = userdata;
 
-    aws_byte_buf_init_copy_from_cursor(&state_test_data->payload,
-                                       state_test_data->allocator,
-                                       payload);
+    aws_byte_buf_init_copy_from_cursor(&state_test_data->payload, state_test_data->allocator, payload);
     return AWS_OP_SUCCESS;
 }
 
@@ -583,7 +580,7 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
         task_config,
         s_publish_fn_copy_report,
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
-   AWS_FATAL_ASSERT(defender_task != NULL);
+    AWS_FATAL_ASSERT(defender_task != NULL);
 
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
@@ -596,8 +593,7 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
     return AWS_OP_SUCCESS;
 }
 
-static int s_publish_fn_fails(struct aws_byte_cursor payload,
-                                void *userdata) {
+static int s_publish_fn_fails(struct aws_byte_cursor payload, void *userdata) {
     (void)payload;
     (void)userdata;
     return AWS_OP_ERR;
@@ -630,8 +626,8 @@ static int s_devicedefender_publish_failure_callback_invoked(struct aws_allocato
     aws_iotdevice_defender_config_set_task_failure_fn(task_config, s_task_failure_fn);
 
     const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str(TM_NUMBER);
-    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
-        task_config, &name_metric_number, get_number_metric, ctx));
+    ASSERT_SUCCESS(
+        aws_iotdevice_defender_config_register_number_metric(task_config, &name_metric_number, get_number_metric, ctx));
 
     struct aws_iotdevice_defender_task *defender_task = NULL;
     ASSERT_SUCCESS(aws_iotdevice_defender_task_create_ex(
@@ -639,7 +635,7 @@ static int s_devicedefender_publish_failure_callback_invoked(struct aws_allocato
         task_config,
         s_publish_fn_fails,
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
-   AWS_FATAL_ASSERT(defender_task != NULL);
+    AWS_FATAL_ASSERT(defender_task != NULL);
 
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
