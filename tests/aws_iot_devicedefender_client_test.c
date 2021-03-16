@@ -40,6 +40,16 @@
 #endif
 
 struct aws_iotdevice_defender_task *defender_task = NULL;
+struct aws_mutex stop_mutex = AWS_MUTEX_INIT;
+struct aws_condition_variable failure_stop_cv = AWS_CONDITION_VARIABLE_INIT;
+struct aws_condition_variable *process_stop_cv;
+
+void sigint_handler(int sig) {
+    if (defender_task) {
+        /* not entirely sure if these are reentrant */
+        aws_condition_variable_notify_one(process_stop_cv);
+    }
+}
 
 const char s_client_id_prefix[] = "c-defender-agent-reference";
 
@@ -74,6 +84,8 @@ static void s_mqtt_on_connection_complete(
     AWS_FATAL_ASSERT(
         AWS_OP_SUCCESS ==
         aws_iotdevice_defender_task_create(&defender_task, args->task_config, connection, args->defender_event_loop));
+    // now register signal handler
+    signal(SIGINT, sigint_handler);
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
@@ -188,14 +200,12 @@ void s_report_rejected(const struct aws_byte_cursor *payload, void *userdata) {
     printf("Report submission rejected reply: " PRInSTR "\n", AWS_BYTE_CURSOR_PRI(*payload));
 }
 
-struct aws_mutex stop_mutex = AWS_MUTEX_INIT;
-struct aws_condition_variable stop_cv = AWS_CONDITION_VARIABLE_INIT;
 void s_task_failure(bool is_task_stopped, int error_code, void *userdata) {
     (void)userdata;
     printf("Defender task failed: %s\n", aws_error_name(error_code));
 
     if (is_task_stopped) {
-        aws_condition_variable_notify_one(&stop_cv);
+        aws_condition_variable_notify_one(&failure_stop_cv);
     }
 }
 
@@ -217,6 +227,7 @@ int main(int argc, char **argv) {
 
     struct aws_mutex mutex = AWS_MUTEX_INIT;
     struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
+    process_stop_cv = &condition_variable;
 
     struct connection_args args;
     AWS_ZERO_STRUCT(args);
@@ -332,6 +343,8 @@ int main(int argc, char **argv) {
     aws_mutex_lock(&stop_mutex);
     ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &stop_mutex));
     aws_mutex_unlock(&stop_mutex);
+
+    aws_iotdevice_defender_task_clean_up(defender_task);
 
     aws_mqtt_client_connection_disconnect(args.connection, s_mqtt_on_disconnect, &args);
 
