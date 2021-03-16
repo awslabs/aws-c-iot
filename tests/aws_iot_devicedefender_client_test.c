@@ -30,6 +30,7 @@
 
 #include <aws/testing/aws_test_harness.h>
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef WIN32
