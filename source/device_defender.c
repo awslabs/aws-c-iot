@@ -174,15 +174,14 @@ static void s_on_report_puback(
             (void *)defender_task,
             packet_id,
             aws_error_name(error_code));
-        s_invoke_failure_callback(&report_context->defender_task->config, false,
-                                  AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE);
+        s_invoke_failure_callback(
+            &report_context->defender_task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE);
     }
     s_report_publish_context_clean_up(report_context);
 }
 
 /* this is a valid aws_iotdevice_defender_publish_fn */
-static int s_mqtt_report_publish_fn(struct aws_byte_cursor report,
-                                    void *userdata) {
+static int s_mqtt_report_publish_fn(struct aws_byte_cursor report, void *userdata) {
     AWS_PRECONDITION(userdata != NULL);
     AWS_PRECONDITION(aws_byte_cursor_is_valid(&report));
 
@@ -192,7 +191,8 @@ static int s_mqtt_report_publish_fn(struct aws_byte_cursor report,
     AWS_ZERO_STRUCT(*report_context);
     report_context->defender_task = defender_task;
     /* must copy the report data and make into a byte_cursor to use it for MQTT publish */
-    if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(&report_context->json_report, defender_task->allocator, report)) {
+    if (AWS_OP_SUCCESS !=
+        aws_byte_buf_init_copy_from_cursor(&report_context->json_report, defender_task->allocator, report)) {
         return AWS_OP_ERR;
     }
     report_context->json_report_cursor = aws_byte_cursor_from_buf(&report_context->json_report);
@@ -529,7 +529,7 @@ static int s_get_metric_report_json(
     }
 
     json_report = cJSON_PrintUnformatted(root);
-    struct aws_byte_cursor json_report_buf = {.len = strlen(json_report)+1, .ptr = (uint8_t *)json_report};
+    struct aws_byte_cursor json_report_buf = {.len = strlen(json_report) + 1, .ptr = (uint8_t *)json_report};
     if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(json_out, task->allocator, json_report_buf)) {
         s_invoke_failure_callback(&task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
         return_value = AWS_OP_ERR;
@@ -745,24 +745,25 @@ void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task)
     aws_mem_release(allocator, defender_task);
 }
 
-static void s_serialize_and_publish_defender_report(struct aws_iotdevice_defender_task *defender_task,
-                                              struct aws_iotdevice_metric_network_transfer *totals,
-                                              struct aws_iotdevice_metric_network_transfer *delta_xfer,
-                                              struct aws_array_list *net_conns,
-                                              const size_t custom_metrics_len,
-                                              struct defender_custom_metric_data *custom_metric_data) {
+static void s_serialize_and_publish_defender_report(
+    struct aws_iotdevice_defender_task *defender_task,
+    struct aws_iotdevice_metric_network_transfer *totals,
+    struct aws_iotdevice_metric_network_transfer *delta_xfer,
+    struct aws_array_list *net_conns,
+    const size_t custom_metrics_len,
+    struct defender_custom_metric_data *custom_metric_data) {
     uint64_t report_id = s_defender_report_id_epoch_time_ms(defender_task);
     struct aws_byte_buf json_report_buf;
     AWS_ZERO_STRUCT(json_report_buf);
 
     if (AWS_OP_SUCCESS == s_get_metric_report_json(
-                                &json_report_buf,
-                                defender_task,
-                                report_id,
-                                delta_xfer,
-                                net_conns,
-                                custom_metrics_len,
-                                custom_metric_data)) {
+                              &json_report_buf,
+                              defender_task,
+                              report_id,
+                              delta_xfer,
+                              net_conns,
+                              custom_metrics_len,
+                              custom_metric_data)) {
         defender_task->previous_net_xfer.bytes_in = totals->bytes_in;
         defender_task->previous_net_xfer.bytes_out = totals->bytes_out;
         defender_task->previous_net_xfer.packets_in = totals->packets_in;
@@ -786,9 +787,7 @@ static void s_serialize_and_publish_defender_report(struct aws_iotdevice_defende
                 aws_error_name(aws_last_error()));
         } else {
             AWS_LOGF_DEBUG(
-                AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Successfully published report",
-                (void *)defender_task);
+                AWS_LS_IOTDEVICE_DEFENDER_TASK, "id=%p: Successfully published report", (void *)defender_task);
         }
         aws_byte_buf_clean_up(&json_report_buf);
     }
@@ -862,12 +861,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
            and invoking the task failure callback. If it succeeeds, completion
            is async dependant on that completion and task cancelation will depend
            on that resolving */
-        s_serialize_and_publish_defender_report(defender_task,
-                                                &totals,
-                                                ptr_delta_xfer,
-                                                &net_conns,
-                                                custom_metrics_len,
-                                                custom_metric_data);
+        s_serialize_and_publish_defender_report(
+            defender_task, &totals, ptr_delta_xfer, &net_conns, custom_metrics_len, custom_metric_data);
 
         for (size_t interface_index = 0; interface_index < net_conns.length; ++interface_index) {
             struct aws_iotdevice_metric_net_connection *con = NULL;
@@ -1085,11 +1080,15 @@ static int s_defender_task_create(
     if (connection != NULL) {
         struct aws_byte_cursor prefix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("$aws/things/");
         struct aws_byte_cursor publish_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json");
-        struct aws_byte_cursor accepted_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json/accepted");
-        struct aws_byte_cursor rejected_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json/rejected");
+        struct aws_byte_cursor accepted_suffix =
+            AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json/accepted");
+        struct aws_byte_cursor rejected_suffix =
+            AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json/rejected");
         defender_task->publish_report_topic_name = s_build_topic(allocator, config->thing_name, prefix, publish_suffix);
-        defender_task->report_accepted_topic_name = s_build_topic(allocator, config->thing_name, prefix, accepted_suffix);
-        defender_task->report_rejected_topic_name = s_build_topic(allocator, config->thing_name, prefix, rejected_suffix);
+        defender_task->report_accepted_topic_name =
+            s_build_topic(allocator, config->thing_name, prefix, accepted_suffix);
+        defender_task->report_rejected_topic_name =
+            s_build_topic(allocator, config->thing_name, prefix, rejected_suffix);
 
         const struct aws_byte_cursor accepted_cursor =
             aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
@@ -1191,7 +1190,6 @@ static void s_cancel_defender_task(struct aws_task *task, void *arg, enum aws_ta
     aws_event_loop_cancel_task(defender_task->event_loop, &defender_task->task);
     aws_condition_variable_notify_one(&defender_task->cv_task_canceled);
 }
-
 
 void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
     AWS_PRECONDITION(defender_task != NULL);
