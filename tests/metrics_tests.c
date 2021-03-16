@@ -459,7 +459,6 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
-    /* this function also sets pointer to null */
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
 
@@ -535,7 +534,6 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
-    /* this function also sets pointer to null */
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
 
@@ -587,7 +585,6 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
    AWS_FATAL_ASSERT(defender_task != NULL);
 
-    /* this function also sets pointer to null */
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
 
@@ -632,7 +629,6 @@ static int s_devicedefender_publish_failure_callback_invoked(struct aws_allocato
     aws_iotdevice_defender_config_set_task_period_ns(task_config, 1000000000UL);
     aws_iotdevice_defender_config_set_task_failure_fn(task_config, s_task_failure_fn);
 
-    /* use a slow metric getter to ensure cancel of the stop will wait */
     const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str(TM_NUMBER);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
         task_config, &name_metric_number, get_number_metric, ctx));
@@ -645,7 +641,6 @@ static int s_devicedefender_publish_failure_callback_invoked(struct aws_allocato
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
    AWS_FATAL_ASSERT(defender_task != NULL);
 
-    /* this function also sets pointer to null */
     aws_iotdevice_defender_config_clean_up(task_config);
     task_config = NULL;
 
