@@ -44,7 +44,8 @@ struct aws_mutex stop_mutex = AWS_MUTEX_INIT;
 struct aws_condition_variable failure_stop_cv = AWS_CONDITION_VARIABLE_INIT;
 struct aws_condition_variable *process_stop_cv;
 
-void sigint_handler(int sig) {
+void sigint_handler(int signal) {
+    (void)signal;
     if (defender_task) {
         /* not entirely sure if these are reentrant */
         aws_condition_variable_notify_one(process_stop_cv);
