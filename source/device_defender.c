@@ -28,6 +28,7 @@
 #include <aws/io/event_loop.h>
 
 #include <aws/mqtt/client.h>
+#include <aws/mqtt/mqtt.h>
 #include <string.h>
 
 /**
@@ -83,6 +84,7 @@ struct aws_iotdevice_defender_task {
     struct aws_event_loop *event_loop;
     struct aws_task task;
     struct aws_iotdevice_defender_task_config config;
+    aws_iotdevice_defender_publish_fn *publish_fn;
     struct aws_mqtt_client_connection *connection;
     struct aws_iotdevice_metric_network_transfer previous_net_xfer;
     struct aws_string *publish_report_topic_name;
@@ -92,14 +94,11 @@ struct aws_iotdevice_defender_task {
     bool is_task_canceled;
     struct aws_mutex task_cancel_mutex;
     struct aws_condition_variable cv_task_canceled;
-    uint8_t outstanding_publish_count;
-    struct aws_mutex outstanding_publish_count_mutex;
-    struct aws_mutex outstanding_publish_mutex;
-    struct aws_condition_variable cv_outstanding_publish;
 };
 
 struct defender_report_publish_context {
     struct aws_byte_buf json_report;
+    struct aws_byte_cursor json_report_cursor;
     struct aws_iotdevice_defender_task *defender_task;
 };
 
@@ -158,20 +157,6 @@ void s_invoke_failure_callback(
     }
 }
 
-static void s_publish_count_atomic_dec(struct aws_iotdevice_defender_task *defender_task) {
-    AWS_PRECONDITION(defender_task != NULL);
-    aws_mutex_lock(&defender_task->outstanding_publish_count_mutex);
-    defender_task->outstanding_publish_count--;
-    aws_mutex_unlock(&defender_task->outstanding_publish_count_mutex);
-}
-
-static void s_publish_count_atomic_inc(struct aws_iotdevice_defender_task *defender_task) {
-    AWS_PRECONDITION(defender_task != NULL);
-    aws_mutex_lock(&defender_task->outstanding_publish_count_mutex);
-    defender_task->outstanding_publish_count++;
-    aws_mutex_unlock(&defender_task->outstanding_publish_count_mutex);
-}
-
 static void s_on_report_puback(
     struct aws_mqtt_client_connection *connection,
     uint16_t packet_id,
@@ -193,8 +178,53 @@ static void s_on_report_puback(
                                   AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE);
     }
     s_report_publish_context_clean_up(report_context);
-    s_publish_count_atomic_dec(defender_task);
-    aws_condition_variable_notify_one(&defender_task->cv_outstanding_publish);
+}
+
+/* this is a valid aws_iotdevice_defender_publish_fn */
+static int s_mqtt_report_publish_fn(struct aws_byte_cursor report,
+                                    void *userdata) {
+    AWS_PRECONDITION(userdata != NULL);
+    AWS_PRECONDITION(aws_byte_cursor_is_valid(&report));
+
+    struct aws_iotdevice_defender_task *defender_task = userdata;
+    struct defender_report_publish_context *report_context =
+        aws_mem_acquire(defender_task->allocator, sizeof(struct defender_report_publish_context));
+    AWS_ZERO_STRUCT(*report_context);
+    report_context->defender_task = defender_task;
+    /* must copy the report data and make into a byte_cursor to use it for MQTT publish */
+    if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(&report_context->json_report, defender_task->allocator, report)) {
+        return AWS_OP_ERR;
+    }
+    report_context->json_report_cursor = aws_byte_cursor_from_buf(&report_context->json_report);
+
+    struct aws_byte_cursor report_topic = aws_byte_cursor_from_string(defender_task->publish_report_topic_name);
+
+    uint16_t report_packet_id = aws_mqtt_client_connection_publish(
+        defender_task->connection,
+        &report_topic,
+        AWS_MQTT_QOS_AT_LEAST_ONCE,
+        false,
+        &report_context->json_report_cursor,
+        s_on_report_puback,
+        report_context);
+    if (report_packet_id != 0) {
+        /* publish success means we do not clean up the report context until the publish callback completes */
+        AWS_LOGF_DEBUG(
+            AWS_LS_IOTDEVICE_DEFENDER_TASK,
+            "id=%p: Report packet_id %d published on topic " PRInSTR,
+            (void *)defender_task,
+            report_packet_id,
+            AWS_BYTE_CURSOR_PRI(report_topic));
+    } else {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_DEFENDER_TASK,
+            "id=%p: Report failed to publish on topic " PRInSTR,
+            (void *)defender_task,
+            AWS_BYTE_CURSOR_PRI(report_topic));
+        s_report_publish_context_clean_up(report_context);
+        return AWS_OP_ERR;
+    }
+    return AWS_OP_SUCCESS;
 }
 
 static void s_on_report_response_rejected(
@@ -503,13 +533,8 @@ static int s_get_metric_report_json(
     if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(json_out, task->allocator, json_report_buf)) {
         s_invoke_failure_callback(&task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
         return_value = AWS_OP_ERR;
-    }
-    if (aws_byte_buf_is_valid(json_out)) {
-        return_value = AWS_OP_SUCCESS;
     } else {
-        /* there may be a need in the future to allow user to see the invalid report either way */
-        s_invoke_failure_callback(&task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
-        return_value = AWS_OP_ERR;
+        return_value = AWS_OP_SUCCESS;
     }
 
 cleanup:
@@ -701,10 +726,13 @@ void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task)
     AWS_PRECONDITION(defender_task != NULL);
 
     struct aws_allocator *allocator = defender_task->allocator;
-    struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
-    aws_mqtt_client_connection_unsubscribe(defender_task->connection, &accepted_topic, NULL, NULL);
-    struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
-    aws_mqtt_client_connection_unsubscribe(defender_task->connection, &rejected_topic, NULL, NULL);
+
+    if (defender_task->connection) {
+        struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
+        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &accepted_topic, NULL, NULL);
+        struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
+        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &rejected_topic, NULL, NULL);
+    }
 
     aws_string_destroy(defender_task->publish_report_topic_name);
     aws_string_destroy(defender_task->report_accepted_topic_name);
@@ -713,17 +741,6 @@ void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task)
     aws_mutex_clean_up(&defender_task->task_cancel_mutex);
     aws_condition_variable_clean_up(&defender_task->cv_task_canceled);
 
-    /* before proceeding, wait for outstanding report publishes to complete */
-    aws_condition_variable_wait_pred(&defender_task->cv_outstanding_publish,
-                                     &defender_task->outstanding_publish_mutex,
-                                     NULL, NULL);
-
-    aws_mutex_clean_up(&defender_task->task_cancel_mutex);
-    aws_condition_variable_clean_up(&defender_task->cv_task_canceled);
-
-    aws_mutex_clean_up(&defender_task->outstanding_publish_count_mutex);
-    aws_mutex_clean_up(&defender_task->outstanding_publish_mutex);
-    aws_condition_variable_clean_up(&defender_task->cv_outstanding_publish);
     s_defender_config_clean_up_internals(&defender_task->config);
     aws_mem_release(allocator, defender_task);
 }
@@ -735,13 +752,11 @@ static void s_serialize_and_publish_defender_report(struct aws_iotdevice_defende
                                               const size_t custom_metrics_len,
                                               struct defender_custom_metric_data *custom_metric_data) {
     uint64_t report_id = s_defender_report_id_epoch_time_ms(defender_task);
-    struct defender_report_publish_context *report_context = NULL;
-    report_context = aws_mem_acquire(defender_task->allocator, sizeof(struct defender_report_publish_context));
-    AWS_ZERO_STRUCT(*report_context);
-    report_context->defender_task = defender_task;
+    struct aws_byte_buf json_report_buf;
+    AWS_ZERO_STRUCT(json_report_buf);
 
     if (AWS_OP_SUCCESS == s_get_metric_report_json(
-                                &report_context->json_report,
+                                &json_report_buf,
                                 defender_task,
                                 report_id,
                                 delta_xfer,
@@ -753,8 +768,7 @@ static void s_serialize_and_publish_defender_report(struct aws_iotdevice_defende
         defender_task->previous_net_xfer.packets_in = totals->packets_in;
         defender_task->previous_net_xfer.packets_out = totals->packets_out;
 
-        struct aws_byte_cursor report_topic = aws_byte_cursor_from_string(defender_task->publish_report_topic_name);
-        struct aws_byte_cursor report = aws_byte_cursor_from_buf(&report_context->json_report);
+        struct aws_byte_cursor report = aws_byte_cursor_from_buf(&json_report_buf);
 
         AWS_LOGF_TRACE(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
@@ -762,35 +776,21 @@ static void s_serialize_and_publish_defender_report(struct aws_iotdevice_defende
             (void *)defender_task,
             AWS_BYTE_CURSOR_PRI(report));
 
-        s_publish_count_atomic_inc(defender_task);
-        uint16_t report_packet_id = aws_mqtt_client_connection_publish(
-            defender_task->connection,
-            &report_topic,
-            AWS_MQTT_QOS_AT_LEAST_ONCE,
-            false,
-            &report,
-            s_on_report_puback,
-            report_context);
-        if (report_packet_id != 0) {
-            /* publish success means we do not clean up the report context until the publish callback */
+        void *userdata = defender_task->connection ? defender_task : defender_task->config.callback_userdata;
+        if (AWS_OP_ERR == defender_task->publish_fn(report, userdata)) {
+            s_invoke_failure_callback(&defender_task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE);
             AWS_LOGF_DEBUG(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Report packet_id %d published on topic " PRInSTR,
+                "id=%p: Failed to publish report: %s",
                 (void *)defender_task,
-                report_packet_id,
-                AWS_BYTE_CURSOR_PRI(report_topic));
+                aws_error_name(aws_last_error()));
         } else {
-            s_publish_count_atomic_dec(defender_task);
-            AWS_LOGF_ERROR(
+            AWS_LOGF_DEBUG(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                "id=%p: Report failed to publish on topic " PRInSTR,
-                (void *)defender_task,
-                AWS_BYTE_CURSOR_PRI(report_topic));
-            s_invoke_failure_callback(&defender_task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE);
-            s_report_publish_context_clean_up(report_context);
+                "id=%p: Successfully published report",
+                (void *)defender_task);
         }
-    } else {
-        s_report_publish_context_clean_up(report_context);
+        aws_byte_buf_clean_up(&json_report_buf);
     }
 }
 
@@ -857,6 +857,11 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
             defender_task->has_previous_net_xfer = true;
         }
 
+        /* serialize and publish MAY not publish successfully, but in the event
+           of failure, it will handle cleaning up the memory it allocated and
+           and invoking the task failure callback. If it succeeeds, completion
+           is async dependant on that completion and task cancelation will depend
+           on that resolving */
         s_serialize_and_publish_defender_report(defender_task,
                                                 &totals,
                                                 ptr_delta_xfer,
@@ -1022,14 +1027,15 @@ int s_copy_task_config(
     return AWS_OP_SUCCESS;
 }
 
-int aws_iotdevice_defender_task_create(
+static int s_defender_task_create(
     struct aws_iotdevice_defender_task **task_out,
     const struct aws_iotdevice_defender_task_config *config,
+    aws_iotdevice_defender_publish_fn *publish_fn,
     struct aws_mqtt_client_connection *connection,
     struct aws_event_loop *event_loop) {
     AWS_PRECONDITION(task_out != NULL);
     AWS_PRECONDITION(config != NULL);
-    AWS_PRECONDITION(connection != NULL);
+    AWS_PRECONDITION(publish_fn != NULL);
     AWS_PRECONDITION(event_loop != NULL);
 
     int return_code = AWS_OP_ERR;
@@ -1052,6 +1058,7 @@ int aws_iotdevice_defender_task_create(
 
     defender_task->allocator = allocator;
     defender_task->event_loop = event_loop;
+    defender_task->publish_fn = publish_fn;
     defender_task->connection = connection;
     defender_task->previous_net_xfer.bytes_in = 0;
     defender_task->previous_net_xfer.bytes_out = 0;
@@ -1059,22 +1066,11 @@ int aws_iotdevice_defender_task_create(
     defender_task->previous_net_xfer.packets_out = 0;
     defender_task->has_previous_net_xfer = false;
     defender_task->is_task_canceled = false;
-    defender_task->outstanding_publish_count = 0;
 
     if (AWS_OP_SUCCESS != aws_mutex_init(&defender_task->task_cancel_mutex)) {
         goto cleanup;
     }
     if (AWS_OP_SUCCESS != aws_condition_variable_init(&defender_task->cv_task_canceled)) {
-        goto cleanup;
-    }
-
-    if (AWS_OP_SUCCESS != aws_mutex_init(&defender_task->outstanding_publish_count_mutex)) {
-        goto cleanup;
-    }
-    if (AWS_OP_SUCCESS != aws_mutex_init(&defender_task->outstanding_publish_mutex)) {
-        goto cleanup;
-    }
-    if (AWS_OP_SUCCESS != aws_condition_variable_init(&defender_task->cv_outstanding_publish)) {
         goto cleanup;
     }
 
@@ -1086,65 +1082,67 @@ int aws_iotdevice_defender_task_create(
         goto cleanup;
     }
 
-    struct aws_byte_cursor prefix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("$aws/things/");
-    struct aws_byte_cursor publish_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json");
-    struct aws_byte_cursor accepted_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json/accepted");
-    struct aws_byte_cursor rejected_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json/rejected");
-    defender_task->publish_report_topic_name = s_build_topic(allocator, config->thing_name, prefix, publish_suffix);
-    defender_task->report_accepted_topic_name = s_build_topic(allocator, config->thing_name, prefix, accepted_suffix);
-    defender_task->report_rejected_topic_name = s_build_topic(allocator, config->thing_name, prefix, rejected_suffix);
+    if (connection != NULL) {
+        struct aws_byte_cursor prefix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("$aws/things/");
+        struct aws_byte_cursor publish_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json");
+        struct aws_byte_cursor accepted_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json/accepted");
+        struct aws_byte_cursor rejected_suffix = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("/defender/metrics/json/rejected");
+        defender_task->publish_report_topic_name = s_build_topic(allocator, config->thing_name, prefix, publish_suffix);
+        defender_task->report_accepted_topic_name = s_build_topic(allocator, config->thing_name, prefix, accepted_suffix);
+        defender_task->report_rejected_topic_name = s_build_topic(allocator, config->thing_name, prefix, rejected_suffix);
 
-    const struct aws_byte_cursor accepted_cursor =
-        aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
-    uint16_t sub_accepted_packet_id = aws_mqtt_client_connection_subscribe(
-        defender_task->connection,
-        &accepted_cursor,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
-        &s_on_report_response_accepted,
-        defender_task,
-        NULL,
-        s_mqtt_on_suback,
-        defender_task);
-    if (sub_accepted_packet_id != 0) {
-        AWS_LOGF_DEBUG(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK,
-            "id=%p: subscription packet_id [%d] for accepted topic %s",
-            (void *)defender_task,
-            sub_accepted_packet_id,
-            aws_string_c_str(defender_task->report_accepted_topic_name));
-    } else {
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK,
-            "id=%p: Failed to send subscription packet for topic: %s",
-            (void *)defender_task,
-            aws_string_c_str(defender_task->report_accepted_topic_name));
-    }
+        const struct aws_byte_cursor accepted_cursor =
+            aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
+        uint16_t sub_accepted_packet_id = aws_mqtt_client_connection_subscribe(
+            defender_task->connection,
+            &accepted_cursor,
+            AWS_MQTT_QOS_AT_LEAST_ONCE,
+            &s_on_report_response_accepted,
+            defender_task,
+            NULL,
+            s_mqtt_on_suback,
+            defender_task);
+        if (sub_accepted_packet_id != 0) {
+            AWS_LOGF_DEBUG(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: subscription packet_id [%d] for accepted topic %s",
+                (void *)defender_task,
+                sub_accepted_packet_id,
+                aws_string_c_str(defender_task->report_accepted_topic_name));
+        } else {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to send subscription packet for topic: %s",
+                (void *)defender_task,
+                aws_string_c_str(defender_task->report_accepted_topic_name));
+        }
 
-    const struct aws_byte_cursor rejected_cursor =
-        aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
-    uint16_t sub_rejected_packet_id = aws_mqtt_client_connection_subscribe(
-        defender_task->connection,
-        &rejected_cursor,
-        AWS_MQTT_QOS_AT_LEAST_ONCE,
-        &s_on_report_response_rejected,
-        defender_task,
-        NULL,
-        s_mqtt_on_suback,
-        defender_task);
+        const struct aws_byte_cursor rejected_cursor =
+            aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
+        uint16_t sub_rejected_packet_id = aws_mqtt_client_connection_subscribe(
+            defender_task->connection,
+            &rejected_cursor,
+            AWS_MQTT_QOS_AT_LEAST_ONCE,
+            &s_on_report_response_rejected,
+            defender_task,
+            NULL,
+            s_mqtt_on_suback,
+            defender_task);
 
-    if (sub_accepted_packet_id != 0) {
-        AWS_LOGF_TRACE(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK,
-            "id=%p: subscription packet_id [%d] for rejected topic %s",
-            (void *)defender_task,
-            sub_rejected_packet_id,
-            aws_string_c_str(defender_task->report_rejected_topic_name));
-    } else {
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK,
-            "id=%p: Failed to send subscription packet for rejected topic: %s",
-            (void *)defender_task,
-            aws_string_c_str(defender_task->report_rejected_topic_name));
+        if (sub_accepted_packet_id != 0) {
+            AWS_LOGF_TRACE(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: subscription packet_id [%d] for rejected topic %s",
+                (void *)defender_task,
+                sub_rejected_packet_id,
+                aws_string_c_str(defender_task->report_rejected_topic_name));
+        } else {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to send subscription packet for rejected topic: %s",
+                (void *)defender_task,
+                aws_string_c_str(defender_task->report_rejected_topic_name));
+        }
     }
 
     aws_task_init(&defender_task->task, s_reporting_task_fn, defender_task, "DeviceDefenderReportTask");
@@ -1163,6 +1161,23 @@ cleanup:
     return return_code;
 }
 
+int aws_iotdevice_defender_task_create_ex(
+    struct aws_iotdevice_defender_task **task_out,
+    const struct aws_iotdevice_defender_task_config *config,
+    aws_iotdevice_defender_publish_fn *publish_fn,
+    struct aws_event_loop *event_loop) {
+    return s_defender_task_create(task_out, config, publish_fn, NULL, event_loop);
+}
+
+int aws_iotdevice_defender_task_create(
+    struct aws_iotdevice_defender_task **task_out,
+    const struct aws_iotdevice_defender_task_config *config,
+    struct aws_mqtt_client_connection *connection,
+    struct aws_event_loop *event_loop) {
+    AWS_PRECONDITION(connection != NULL);
+    return s_defender_task_create(task_out, config, s_mqtt_report_publish_fn, connection, event_loop);
+}
+
 /**
  * Function gets scheduled on the same event loop at the defender task itself so it cannot
  * run at the same time as that task outside of the cancelled status.
@@ -1177,10 +1192,6 @@ static void s_cancel_defender_task(struct aws_task *task, void *arg, enum aws_ta
     aws_condition_variable_notify_one(&defender_task->cv_task_canceled);
 }
 
-static bool s_wait_for_no_outstanding_publish(void *userdata) {
-    struct aws_iotdevice_defender_task *defender_task = userdata;
-    return defender_task->outstanding_publish_count == 0;
-}
 
 void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
     AWS_PRECONDITION(defender_task != NULL);
@@ -1191,11 +1202,6 @@ void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *de
     aws_mutex_lock(&defender_task->task_cancel_mutex);
     aws_condition_variable_wait(&defender_task->cv_task_canceled, &defender_task->task_cancel_mutex);
     aws_mutex_unlock(&defender_task->task_cancel_mutex);
-
-    aws_mutex_lock(&defender_task->outstanding_publish_mutex);
-    aws_condition_variable_wait_pred(&defender_task->cv_outstanding_publish, &defender_task->outstanding_publish_mutex,
-                                     s_wait_for_no_outstanding_publish, defender_task);
-    aws_mutex_unlock(&defender_task->outstanding_publish_mutex);
 
     s_defender_task_clean_up(defender_task);
 }

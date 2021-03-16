@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/common/byte_buf.h>
 #include <aws/common/condition_variable.h>
 #include <aws/common/mutex.h>
 #include <aws/common/string.h>
@@ -39,7 +40,12 @@ struct mqtt_connection_test_data {
     struct aws_socket_options socket_options;
     struct aws_condition_variable cvar;
     struct aws_mutex lock;
+    struct aws_byte_buf payload;
     bool task_stopped;
+
+    /* the following two are only set if the publish failure callback is invoked */
+    bool task_stopped_from_failure;
+    int failure_error_code;
 };
 
 static struct mqtt_connection_test_data mqtt_test_data = {0};
@@ -396,6 +402,9 @@ static int s_clean_up_mqtt_test_data_fn(struct aws_allocator *allocator, int set
         aws_client_bootstrap_release(state_test_data->client_bootstrap);
         aws_host_resolver_release(state_test_data->host_resolver);
         aws_event_loop_group_release(state_test_data->el_group);
+        if (aws_byte_buf_is_valid(&state_test_data->payload)) {
+            aws_byte_buf_clean_up(&state_test_data->payload);
+        }
     }
 
     aws_iotdevice_library_clean_up();
@@ -419,6 +428,16 @@ AWS_TEST_CASE_FIXTURE(
     s_clean_up_mqtt_test_data_fn,
     &mqtt_test_data);
 
+static int s_publish_fn_copy_report(struct aws_byte_cursor payload,
+                                void *userdata) {
+    struct mqtt_connection_test_data *state_test_data = userdata;
+
+    aws_byte_buf_init_copy_from_cursor(&state_test_data->payload,
+                                       state_test_data->allocator,
+                                       payload);
+    return AWS_OP_SUCCESS;
+}
+
 static int s_devicedefender_success_test(struct aws_allocator *allocator, void *ctx) {
     (void)allocator;
     struct mqtt_connection_test_data *state_test_data = ctx;
@@ -433,10 +452,10 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_iotdevice_defender_config_set_task_period_ns(task_config, 1000000000UL);
 
     struct aws_iotdevice_defender_task *defender_task = NULL;
-    ASSERT_SUCCESS(aws_iotdevice_defender_task_create(
+    ASSERT_SUCCESS(aws_iotdevice_defender_task_create_ex(
         &defender_task,
         task_config,
-        state_test_data->mqtt_connection,
+        s_publish_fn_copy_report,
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
@@ -448,19 +467,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_iotdevice_defender_task_clean_up(defender_task);
     defender_task = NULL;
 
-    /* The third packet is the report publish */
-    uint16_t packet_id = 3;
-    struct aws_byte_cursor payload;
-    AWS_ZERO_STRUCT(payload);
-    aws_mqtt_client_get_payload_for_outstanding_publish_packet(state_test_data->mqtt_connection, packet_id, &payload);
-
-    struct aws_string *publish_topic = NULL;
-    aws_mqtt_client_get_topic_for_outstanding_publish_packet(
-        state_test_data->mqtt_connection, packet_id, state_test_data->allocator, &publish_topic);
-
-    ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestSuccessThing/defender/metrics/json"));
-    aws_string_destroy(publish_topic);
-
+    struct aws_byte_cursor payload = aws_byte_cursor_from_buf(&state_test_data->payload);
     validate_devicedefender_record((const char *)payload.ptr);
 
     return AWS_OP_SUCCESS;
@@ -521,10 +528,10 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
         task_config, &name_metric_ip_list_fail, get_ip_list_metric_fail, ctx));
 
     struct aws_iotdevice_defender_task *defender_task = NULL;
-    ASSERT_SUCCESS(aws_iotdevice_defender_task_create(
+    ASSERT_SUCCESS(aws_iotdevice_defender_task_create_ex(
         &defender_task,
         task_config,
-        state_test_data->mqtt_connection,
+        s_publish_fn_copy_report,
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
     AWS_FATAL_ASSERT(defender_task != NULL);
 
@@ -536,19 +543,7 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
 
     ASSERT_TRUE(state_test_data->task_stopped);
 
-    /* The third packet is the report publish */
-    uint16_t packet_id = 3;
-    struct aws_byte_cursor payload;
-    AWS_ZERO_STRUCT(payload);
-    aws_mqtt_client_get_payload_for_outstanding_publish_packet(state_test_data->mqtt_connection, packet_id, &payload);
-
-    struct aws_string *publish_topic = NULL;
-    aws_mqtt_client_get_topic_for_outstanding_publish_packet(
-        state_test_data->mqtt_connection, packet_id, state_test_data->allocator, &publish_topic);
-
-    ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestCustomMetricSuccessThing/defender/metrics/json"));
-    aws_string_destroy(publish_topic);
-
+    struct aws_byte_cursor payload = aws_byte_cursor_from_buf(&state_test_data->payload);
     validate_devicedefender_custom_record((const char *)payload.ptr);
 
     return AWS_OP_SUCCESS;
@@ -585,12 +580,12 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
         task_config, &name_metric_number, get_number_metric_slow, ctx));
 
     struct aws_iotdevice_defender_task *defender_task = NULL;
-    ASSERT_SUCCESS(aws_iotdevice_defender_task_create(
+    ASSERT_SUCCESS(aws_iotdevice_defender_task_create_ex(
         &defender_task,
         task_config,
-        state_test_data->mqtt_connection,
+        s_publish_fn_copy_report,
         aws_event_loop_group_get_next_loop(state_test_data->el_group)));
-    AWS_FATAL_ASSERT(defender_task != NULL);
+   AWS_FATAL_ASSERT(defender_task != NULL);
 
     /* this function also sets pointer to null */
     aws_iotdevice_defender_config_clean_up(task_config);
@@ -601,19 +596,63 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
 
     ASSERT_TRUE(state_test_data->task_stopped);
 
-    /* The third packet is the report publish */
-    uint16_t packet_id = 3;
-    struct aws_byte_cursor payload;
-    AWS_ZERO_STRUCT(payload);
-    aws_mqtt_client_get_payload_for_outstanding_publish_packet(state_test_data->mqtt_connection, packet_id, &payload);
+    return AWS_OP_SUCCESS;
+}
 
-    struct aws_string *publish_topic = NULL;
-    aws_mqtt_client_get_topic_for_outstanding_publish_packet(
-        state_test_data->mqtt_connection, packet_id, state_test_data->allocator, &publish_topic);
+static int s_publish_fn_fails(struct aws_byte_cursor payload,
+                                void *userdata) {
+    (void)payload;
+    (void)userdata;
+    return AWS_OP_ERR;
+}
 
-    /* leave basic assertion in tact that the stop didn't prevent the publish from happening */
-    ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestCustomMetricSuccessThing/defender/metrics/json"));
-    aws_string_destroy(publish_topic);
+static void s_task_failure_fn(bool is_task_stopped, int error_code, void *userdata) {
+    struct mqtt_connection_test_data *test_data = userdata;
+    test_data->task_stopped_from_failure = is_task_stopped;
+    test_data->failure_error_code = error_code;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    devicedefender_publish_failure_callback_invoked,
+    s_setup_mqtt_test_data_fn,
+    s_devicedefender_publish_failure_callback_invoked,
+    s_clean_up_mqtt_test_data_fn,
+    &mqtt_test_data);
+static int s_devicedefender_publish_failure_callback_invoked(struct aws_allocator *allocator, void *ctx) {
+    (void)allocator;
+    struct mqtt_connection_test_data *state_test_data = ctx;
+
+    aws_iotdevice_library_init(state_test_data->allocator);
+    struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestCustomMetricSuccessThing");
+    struct aws_iotdevice_defender_task_config *task_config = NULL;
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
+
+    aws_iotdevice_defender_config_set_callback_userdata(task_config, ctx);
+    aws_iotdevice_defender_config_set_task_cancelation_fn(task_config, s_devicedefender_cb);
+    aws_iotdevice_defender_config_set_task_period_ns(task_config, 1000000000UL);
+    aws_iotdevice_defender_config_set_task_failure_fn(task_config, s_task_failure_fn);
+
+    /* use a slow metric getter to ensure cancel of the stop will wait */
+    const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str(TM_NUMBER);
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
+        task_config, &name_metric_number, get_number_metric, ctx));
+
+    struct aws_iotdevice_defender_task *defender_task = NULL;
+    ASSERT_SUCCESS(aws_iotdevice_defender_task_create_ex(
+        &defender_task,
+        task_config,
+        s_publish_fn_fails,
+        aws_event_loop_group_get_next_loop(state_test_data->el_group)));
+   AWS_FATAL_ASSERT(defender_task != NULL);
+
+    /* this function also sets pointer to null */
+    aws_iotdevice_defender_config_clean_up(task_config);
+    task_config = NULL;
+
+    aws_iotdevice_defender_task_clean_up(defender_task);
+    defender_task = NULL;
+
+    ASSERT_TRUE(state_test_data->task_stopped);
 
     return AWS_OP_SUCCESS;
 }
