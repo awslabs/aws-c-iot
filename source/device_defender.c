@@ -708,7 +708,7 @@ static void s_get_custom_metrics_data(
  * Differs in the public version in that it only cleans up the members and not the
  * entire structure itself. When cleaning up the defender_task internals, it must clean
  * up the copy of the config, but the config struct is part of the defender_task
- * so it's memory isn't freed along with the internals
+ * so its memory isn't freed along with the internals
  */
 void s_defender_config_clean_up_internals(struct aws_iotdevice_defender_task_config *config) {
     AWS_PRECONDITION(config != NULL);
