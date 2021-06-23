@@ -592,6 +592,13 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
 
     ASSERT_TRUE(state_test_data->task_stopped);
 
+    // The third packet is the report publish
+    uint16_t packet_id = 3;
+    struct aws_byte_buf payload;
+    AWS_ZERO_STRUCT(payload);
+    aws_mqtt_client_get_payload_for_outstanding_publish_packet(
+                                                               state_test_data->mqtt_connection, packet_id, allocator, &payload);
+    validate_devicedefender_record((const char *)payload.buffer);
     return AWS_OP_SUCCESS;
 }
 
