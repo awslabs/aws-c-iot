@@ -276,9 +276,10 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
 
     // The third packet is the report publish
     uint16_t packet_id = 3;
-    struct aws_byte_cursor payload;
+    struct aws_byte_buf payload;
     AWS_ZERO_STRUCT(payload);
-    aws_mqtt_client_get_payload_for_outstanding_publish_packet(state_test_data->mqtt_connection, packet_id, &payload);
+    aws_mqtt_client_get_payload_for_outstanding_publish_packet(
+        state_test_data->mqtt_connection, packet_id, allocator, &payload);
 
     struct aws_string *publish_topic = NULL;
     aws_mqtt_client_get_topic_for_outstanding_publish_packet(
@@ -287,7 +288,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     ASSERT_TRUE(aws_string_eq_c_str(publish_topic, "$aws/things/TestSuccessThing/defender/metrics/json"));
     aws_string_destroy(publish_topic);
 
-    validate_devicedefender_record((const char *)payload.ptr);
+    validate_devicedefender_record((const char *)payload.buffer);
 
     aws_condition_variable_clean_up(&test);
     aws_mutex_clean_up(&lock);
