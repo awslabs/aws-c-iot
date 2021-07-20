@@ -349,6 +349,7 @@ static int s_secure_tunneling_init_websocket_options_test(struct aws_allocator *
         {"Sec-WebSocket-Protocol", "aws.iot.securetunneling-1.0"},
         {"access-token", ACCESS_TOKEN},
     };
+
     const struct aws_http_headers *headers = aws_http_message_get_const_headers(websocket_options.handshake_request);
     for (size_t i = 0; i < sizeof(expected_headers) / sizeof(expected_headers[0]); i++) {
         struct aws_byte_cursor name = aws_byte_cursor_from_c_str(expected_headers[i][0]);
