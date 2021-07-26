@@ -100,6 +100,7 @@ struct defender_report_publish_context {
     struct aws_byte_buf json_report;
     struct aws_byte_cursor json_report_cursor;
     struct aws_iotdevice_defender_task *defender_task;
+    struct aws_allocator *allocator;
 };
 
 static void s_mqtt_on_suback(
@@ -139,7 +140,7 @@ static void s_mqtt_on_suback(
 
 static void s_report_publish_context_clean_up(struct defender_report_publish_context *report_context) {
     AWS_PRECONDITION(report_context);
-    struct aws_allocator *allocator = report_context->defender_task->allocator;
+    struct aws_allocator *allocator = report_context->allocator;
     if (aws_byte_buf_is_valid(&report_context->json_report)) {
         aws_byte_buf_clean_up(&report_context->json_report);
     }
@@ -188,6 +189,7 @@ static int s_mqtt_report_publish_fn(struct aws_byte_cursor report, void *userdat
     struct defender_report_publish_context *report_context =
         aws_mem_acquire(defender_task->allocator, sizeof(struct defender_report_publish_context));
     AWS_ZERO_STRUCT(*report_context);
+    report_context->allocator = defender_task->allocator;
     report_context->defender_task = defender_task;
     /* must copy the report data and make into a byte_cursor to use it for MQTT publish */
     if (AWS_OP_SUCCESS !=
