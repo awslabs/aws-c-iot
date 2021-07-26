@@ -50,8 +50,7 @@ struct aws_iotdevice_defender_task_config {
 };
 
 /**
- * Instantiation of a custom metric that needs a value to be retrieved when
- * it is time to produce a metric report.
+ * Instantiation of a custom metric to be collected when generating a metric report.
  */
 struct defender_custom_metric {
     enum defender_custom_metric_type type;
@@ -66,7 +65,8 @@ struct defender_custom_metric {
 };
 
 /**
- * of a custom metric's data that needs to be populated into a report
+ * Result of a custom metric's data collection callback function that needs to be
+ * populated into a report
  *
  * Data union only needs to physically point to a single number, and single list.
  */
@@ -180,7 +180,6 @@ static void s_on_report_puback(
     s_report_publish_context_clean_up(report_context);
 }
 
-/* this is a valid aws_iotdevice_defender_publish_fn */
 static int s_mqtt_report_publish_fn(struct aws_byte_cursor report, void *userdata) {
     AWS_PRECONDITION(userdata != NULL);
     AWS_PRECONDITION(aws_byte_cursor_is_valid(&report));
@@ -858,9 +857,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
 
         /* serialize and publish MAY not publish successfully, but in the event
            of failure, it will handle cleaning up the memory it allocated and
-           and invoking the task failure callback. If it succeeeds, completion
-           is async dependant on that completion and task cancelation will depend
-           on that resolving */
+           and invoke the task failure callback. If it succeeeds, task completion
+           deferred until puback packet for the report is recieved. */
         s_serialize_and_publish_defender_report(
             defender_task, &totals, ptr_delta_xfer, &net_conns, custom_metrics_len, custom_metric_data);
 
@@ -959,7 +957,6 @@ void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_c
     }
 }
 
-/* Maybe highlights the need for aws_string construction to consume a aws_byte_buf and own it?? */
 struct aws_string *s_build_topic(
     struct aws_allocator *allocator,
     const struct aws_string *thing_name,

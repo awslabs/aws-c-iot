@@ -45,14 +45,6 @@ struct aws_mutex stop_mutex = AWS_MUTEX_INIT;
 struct aws_condition_variable failure_stop_cv = AWS_CONDITION_VARIABLE_INIT;
 struct aws_condition_variable *process_stop_cv;
 
-void sigint_handler(int signal) {
-    (void)signal;
-    if (defender_task) {
-        /* not entirely sure if these are reentrant */
-        aws_condition_variable_notify_one(process_stop_cv);
-    }
-}
-
 const char s_client_id_prefix[] = "c-defender-agent-reference";
 
 struct connection_args {
@@ -86,8 +78,6 @@ static void s_mqtt_on_connection_complete(
     AWS_FATAL_ASSERT(
         AWS_OP_SUCCESS ==
         aws_iotdevice_defender_task_create(&defender_task, args->task_config, connection, args->defender_event_loop));
-    // now register signal handler
-    signal(SIGINT, sigint_handler);
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
