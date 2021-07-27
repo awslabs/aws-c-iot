@@ -940,7 +940,7 @@ int aws_iotdevice_defender_config_create(
     config->custom_metrics_len = 0;
 
     *config_out = config;
-    return AWS_OP_SUCCESS;
+    return aws_last_error();
 
 error_return:
     aws_mem_release(allocator, config);
