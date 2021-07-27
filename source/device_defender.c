@@ -945,7 +945,7 @@ int aws_iotdevice_defender_config_create(
 error_return:
     aws_mem_release(allocator, config);
 
-    return AWS_OP_ERR;
+    return aws_last_error();
 }
 
 void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_config *config) {
