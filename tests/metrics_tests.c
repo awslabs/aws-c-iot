@@ -444,6 +444,9 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
 
     struct aws_iotdevice_defender_task_config *task_config = NULL;
     struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestSuccessThing");
+    /* We are setting this error to verify that it has no impact on a successful
+       return value of task config creation */
+    aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
 
     aws_iotdevice_defender_config_set_callback_userdata(task_config, ctx);
