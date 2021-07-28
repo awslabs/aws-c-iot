@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+#include <aws/common/thread.h>
 #include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/iotdevice.h>
 
@@ -34,6 +35,18 @@ static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE,
         "Error serializing report for publishing"),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_DEFENDER_UNKNOWN_CUSTOM_METRIC_TYPE,
+        "Unknown custom metric type found in reporting task"),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_TASK_CONFIG,
+        "Invalid configuration detected in defender reporting task config. Check prior errors"),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE,
+        "Mqtt client error while attempting to publish defender report"),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+         AWS_ERROR_IOTDEVICE_DEFENDER_UNKNOWN_TASK_STATUS,
+        "Device defender task was invoked with an unknown task status"),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE
@@ -46,6 +59,7 @@ static struct aws_error_info_list s_error_list = {
 /* clang-format off */
         static struct aws_log_subject_info s_logging_subjects[] = {
             DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER_TASK, "iotdevice-defender", "IoT DeviceDefender"),
+            DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_DEFENDER_TASK_CONFIG, "iotdevice-defender-config", "IoT DeviceDefender Task Config"),
             DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_NETWORK_CONFIG, "iotdevice-network", "IoT Device Network"),
             DEFINE_LOG_SUBJECT_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "iotdevice-st", "IoT Secure Tunneling"),
         };
@@ -77,7 +91,6 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator) {
 void aws_iotdevice_library_clean_up(void) {
     if (s_iotdevice_library_initialized) {
         aws_thread_join_all_managed();
-
         s_library_allocator = NULL;
 
         aws_unregister_error_info(&s_error_list);

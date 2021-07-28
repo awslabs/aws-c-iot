@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/common/array_list.h>
+#include <aws/common/byte_buf.h>
+#include <aws/common/error.h>
+#include <aws/common/zero.h>
 #include <aws/mqtt/client.h>
 #include <aws/mqtt/mqtt.h>
 
@@ -26,6 +30,7 @@
 
 #include <aws/testing/aws_test_harness.h>
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef WIN32
@@ -35,7 +40,10 @@
 #    include <unistd.h>
 #endif
 
-struct aws_iotdevice_defender_v1_task *defender_task = NULL;
+struct aws_iotdevice_defender_task *defender_task = NULL;
+struct aws_mutex stop_mutex = AWS_MUTEX_INIT;
+struct aws_condition_variable failure_stop_cv = AWS_CONDITION_VARIABLE_INIT;
+struct aws_condition_variable *process_stop_cv;
 
 const char s_client_id_prefix[] = "c-defender-agent-reference";
 
@@ -47,7 +55,8 @@ struct connection_args {
 
     struct aws_mqtt_client_connection *connection;
 
-    struct aws_iotdevice_defender_report_task_config task_config;
+    struct aws_iotdevice_defender_task_config *task_config;
+    struct aws_event_loop *defender_event_loop;
 };
 
 static void s_mqtt_on_connection_complete(
@@ -56,28 +65,26 @@ static void s_mqtt_on_connection_complete(
     enum aws_mqtt_connect_return_code return_code,
     bool session_present,
     void *userdata) {
-
     (void)connection;
     (void)error_code;
     (void)return_code;
     (void)session_present;
-    struct connection_args *connection_args = (struct connection_args *)userdata;
+    struct connection_args *args = (struct connection_args *)userdata;
 
     AWS_FATAL_ASSERT(error_code == AWS_ERROR_SUCCESS);
     AWS_FATAL_ASSERT(return_code == AWS_MQTT_CONNECT_ACCEPTED);
     AWS_FATAL_ASSERT(session_present == false);
 
-    printf("Client connected...");
-
-    defender_task = aws_iotdevice_defender_v1_report_task(connection_args->allocator, &connection_args->task_config);
+    AWS_FATAL_ASSERT(
+        AWS_OP_SUCCESS ==
+        aws_iotdevice_defender_task_create(&defender_task, args->task_config, connection, args->defender_event_loop));
     AWS_FATAL_ASSERT(defender_task != NULL);
 }
 
 static void s_on_connection_interrupted(struct aws_mqtt_client_connection *connection, int error_code, void *userdata) {
-
     (void)connection;
     (void)userdata;
-    printf("CONNECTION INTERRUPTED error_code=%d\n", error_code);
+    (void)error_code;
 }
 
 static void s_on_resubscribed(
@@ -86,7 +93,6 @@ static void s_on_resubscribed(
     const struct aws_array_list *topic_subacks,
     int error_code,
     void *userdata) {
-
     (void)connection;
     (void)packet_id;
     (void)userdata;
@@ -94,11 +100,9 @@ static void s_on_resubscribed(
     AWS_FATAL_ASSERT(error_code == AWS_ERROR_SUCCESS);
 
     size_t num_topics = aws_array_list_length(topic_subacks);
-    printf("RESUBSCRIBE_COMPLETE. error_code=%d num_topics=%zu\n", error_code, num_topics);
     for (size_t i = 0; i < num_topics; ++i) {
         struct aws_mqtt_topic_subscription sub_i;
         aws_array_list_get_at(topic_subacks, &sub_i, i);
-        printf("  topic=" PRInSTR " qos=%d\n", AWS_BYTE_CURSOR_PRI(sub_i.topic), sub_i.qos);
         AWS_FATAL_ASSERT(sub_i.qos != AWS_MQTT_QOS_FAILURE);
     }
 }
@@ -108,13 +112,11 @@ static void s_on_connection_resumed(
     enum aws_mqtt_connect_return_code return_code,
     bool session_present,
     void *userdata) {
-
     (void)connection;
     (void)userdata;
+    (void)return_code;
 
-    printf("CONNECTION RESUMED return_code=%d session_present=%d\n", return_code, session_present);
     if (!session_present) {
-        printf("RESUBSCRIBING...");
         uint16_t packet_id = aws_mqtt_resubscribe_existing_topics(connection, s_on_resubscribed, NULL);
         AWS_FATAL_ASSERT(packet_id);
     }
@@ -130,6 +132,73 @@ static void s_mqtt_on_disconnect(struct aws_mqtt_client_connection *connection, 
     aws_mutex_lock(args->mutex);
     aws_condition_variable_notify_one(args->condition_variable);
     aws_mutex_unlock(args->mutex);
+}
+
+static int get_number_metric(int64_t *out, void *userdata) {
+    (void)userdata;
+    *out = 42;
+    return AWS_OP_SUCCESS;
+}
+
+static int get_number_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    (void)userdata;
+    int64_t number = 64;
+    aws_array_list_push_back(to_write_list, &number);
+    number = 128;
+    aws_array_list_push_back(to_write_list, &number);
+    number = 256;
+    aws_array_list_push_back(to_write_list, &number);
+
+    return AWS_OP_SUCCESS;
+}
+
+static int get_string_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    struct connection_args *args = userdata;
+    struct aws_allocator *allocator = args->allocator;
+    struct aws_string *string_value = aws_string_new_from_c_str(allocator, "foo");
+    aws_array_list_push_back(to_write_list, &string_value);
+    string_value = aws_string_new_from_c_str(allocator, "bar");
+    aws_array_list_push_back(to_write_list, &string_value);
+    string_value = aws_string_new_from_c_str(allocator, "donkey");
+    aws_array_list_push_back(to_write_list, &string_value);
+
+    return AWS_OP_SUCCESS;
+}
+
+static int get_ip_list_metric(struct aws_array_list *to_write_list, void *userdata) {
+    struct connection_args *args = userdata;
+    struct aws_allocator *allocator = args->allocator;
+    struct aws_string *ip_value = aws_string_new_from_c_str(allocator, "127.0.0.1");
+    aws_array_list_push_back(to_write_list, &ip_value);
+    ip_value = aws_string_new_from_c_str(allocator, "192.168.1.100");
+    aws_array_list_push_back(to_write_list, &ip_value);
+    ip_value = aws_string_new_from_c_str(allocator, "08:00:27:d1:ea:38");
+    /* intentionally showing different way of constructing strings is still managed correctly in report */
+    AWS_STRING_FROM_LITERAL(example_ipv6, "2001:db8:3333:4444:5555:6666:7777:8888");
+    aws_array_list_push_back(to_write_list, &example_ipv6);
+    AWS_STRING_FROM_LITERAL(ipv6, "fe80::843:a8ff:fe18:a879");
+    aws_array_list_push_back(to_write_list, &ipv6);
+
+    return AWS_OP_SUCCESS;
+}
+
+void s_report_accepted(const struct aws_byte_cursor *payload, void *userdata) {
+    (void)userdata;
+    printf("Report submission accepted reply: " PRInSTR "\n", AWS_BYTE_CURSOR_PRI(*payload));
+}
+
+void s_report_rejected(const struct aws_byte_cursor *payload, void *userdata) {
+    (void)userdata;
+    printf("Report submission rejected reply: " PRInSTR "\n", AWS_BYTE_CURSOR_PRI(*payload));
+}
+
+void s_task_failure(bool is_task_stopped, int error_code, void *userdata) {
+    (void)userdata;
+    printf("Defender task failed: %s\n", aws_error_name(error_code));
+
+    if (is_task_stopped) {
+        aws_condition_variable_notify_one(&failure_stop_cv);
+    }
 }
 
 int main(int argc, char **argv) {
@@ -150,6 +219,7 @@ int main(int argc, char **argv) {
 
     struct aws_mutex mutex = AWS_MUTEX_INIT;
     struct aws_condition_variable condition_variable = AWS_CONDITION_VARIABLE_INIT;
+    process_stop_cv = &condition_variable;
 
     struct connection_args args;
     AWS_ZERO_STRUCT(args);
@@ -170,6 +240,9 @@ int main(int argc, char **argv) {
     aws_logger_set(&logger);
 
     struct aws_event_loop_group *elg = aws_event_loop_group_new_default(args.allocator, 1, NULL);
+    /* defender task explicitly gets told which event loop to work on */
+    args.defender_event_loop = aws_event_loop_group_get_next_loop(elg);
+
     struct aws_host_resolver_default_options host_resolver_default_options;
     AWS_ZERO_STRUCT(host_resolver_default_options);
     host_resolver_default_options.max_entries = 8;
@@ -220,18 +293,30 @@ int main(int argc, char **argv) {
     aws_uuid_to_str(&uuid, &client_id_buf);
 
     struct aws_byte_cursor client_id_cur = aws_byte_cursor_from_buf(&client_id_buf);
-
-    struct aws_iotdevice_defender_report_task_config task_config = {
-        .cancellation_userdata = NULL,
-        .task_cancelled_fn = NULL,
-        .connection = args.connection,
-        .event_loop = aws_event_loop_group_get_next_loop(elg),
-        .netconn_sample_period_ns = 5ull * 60ull * 1000000000ull,
-        .report_format = AWS_IDDRF_JSON,
-        .thing_name =
-            AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi"), /* TODO: make cli arg so policies can work */
-        .task_period_ns = 5ull * 60ull * 1000000000ull};
+    struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("RaspberryPi");
+    struct aws_iotdevice_defender_task_config *task_config = NULL;
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
     args.task_config = task_config;
+
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_set_report_accepted_fn(task_config, s_report_accepted));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_set_report_rejected_fn(task_config, s_report_rejected));
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_set_task_failure_fn(task_config, s_task_failure));
+
+    const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
+        task_config, &name_metric_number, get_number_metric, &args));
+
+    const struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str("TestCustomMetricNumberList");
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
+        task_config, &name_metric_number_list, get_number_list_metric, &args));
+
+    const struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str("TestCustomMetricStringList");
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
+        task_config, &name_metric_string_list, get_string_list_metric, &args));
+
+    const struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str("TestCustomMetricIpList");
+    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
+        task_config, &name_metric_ip_list, get_ip_list_metric, &args));
 
     struct aws_mqtt_connection_options conn_options = {
         .host_name = host_name_cur,
@@ -249,10 +334,11 @@ int main(int argc, char **argv) {
     aws_mqtt_client_connection_connect(args.connection, &conn_options);
     aws_tls_connection_options_clean_up(&tls_con_opt);
 
-    // TODO: Revisit wait condition
-    aws_mutex_lock(&mutex);
-    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
-    aws_mutex_unlock(&mutex);
+    aws_mutex_lock(&stop_mutex);
+    ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &stop_mutex));
+    aws_mutex_unlock(&stop_mutex);
+
+    aws_iotdevice_defender_task_clean_up(defender_task);
 
     aws_mqtt_client_connection_disconnect(args.connection, s_mqtt_on_disconnect, &args);
 
