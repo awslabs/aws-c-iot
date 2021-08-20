@@ -1187,7 +1187,17 @@ static void s_cancel_defender_task(struct aws_task *task, void *arg, enum aws_ta
     struct aws_iotdevice_defender_task *defender_task = arg;
     /* proper invocation here will block and run */
     aws_event_loop_cancel_task(defender_task->event_loop, &defender_task->task);
+
+    aws_mutex_lock(&defender_task->task_cancel_mutex);
+    defender_task->is_task_canceled = true;
     aws_condition_variable_notify_one(&defender_task->cv_task_canceled);
+    aws_mutex_unlock(&defender_task->task_cancel_mutex);
+}
+
+static bool s_is_cancellation_complete(void *arg) {
+    struct aws_iotdevice_defender_task *defender_task = arg;
+
+    return defender_task->is_task_canceled;
 }
 
 void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
@@ -1197,7 +1207,8 @@ void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *de
     aws_task_init(&cancel_task, s_cancel_defender_task, defender_task, "cancel_defender_task");
     aws_event_loop_schedule_task_now(defender_task->event_loop, &cancel_task);
     aws_mutex_lock(&defender_task->task_cancel_mutex);
-    aws_condition_variable_wait(&defender_task->cv_task_canceled, &defender_task->task_cancel_mutex);
+    aws_condition_variable_wait_pred(
+        &defender_task->cv_task_canceled, &defender_task->task_cancel_mutex, s_is_cancellation_complete, defender_task);
     aws_mutex_unlock(&defender_task->task_cancel_mutex);
 
     s_defender_task_clean_up(defender_task);
