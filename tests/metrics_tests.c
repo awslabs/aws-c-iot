@@ -404,6 +404,9 @@ static int s_clean_up_mqtt_test_data_fn(struct aws_allocator *allocator, int set
         aws_client_bootstrap_release(state_test_data->client_bootstrap);
         aws_host_resolver_release(state_test_data->host_resolver);
         aws_event_loop_group_release(state_test_data->el_group);
+
+        aws_thread_join_all_managed();
+
         if (aws_byte_buf_is_valid(&state_test_data->payload)) {
             aws_byte_buf_clean_up(&state_test_data->payload);
         }
