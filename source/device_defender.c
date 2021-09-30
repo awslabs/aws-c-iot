@@ -81,6 +81,7 @@ struct defender_custom_metric_data {
 
 struct aws_iotdevice_defender_task {
     struct aws_allocator *allocator;
+    struct aws_ref_count ref_count;
     struct aws_event_loop *event_loop;
     struct aws_task task;
     struct aws_iotdevice_defender_task_config config;
@@ -144,6 +145,9 @@ static void s_report_publish_context_clean_up(struct defender_report_publish_con
     if (aws_byte_buf_is_valid(&report_context->json_report)) {
         aws_byte_buf_clean_up(&report_context->json_report);
     }
+
+    aws_ref_count_release(&report_context->defender_task->ref_count);
+
     aws_mem_release(allocator, report_context);
 }
 
@@ -185,17 +189,20 @@ static int s_mqtt_report_publish_fn(struct aws_byte_cursor report, void *userdat
     AWS_PRECONDITION(userdata != NULL);
     AWS_PRECONDITION(aws_byte_cursor_is_valid(&report));
 
+    int result = AWS_OP_ERR;
     struct aws_iotdevice_defender_task *defender_task = userdata;
     struct defender_report_publish_context *report_context =
-        aws_mem_acquire(defender_task->allocator, sizeof(struct defender_report_publish_context));
-    AWS_ZERO_STRUCT(*report_context);
+        aws_mem_calloc(defender_task->allocator, 1, sizeof(struct defender_report_publish_context));
+
     report_context->allocator = defender_task->allocator;
     report_context->defender_task = defender_task;
+    aws_ref_count_acquire(&defender_task->ref_count);
+
     /* must copy the report data and make into a byte_cursor to use it for MQTT publish */
-    if (AWS_OP_SUCCESS !=
-        aws_byte_buf_init_copy_from_cursor(&report_context->json_report, defender_task->allocator, report)) {
-        return AWS_OP_ERR;
+    if (aws_byte_buf_init_copy_from_cursor(&report_context->json_report, defender_task->allocator, report)) {
+        goto done;
     }
+
     report_context->json_report_cursor = aws_byte_cursor_from_buf(&report_context->json_report);
 
     struct aws_byte_cursor report_topic = aws_byte_cursor_from_string(defender_task->publish_report_topic_name);
@@ -208,24 +215,32 @@ static int s_mqtt_report_publish_fn(struct aws_byte_cursor report, void *userdat
         &report_context->json_report_cursor,
         s_on_report_puback,
         report_context);
-    if (report_packet_id != 0) {
-        /* publish success means we do not clean up the report context until the publish callback completes */
-        AWS_LOGF_DEBUG(
-            AWS_LS_IOTDEVICE_DEFENDER_TASK,
-            "id=%p: Report packet_id %d published on topic " PRInSTR,
-            (void *)defender_task,
-            report_packet_id,
-            AWS_BYTE_CURSOR_PRI(report_topic));
-    } else {
+    if (report_packet_id == 0) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_DEFENDER_TASK,
             "id=%p: Report failed to publish on topic " PRInSTR,
             (void *)defender_task,
             AWS_BYTE_CURSOR_PRI(report_topic));
-        s_report_publish_context_clean_up(report_context);
-        return AWS_OP_ERR;
+        goto done;
     }
-    return AWS_OP_SUCCESS;
+
+    /* publish success means we do not clean up the report context until the publish callback completes */
+    AWS_LOGF_DEBUG(
+        AWS_LS_IOTDEVICE_DEFENDER_TASK,
+        "id=%p: Report packet_id %d published on topic " PRInSTR,
+        (void *)defender_task,
+        report_packet_id,
+        AWS_BYTE_CURSOR_PRI(report_topic));
+
+    result = AWS_OP_SUCCESS;
+
+done:
+
+    if (result == AWS_OP_ERR) {
+        s_report_publish_context_clean_up(report_context);
+    }
+
+    return result;
 }
 
 static void s_on_report_response_rejected(
@@ -723,18 +738,7 @@ void s_defender_config_clean_up_internals(struct aws_iotdevice_defender_task_con
     aws_array_list_clean_up(&config->custom_metrics);
 }
 
-void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
-    AWS_PRECONDITION(defender_task != NULL);
-
-    struct aws_allocator *allocator = defender_task->allocator;
-
-    if (defender_task->connection) {
-        struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
-        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &accepted_topic, NULL, NULL);
-        struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
-        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &rejected_topic, NULL, NULL);
-    }
-
+void s_defender_task_clean_up_final(struct aws_iotdevice_defender_task *defender_task) {
     aws_string_destroy(defender_task->publish_report_topic_name);
     aws_string_destroy(defender_task->report_accepted_topic_name);
     aws_string_destroy(defender_task->report_rejected_topic_name);
@@ -743,7 +747,20 @@ void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task)
     aws_condition_variable_clean_up(&defender_task->cv_task_canceled);
 
     s_defender_config_clean_up_internals(&defender_task->config);
-    aws_mem_release(allocator, defender_task);
+    aws_mem_release(defender_task->allocator, defender_task);
+}
+
+void s_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task) {
+    AWS_PRECONDITION(defender_task != NULL);
+
+    if (defender_task->connection) {
+        struct aws_byte_cursor accepted_topic = aws_byte_cursor_from_string(defender_task->report_accepted_topic_name);
+        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &accepted_topic, NULL, NULL);
+        struct aws_byte_cursor rejected_topic = aws_byte_cursor_from_string(defender_task->report_rejected_topic_name);
+        aws_mqtt_client_connection_unsubscribe(defender_task->connection, &rejected_topic, NULL, NULL);
+    }
+
+    aws_ref_count_release(&defender_task->ref_count);
 }
 
 static void s_serialize_and_publish_defender_report(
@@ -924,8 +941,7 @@ int aws_iotdevice_defender_config_create(
         goto error_return;
     }
 
-    config = aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_defender_task_config));
-    AWS_ZERO_STRUCT(*config);
+    config = aws_mem_calloc(allocator, 1, sizeof(struct aws_iotdevice_defender_task_config));
 
     config->thing_name = aws_string_new_from_cursor(allocator, thing_name);
     config->allocator = allocator;
@@ -1009,7 +1025,8 @@ int s_copy_task_config(
     }
 
     for (size_t metric_index = 0; metric_index < dest_config->custom_metrics_len; ++metric_index) {
-        struct defender_custom_metric *metric_dest = aws_mem_acquire(allocator, sizeof(struct defender_custom_metric));
+        struct defender_custom_metric *metric_dest =
+            aws_mem_calloc(allocator, 1, sizeof(struct defender_custom_metric));
         struct defender_custom_metric *metric_src = NULL;
         aws_array_list_get_at(&src_config->custom_metrics, (void **)&metric_src, metric_index);
         metric_dest->metric_name = aws_string_new_from_string(allocator, metric_src->metric_name);
@@ -1019,6 +1036,11 @@ int s_copy_task_config(
         aws_array_list_push_back(&dest_config->custom_metrics, &metric_dest);
     }
     return AWS_OP_SUCCESS;
+}
+
+static void s_delete_dd_task(void *data) {
+    struct aws_iotdevice_defender_task *task = data;
+    s_defender_task_clean_up_final(task);
 }
 
 static int s_defender_task_create(
@@ -1043,8 +1065,7 @@ static int s_defender_task_create(
     }
 
     defender_task =
-        (struct aws_iotdevice_defender_task *)aws_mem_acquire(allocator, sizeof(struct aws_iotdevice_defender_task));
-    AWS_ZERO_STRUCT(*defender_task);
+        (struct aws_iotdevice_defender_task *)aws_mem_calloc(allocator, 1, sizeof(struct aws_iotdevice_defender_task));
     if (defender_task == NULL) {
         aws_raise_error(aws_last_error());
         goto cleanup;
@@ -1060,6 +1081,7 @@ static int s_defender_task_create(
     defender_task->previous_net_xfer.packets_out = 0;
     defender_task->has_previous_net_xfer = false;
     defender_task->is_task_canceled = false;
+    aws_ref_count_init(&defender_task->ref_count, defender_task, s_delete_dd_task);
 
     if (AWS_OP_SUCCESS != aws_mutex_init(&defender_task->task_cancel_mutex)) {
         goto cleanup;
@@ -1258,7 +1280,7 @@ int aws_iotdevice_defender_config_register_number_list_metric(
     AWS_PRECONDITION(supplier != NULL);
 
     struct aws_allocator *allocator = task_config->allocator;
-    struct defender_custom_metric *custom_metric = aws_mem_acquire(allocator, sizeof(struct defender_custom_metric));
+    struct defender_custom_metric *custom_metric = aws_mem_calloc(allocator, 1, sizeof(struct defender_custom_metric));
     if (custom_metric) {
         custom_metric->type = DD_METRIC_NUMBER_LIST;
         custom_metric->metric_name = aws_string_new_from_cursor(allocator, metric_name);
@@ -1292,7 +1314,7 @@ int aws_iotdevice_defender_config_register_string_list_metric(
     AWS_PRECONDITION(supplier != NULL);
 
     struct aws_allocator *allocator = task_config->allocator;
-    struct defender_custom_metric *custom_metric = aws_mem_acquire(allocator, sizeof(struct defender_custom_metric));
+    struct defender_custom_metric *custom_metric = aws_mem_calloc(allocator, 1, sizeof(struct defender_custom_metric));
     if (custom_metric) {
         custom_metric->type = DD_METRIC_STRING_LIST;
         custom_metric->metric_name = aws_string_new_from_cursor(allocator, metric_name);
@@ -1326,7 +1348,7 @@ int aws_iotdevice_defender_config_register_ip_list_metric(
     AWS_PRECONDITION(supplier != NULL);
 
     struct aws_allocator *allocator = task_config->allocator;
-    struct defender_custom_metric *custom_metric = aws_mem_acquire(allocator, sizeof(struct defender_custom_metric));
+    struct defender_custom_metric *custom_metric = aws_mem_calloc(allocator, 1, sizeof(struct defender_custom_metric));
     if (custom_metric) {
         custom_metric->type = DD_METRIC_IP_LIST;
         custom_metric->metric_name = aws_string_new_from_cursor(allocator, metric_name);
