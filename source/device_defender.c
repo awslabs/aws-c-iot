@@ -196,6 +196,8 @@ static int s_mqtt_report_publish_fn(struct aws_byte_cursor report, void *userdat
 
     report_context->allocator = defender_task->allocator;
     report_context->defender_task = defender_task;
+
+    /* Make sure defender task stays alive until publish completes one way or another */
     aws_ref_count_acquire(&defender_task->ref_count);
 
     /* must copy the report data and make into a byte_cursor to use it for MQTT publish */
@@ -738,6 +740,7 @@ void s_defender_config_clean_up_internals(struct aws_iotdevice_defender_task_con
     aws_array_list_clean_up(&config->custom_metrics);
 }
 
+/* Final memory clean up when ref count hits zero */
 void s_defender_task_clean_up_final(struct aws_iotdevice_defender_task *defender_task) {
     aws_string_destroy(defender_task->publish_report_topic_name);
     aws_string_destroy(defender_task->report_accepted_topic_name);
