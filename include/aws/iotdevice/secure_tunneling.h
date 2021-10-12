@@ -5,10 +5,10 @@
 #include <aws/common/condition_variable.h>
 #include <aws/common/mutex.h>
 #include <aws/common/task_scheduler.h>
+#include <aws/http/proxy.h>
 #include <aws/io/tls_channel_handler.h>
 #include <aws/iotdevice/exports.h>
 #include <aws/iotdevice/iotdevice.h>
-#include <aws/http/proxy.h>
 
 #define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
 
