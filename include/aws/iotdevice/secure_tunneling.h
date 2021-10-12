@@ -8,6 +8,7 @@
 #include <aws/io/tls_channel_handler.h>
 #include <aws/iotdevice/exports.h>
 #include <aws/iotdevice/iotdevice.h>
+#include <aws/http/proxy.h>
 
 #define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
 
@@ -53,6 +54,7 @@ struct aws_secure_tunneling_connection_config {
     struct aws_allocator *allocator;
     struct aws_client_bootstrap *bootstrap;
     struct aws_socket_options *socket_options;
+    struct aws_http_proxy_options *http_proxy_options;
 
     struct aws_byte_cursor access_token;
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
