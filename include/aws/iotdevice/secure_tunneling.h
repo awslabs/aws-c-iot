@@ -54,7 +54,7 @@ struct aws_secure_tunneling_connection_config {
     struct aws_allocator *allocator;
     struct aws_client_bootstrap *bootstrap;
     struct aws_socket_options *socket_options;
-    struct aws_http_proxy_options *http_proxy_options;
+    struct aws_http_proxy_config *http_proxy_config;
 
     struct aws_byte_cursor access_token;
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
