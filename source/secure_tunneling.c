@@ -577,7 +577,7 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
     aws_byte_buf_clean_up(&secure_tunnel->received_data);
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
-    aws_mem_release(secure_tunnel->config.allocator, secure_tunnel->config.http_proxy_config);
+    aws_http_proxy_config_destroy(secure_tunnel->config.http_proxy_config);
     aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
 }
 
