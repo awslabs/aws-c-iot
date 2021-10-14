@@ -8,8 +8,8 @@
 #include <aws/io/socket.h>
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/iotdevice_internals.h>
+#include <aws/iotdevice/private/secure_tunneling_impl.h>
 #include <aws/iotdevice/private/serializer.h>
-#include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
 
 #define UNUSED(x) (void)(x)
@@ -61,21 +61,21 @@ static void s_init_secure_tunneling_connection_config(
     const char *access_token,
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode,
     const char *endpoint,
-    struct aws_secure_tunneling_connection_config *config) {
+    struct aws_secure_tunneling_connection_options *options) {
 
-    AWS_ZERO_STRUCT(*config);
-    config->allocator = allocator;
-    config->bootstrap = bootstrap;
-    config->socket_options = socket_options;
+    AWS_ZERO_STRUCT(*options);
+    options->allocator = allocator;
+    options->bootstrap = bootstrap;
+    options->socket_options = socket_options;
 
-    config->access_token = aws_byte_cursor_from_c_str(access_token);
-    config->local_proxy_mode = local_proxy_mode;
-    config->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
+    options->access_token = aws_byte_cursor_from_c_str(access_token);
+    options->local_proxy_mode = local_proxy_mode;
+    options->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
 
-    config->on_stream_start = s_on_stream_start;
-    config->on_data_receive = s_on_data_receive;
-    config->on_stream_reset = s_on_stream_reset;
-    config->on_session_reset = s_on_session_reset;
+    options->on_stream_start = s_on_stream_start;
+    options->on_data_receive = s_on_data_receive;
+    options->on_stream_reset = s_on_stream_reset;
+    options->on_session_reset = s_on_session_reset;
     /* TODO: Initialize the rest of the callbacks */
 }
 
@@ -99,11 +99,11 @@ static int before(struct aws_allocator *allocator, void *ctx) {
     };
     struct aws_client_bootstrap *bootstrap = aws_client_bootstrap_new(allocator, &bootstrap_options);
 
-    struct aws_secure_tunneling_connection_config config;
+    struct aws_secure_tunneling_connection_options options;
     s_init_secure_tunneling_connection_config(
-        allocator, bootstrap, NULL, ACCESS_TOKEN, test_context->local_proxy_mode, ENDPOINT, &config);
+        allocator, bootstrap, NULL, ACCESS_TOKEN, test_context->local_proxy_mode, ENDPOINT, &options);
 
-    test_context->secure_tunnel = aws_secure_tunnel_new(&config);
+    test_context->secure_tunnel = aws_secure_tunnel_new(&options);
 
     return AWS_OP_SUCCESS;
 }
@@ -114,9 +114,9 @@ static int after(struct aws_allocator *allocator, int setup_result, void *ctx) {
 
     struct secure_tunneling_test_context *test_context = ctx;
 
-    aws_host_resolver_release(test_context->secure_tunnel->config.bootstrap->host_resolver);
-    aws_event_loop_group_release(test_context->secure_tunnel->config.bootstrap->event_loop_group);
-    aws_client_bootstrap_release(test_context->secure_tunnel->config.bootstrap);
+    aws_host_resolver_release(test_context->secure_tunnel->options->bootstrap->host_resolver);
+    aws_event_loop_group_release(test_context->secure_tunnel->options->bootstrap->event_loop_group);
+    aws_client_bootstrap_release(test_context->secure_tunnel->options->bootstrap);
 
     aws_secure_tunnel_release(test_context->secure_tunnel);
     aws_iotdevice_library_clean_up();
@@ -160,7 +160,7 @@ static int s_test_sent_data(
     message.ignorable = 0;
     message.payload = aws_byte_buf_from_c_str(expected_payload);
     struct aws_byte_buf serialized_st_msg;
-    aws_iot_st_msg_serialize_from_struct(&serialized_st_msg, test_context->secure_tunnel->config.allocator, message);
+    aws_iot_st_msg_serialize_from_struct(&serialized_st_msg, test_context->secure_tunnel->options->allocator, message);
 
     struct aws_byte_cursor cur = aws_byte_cursor_from_c_str(expected_payload);
     struct aws_websocket_send_frame_options frame_options;
@@ -174,7 +174,7 @@ static int s_test_sent_data(
     ASSERT_INT_EQUALS(
         AWS_OP_SUCCESS,
         aws_byte_buf_init(
-            &out_buf, test_context->secure_tunnel->config.allocator, (size_t)frame_options.payload_length));
+            &out_buf, test_context->secure_tunnel->options->allocator, (size_t)frame_options.payload_length));
 
     ASSERT_TRUE(secure_tunneling_send_data_call(NULL, &out_buf, frame_options.user_data));
     struct aws_byte_cursor out_buf_cur = aws_byte_cursor_from_buf(&out_buf);
@@ -188,7 +188,7 @@ static int s_test_sent_data(
 
     struct data_tunnel_pair *pair = frame_options.user_data;
     aws_byte_buf_clean_up(&pair->buf);
-    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
+    aws_mem_release(pair->secure_tunnel->options->allocator, (void *)pair);
     aws_byte_buf_clean_up(&serialized_st_msg);
     aws_byte_buf_clean_up(&out_buf);
 
@@ -203,7 +203,7 @@ AWS_TEST_CASE_FIXTURE(
     &s_test_context);
 static int s_secure_tunneling_handle_stream_start_test(struct aws_allocator *allocator, void *ctx) {
     struct secure_tunneling_test_context *test_context = ctx;
-    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
     struct aws_iot_st_msg st_msg;
     AWS_ZERO_STRUCT(st_msg);
@@ -227,7 +227,7 @@ AWS_TEST_CASE_FIXTURE(
     &s_test_context);
 static int s_secure_tunneling_handle_data_receive_test(struct aws_allocator *allocator, void *ctx) {
     struct secure_tunneling_test_context *test_context = ctx;
-    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
     /* Send StreamStart first */
     struct aws_iot_st_msg st_msg;
@@ -259,7 +259,7 @@ AWS_TEST_CASE_FIXTURE(
     &s_test_context);
 static int s_secure_tunneling_handle_stream_reset_test(struct aws_allocator *allocator, void *ctx) {
     struct secure_tunneling_test_context *test_context = ctx;
-    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
     /* Send StreamStart first */
     struct aws_iot_st_msg st_msg;
@@ -290,7 +290,7 @@ AWS_TEST_CASE_FIXTURE(
     &s_test_context);
 static int s_secure_tunneling_handle_session_reset_test(struct aws_allocator *allocator, void *ctx) {
     struct secure_tunneling_test_context *test_context = ctx;
-    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
     /* Send StreamStart first */
     struct aws_iot_st_msg st_msg;
@@ -377,7 +377,7 @@ static int s_secure_tunneling_handle_send_data(struct aws_allocator *allocator, 
     const enum aws_iot_st_message_type type = DATA;
 
     struct secure_tunneling_test_context *test_context = ctx;
-    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
     test_context->secure_tunnel->stream_id = expected_stream_id;
 
     s_test_sent_data(test_context, expected_payload, expected_stream_id, prefix_bytes, type);
@@ -399,7 +399,7 @@ static int s_secure_tunneling_handle_send_data_stream_start(struct aws_allocator
     const enum aws_iot_st_message_type type = STREAM_START;
 
     struct secure_tunneling_test_context *test_context = ctx;
-    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
     test_context->secure_tunnel->stream_id = expected_stream_id;
 
     s_test_sent_data(test_context, expected_payload, expected_stream_id, prefix_bytes, type);
@@ -421,7 +421,7 @@ static int s_secure_tunneling_handle_send_data_stream_reset(struct aws_allocator
     const enum aws_iot_st_message_type type = STREAM_RESET;
 
     struct secure_tunneling_test_context *test_context = ctx;
-    test_context->secure_tunnel->config.local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
     test_context->secure_tunnel->stream_id = expected_stream_id;
 
     s_test_sent_data(test_context, expected_payload, expected_stream_id, prefix_bytes, type);
