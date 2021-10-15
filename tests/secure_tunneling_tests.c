@@ -64,7 +64,7 @@ static void s_init_secure_tunneling_connection_config(
     const char *access_token,
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode,
     const char *endpoint,
-    struct aws_secure_tunneling_connection_options *options) {
+    struct aws_secure_tunnel_options *options) {
 
     AWS_ZERO_STRUCT(*options);
     options->allocator = allocator;
@@ -105,7 +105,7 @@ static int before(struct aws_allocator *allocator, void *ctx) {
     struct aws_socket_options socket_options;
     AWS_ZERO_STRUCT(socket_options);
 
-    struct aws_secure_tunneling_connection_options options;
+    struct aws_secure_tunnel_options options;
     s_init_secure_tunneling_connection_config(
         allocator,
         test_context->bootstrap,

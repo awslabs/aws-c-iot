@@ -17,8 +17,8 @@
 
 #define UNUSED(x) (void)(x)
 
-struct aws_secure_tunneling_connection_options_storage {
-    struct aws_secure_tunneling_connection_options options;
+struct aws_secure_tunnel_options_storage {
+    struct aws_secure_tunnel_options options;
 
     /* backup */
     struct aws_socket_options socket_options;
@@ -26,7 +26,7 @@ struct aws_secure_tunneling_connection_options_storage {
     struct aws_string *root_ca;
 };
 
-int aws_secure_tunneling_connection_options_validate(const struct aws_secure_tunneling_connection_options *options) {
+int aws_secure_tunnel_options_validate(const struct aws_secure_tunnel_options *options) {
     AWS_ASSERT(options && options->allocator);
     if (options->bootstrap == NULL) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "bootstrap cannot be NULL");
@@ -48,9 +48,7 @@ int aws_secure_tunneling_connection_options_validate(const struct aws_secure_tun
     return AWS_OP_SUCCESS;
 }
 
-void aws_secure_tunneling_connection_options_storage_destroy(
-    struct aws_secure_tunneling_connection_options_storage *storage) {
-
+void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_storage *storage) {
     if (storage == NULL) {
         return;
     }
@@ -61,23 +59,25 @@ void aws_secure_tunneling_connection_options_storage_destroy(
     aws_mem_release(storage->options.allocator, storage);
 }
 
-struct aws_secure_tunneling_connection_options_storage *aws_secure_tunneling_connection_options_storage_new(
-    const struct aws_secure_tunneling_connection_options *src) {
+struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
+    const struct aws_secure_tunnel_options *src) {
 
-    if (aws_secure_tunneling_connection_options_validate(src)) {
+    if (aws_secure_tunnel_options_validate(src)) {
         return NULL;
     }
 
     struct aws_allocator *alloc = src->allocator;
 
-    struct aws_secure_tunneling_connection_options_storage *storage =
-        aws_mem_calloc(alloc, 1, sizeof(struct aws_secure_tunneling_connection_options_storage));
+    struct aws_secure_tunnel_options_storage *storage =
+        aws_mem_calloc(alloc, 1, sizeof(struct aws_secure_tunnel_options_storage));
 
     /* shallow-copy everything that's shallow-copy-able */
     storage->options = *src;
 
+    /* acquire reference to everything that's ref-counted */
     aws_client_bootstrap_acquire(storage->options.bootstrap);
 
+    /* deep-copy anything that needs deep-copying */
     storage->socket_options = *src->socket_options;
     storage->options.socket_options = &storage->socket_options;
 
@@ -604,7 +604,7 @@ static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure
 
 static void s_secure_tunnel_destroy(void *user_data);
 
-struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunneling_connection_options *options) {
+struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_options *options) {
 
     struct aws_tls_ctx_options tls_ctx_opt;
     AWS_ZERO_STRUCT(tls_ctx_opt);
@@ -614,7 +614,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnelin
     aws_ref_count_init(&secure_tunnel->ref_count, secure_tunnel, s_secure_tunnel_destroy);
 
     /* store options */
-    secure_tunnel->options_storage = aws_secure_tunneling_connection_options_storage_new(options);
+    secure_tunnel->options_storage = aws_secure_tunnel_options_storage_new(options);
     if (secure_tunnel->options_storage == NULL) {
         goto error;
     }
@@ -682,7 +682,7 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
 
 static void s_secure_tunnel_destroy(void *user_data) {
     struct aws_secure_tunnel *secure_tunnel = user_data;
-    aws_secure_tunneling_connection_options_storage_destroy(secure_tunnel->options_storage);
+    aws_secure_tunnel_options_storage_destroy(secure_tunnel->options_storage);
     aws_byte_buf_clean_up(&secure_tunnel->received_data);
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);

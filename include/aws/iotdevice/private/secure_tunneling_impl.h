@@ -29,8 +29,8 @@ struct aws_secure_tunnel_vtable {
 struct aws_secure_tunnel {
     /* Static settings */
     struct aws_allocator *alloc;
-    struct aws_secure_tunneling_connection_options_storage *options_storage;
-    struct aws_secure_tunneling_connection_options *options;
+    struct aws_secure_tunnel_options_storage *options_storage;
+    struct aws_secure_tunnel_options *options;
     struct aws_tls_ctx *tls_ctx;
     struct aws_tls_connection_options tls_con_opt;
     struct aws_secure_tunnel_vtable vtable;

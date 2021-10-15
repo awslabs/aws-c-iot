@@ -76,7 +76,7 @@ static void s_init_secure_tunneling_connection_config(
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode,
     const char *endpoint,
     const char *root_ca,
-    struct aws_secure_tunneling_connection_options *config) {
+    struct aws_secure_tunnel_options *config) {
 
     AWS_ZERO_STRUCT(*config);
     config->allocator = allocator;
@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
     socket_options.domain = AWS_SOCKET_IPV4;
 
     /* setup secure tunneling connection config */
-    struct aws_secure_tunneling_connection_options config;
+    struct aws_secure_tunnel_options config;
     s_init_secure_tunneling_connection_config(
         allocator, bootstrap, &socket_options, access_token, local_proxy_mode, endpoint, root_ca, &config);
 
