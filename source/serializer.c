@@ -4,12 +4,6 @@
  */
 #include <aws/iotdevice/private/serializer.h>
 
-#include <aws/common/assert.h>
-#include <aws/common/byte_buf.h>
-#include <aws/common/error.h>
-
-#include <stdio.h>
-
 static int s_iot_st_encode_varint_uint32_t(struct aws_byte_buf *buffer, uint32_t n) {
     // & 2's comp   lement
     // ~0x7F == b-10000000

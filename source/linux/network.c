@@ -3,15 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
-#include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/network.h>
 
-#include <aws/common/byte_buf.h>
-#include <aws/common/error.h>
 #include <aws/common/hash_table.h>
-#include <aws/common/logging.h>
 #include <aws/common/string.h>
-#include <aws/io/io.h>
 
 #include <arpa/inet.h>
 #include <errno.h>

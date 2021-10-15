@@ -1,12 +1,18 @@
+/**
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0.
+ */
+
+#include <aws/iotdevice/private/secure_tunneling_impl.h>
+
+#include <aws/common/string.h>
 #include <aws/http/request_response.h>
 #include <aws/http/websocket.h>
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/event_loop.h>
-#include <aws/io/tls_channel_handler.h>
-#include <aws/iotdevice/iotdevice.h>
+#include <aws/io/socket.h>
 #include <aws/iotdevice/private/iotdevice_internals.h>
 #include <aws/iotdevice/private/serializer.h>
-#include <aws/iotdevice/secure_tunneling.h>
 #include <math.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076
@@ -15,6 +21,82 @@
 #define PING_TASK_INTERVAL ((uint64_t)20 * 1000000000)
 
 #define UNUSED(x) (void)(x)
+
+struct aws_secure_tunnel_options_storage {
+    struct aws_secure_tunnel_options options;
+
+    /* backup */
+    struct aws_socket_options socket_options;
+    struct aws_byte_buf cursor_storage;
+    struct aws_string *root_ca;
+};
+
+int aws_secure_tunnel_options_validate(const struct aws_secure_tunnel_options *options) {
+    AWS_ASSERT(options && options->allocator);
+    if (options->bootstrap == NULL) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "bootstrap cannot be NULL");
+        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
+    }
+    if (options->socket_options == NULL) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "socket options cannot be NULL");
+        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
+    }
+    if (options->access_token.len == 0) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "access token is required");
+        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
+    }
+    if (options->endpoint_host.len == 0) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "endpoint host is required");
+        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
+    }
+
+    return AWS_OP_SUCCESS;
+}
+
+void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_storage *storage) {
+    if (storage == NULL) {
+        return;
+    }
+
+    aws_client_bootstrap_release(storage->options.bootstrap);
+    aws_byte_buf_clean_up(&storage->cursor_storage);
+    aws_string_destroy(storage->root_ca);
+    aws_mem_release(storage->options.allocator, storage);
+}
+
+struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
+    const struct aws_secure_tunnel_options *src) {
+
+    if (aws_secure_tunnel_options_validate(src)) {
+        return NULL;
+    }
+
+    struct aws_allocator *alloc = src->allocator;
+
+    struct aws_secure_tunnel_options_storage *storage =
+        aws_mem_calloc(alloc, 1, sizeof(struct aws_secure_tunnel_options_storage));
+
+    /* shallow-copy everything that's shallow-copy-able */
+    storage->options = *src;
+
+    /* acquire reference to everything that's ref-counted */
+    aws_client_bootstrap_acquire(storage->options.bootstrap);
+
+    /* deep-copy anything that needs deep-copying */
+    storage->socket_options = *src->socket_options;
+    storage->options.socket_options = &storage->socket_options;
+
+    /* Store contents of all cursors within single buffer (and update cursors to point into it) */
+    aws_byte_buf_init_cache_and_update_cursors(
+        &storage->cursor_storage, alloc, &storage->options.access_token, &storage->options.endpoint_host, NULL);
+
+    if (src->root_ca != NULL) {
+        storage->root_ca = aws_string_new_from_c_str(alloc, src->root_ca);
+        storage->options.root_ca = aws_string_c_str(storage->root_ca);
+    }
+
+    return storage;
+}
 
 static void s_send_websocket_ping(struct aws_websocket *websocket) {
     if (!websocket) {
@@ -86,15 +168,15 @@ static void s_on_websocket_setup(
     secure_tunnel->handshake_request = NULL;
 
     secure_tunnel->websocket = websocket;
-    secure_tunnel->config.on_connection_complete(secure_tunnel->config.user_data);
+    secure_tunnel->options->on_connection_complete(secure_tunnel->options->user_data);
 
     struct ping_task_context *ping_task_context =
-        aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct ping_task_context));
+        aws_mem_acquire(secure_tunnel->alloc, sizeof(struct ping_task_context));
     secure_tunnel->ping_task_context = ping_task_context;
     AWS_ZERO_STRUCT(*ping_task_context);
-    ping_task_context->allocator = secure_tunnel->config.allocator;
+    ping_task_context->allocator = secure_tunnel->alloc;
     ping_task_context->event_loop =
-        aws_event_loop_group_get_next_loop(secure_tunnel->config.bootstrap->event_loop_group);
+        aws_event_loop_group_get_next_loop(secure_tunnel->options->bootstrap->event_loop_group);
     aws_atomic_store_int(&ping_task_context->task_cancelled, 0);
     ping_task_context->websocket = websocket;
 
@@ -109,7 +191,7 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     struct aws_secure_tunnel *secure_tunnel = user_data;
     aws_atomic_store_int(&secure_tunnel->ping_task_context->task_cancelled, 1);
     secure_tunnel->ping_task_context->websocket = NULL;
-    secure_tunnel->config.on_connection_shutdown(secure_tunnel->config.user_data);
+    secure_tunnel->options->on_connection_shutdown(secure_tunnel->options->user_data);
 }
 
 static bool s_on_websocket_incoming_frame_begin(
@@ -123,7 +205,7 @@ static bool s_on_websocket_incoming_frame_begin(
 }
 
 static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
-    if (secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
+    if (secure_tunnel->options->local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
         /* Source mode tunnel clients SHOULD treat receiving StreamStart as an error and close the active data stream
          * and WebSocket connection. */
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Received StreamStart in source mode. Closing the tunnel.");
@@ -134,7 +216,7 @@ static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struc
             "Received StreamStart in destination mode. stream_id=%d",
             st_msg->stream_id);
         secure_tunnel->stream_id = st_msg->stream_id;
-        secure_tunnel->config.on_stream_start(secure_tunnel->config.user_data);
+        secure_tunnel->options->on_stream_start(secure_tunnel->options->user_data);
     }
 }
 
@@ -154,7 +236,7 @@ static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struc
         return;
     }
 
-    secure_tunnel->config.on_stream_reset(secure_tunnel->config.user_data);
+    secure_tunnel->options->on_stream_reset(secure_tunnel->options->user_data);
     s_reset_secure_tunnel(secure_tunnel);
 }
 
@@ -163,7 +245,7 @@ static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
         return;
     }
 
-    secure_tunnel->config.on_session_reset(secure_tunnel->config.user_data);
+    secure_tunnel->options->on_session_reset(secure_tunnel->options->user_data);
     s_reset_secure_tunnel(secure_tunnel);
 }
 
@@ -172,7 +254,7 @@ static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct
 
     switch (st_msg->type) {
         case DATA:
-            secure_tunnel->config.on_data_receive(&st_msg->payload, secure_tunnel->config.user_data);
+            secure_tunnel->options->on_data_receive(&st_msg->payload, secure_tunnel->options->user_data);
             break;
         case STREAM_START:
             s_handle_stream_start(secure_tunnel, st_msg);
@@ -211,7 +293,7 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         tmp_cursor = cursor;
 
         struct aws_iot_st_msg st_msg;
-        aws_iot_st_msg_deserialize_from_cursor(&st_msg, &st_frame, secure_tunnel->config.allocator);
+        aws_iot_st_msg_deserialize_from_cursor(&st_msg, &st_frame, secure_tunnel->alloc);
         s_process_iot_st_msg(secure_tunnel, &st_msg);
 
         if (st_msg.type == DATA) {
@@ -275,9 +357,9 @@ static struct aws_http_message *s_new_handshake_request(const struct aws_secure_
         path,
         sizeof(path),
         "/tunnel?local-proxy-mode=%s",
-        s_get_proxy_mode_string(secure_tunnel->config.local_proxy_mode));
+        s_get_proxy_mode_string(secure_tunnel->options->local_proxy_mode));
     struct aws_http_message *handshake_request = aws_http_message_new_websocket_handshake_request(
-        secure_tunnel->config.allocator, aws_byte_cursor_from_c_str(path), secure_tunnel->config.endpoint_host);
+        secure_tunnel->alloc, aws_byte_cursor_from_c_str(path), secure_tunnel->options->endpoint_host);
 
     struct aws_http_header extra_headers[] = {
         {
@@ -286,7 +368,7 @@ static struct aws_http_message *s_new_handshake_request(const struct aws_secure_
         },
         {
             .name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("access-token"),
-            .value = secure_tunnel->config.access_token,
+            .value = secure_tunnel->options->access_token,
         },
     };
     for (size_t i = 0; i < AWS_ARRAY_SIZE(extra_headers); ++i) {
@@ -301,11 +383,11 @@ void init_websocket_client_connection_options(
     struct aws_websocket_client_connection_options *websocket_options) {
 
     AWS_ZERO_STRUCT(*websocket_options);
-    websocket_options->allocator = secure_tunnel->config.allocator;
-    websocket_options->bootstrap = secure_tunnel->config.bootstrap;
-    websocket_options->socket_options = secure_tunnel->config.socket_options;
+    websocket_options->allocator = secure_tunnel->alloc;
+    websocket_options->bootstrap = secure_tunnel->options->bootstrap;
+    websocket_options->socket_options = secure_tunnel->options->socket_options;
     websocket_options->tls_options = &secure_tunnel->tls_con_opt;
-    websocket_options->host = secure_tunnel->config.endpoint_host;
+    websocket_options->host = secure_tunnel->options->endpoint_host;
     websocket_options->port = 443;
     websocket_options->handshake_request = s_new_handshake_request(secure_tunnel);
     websocket_options->initial_window_size = MAX_WEBSOCKET_PAYLOAD; /* TODO: followup */
@@ -354,9 +436,9 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     UNUSED(websocket);
     struct data_tunnel_pair *pair = user_data;
     struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)pair->secure_tunnel;
-    secure_tunnel->config.on_send_data_complete(error_code, pair->secure_tunnel->config.user_data);
+    secure_tunnel->options->on_send_data_complete(error_code, pair->secure_tunnel->options->user_data);
     aws_byte_buf_clean_up(&pair->buf);
-    aws_mem_release(secure_tunnel->config.allocator, pair);
+    aws_mem_release(secure_tunnel->alloc, pair);
 
     aws_mutex_lock(&secure_tunnel->send_data_mutex);
     secure_tunnel->can_send_data = true;
@@ -423,7 +505,7 @@ static int s_init_data_tunnel_pair(
     }
     pair->secure_tunnel = secure_tunnel;
     pair->length_prefix_written = false;
-    if (aws_iot_st_msg_serialize_from_struct(&pair->buf, secure_tunnel->config.allocator, message) != AWS_OP_SUCCESS) {
+    if (aws_iot_st_msg_serialize_from_struct(&pair->buf, secure_tunnel->alloc, message) != AWS_OP_SUCCESS) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
         goto cleanup;
     }
@@ -435,7 +517,7 @@ static int s_init_data_tunnel_pair(
     return AWS_OP_SUCCESS;
 cleanup:
     aws_byte_buf_clean_up(&pair->buf);
-    aws_mem_release(pair->secure_tunnel->config.allocator, (void *)pair);
+    aws_mem_release(pair->secure_tunnel->alloc, (void *)pair);
     return AWS_OP_ERR;
 }
 
@@ -445,7 +527,7 @@ int secure_tunneling_init_send_frame(
     const struct aws_byte_cursor *data,
     enum aws_iot_st_message_type type) {
     struct data_tunnel_pair *pair =
-        (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->config.allocator, sizeof(struct data_tunnel_pair));
+        (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->alloc, sizeof(struct data_tunnel_pair));
     if (s_init_data_tunnel_pair(pair, secure_tunnel, data, type) != AWS_OP_SUCCESS) {
         return AWS_OP_ERR;
     }
@@ -503,7 +585,7 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
 }
 
 static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel->config.local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+    if (secure_tunnel->options->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Start can only be sent from src mode");
         return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INCORRECT_MODE;
     }
@@ -525,32 +607,46 @@ static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure
     return result;
 }
 
-static void s_copy_secure_tunneling_connection_config(
-    const struct aws_secure_tunneling_connection_config *src,
-    struct aws_secure_tunneling_connection_config *dest) {
-    *dest = *src;
-}
+static void s_secure_tunnel_destroy(void *user_data);
 
-struct aws_secure_tunnel *aws_secure_tunnel_new(
-    const struct aws_secure_tunneling_connection_config *connection_config) {
+struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_options *options) {
 
-    struct aws_secure_tunnel *secure_tunnel =
-        aws_mem_acquire(connection_config->allocator, sizeof(struct aws_secure_tunnel));
-    AWS_ZERO_STRUCT(*secure_tunnel);
-
-    s_copy_secure_tunneling_connection_config(connection_config, &secure_tunnel->config);
-
-    /* tls */
     struct aws_tls_ctx_options tls_ctx_opt;
-    aws_tls_ctx_options_init_default_client(&tls_ctx_opt, connection_config->allocator);
-    aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, connection_config->root_ca);
-    secure_tunnel->tls_ctx = aws_tls_client_ctx_new(connection_config->allocator, &tls_ctx_opt);
+    AWS_ZERO_STRUCT(tls_ctx_opt);
+
+    struct aws_secure_tunnel *secure_tunnel = aws_mem_calloc(options->allocator, 1, sizeof(struct aws_secure_tunnel));
+    secure_tunnel->alloc = options->allocator;
+    aws_ref_count_init(&secure_tunnel->ref_count, secure_tunnel, s_secure_tunnel_destroy);
+
+    /* store options */
+    secure_tunnel->options_storage = aws_secure_tunnel_options_storage_new(options);
+    if (secure_tunnel->options_storage == NULL) {
+        goto error;
+    }
+    secure_tunnel->options = &secure_tunnel->options_storage->options;
+
+    /* tls_ctx */
+    aws_tls_ctx_options_init_default_client(&tls_ctx_opt, options->allocator);
+
+    if (options->root_ca != NULL) {
+        if (aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, options->root_ca)) {
+            goto error;
+        }
+    }
+
+    secure_tunnel->tls_ctx = aws_tls_client_ctx_new(options->allocator, &tls_ctx_opt);
+    if (secure_tunnel->tls_ctx == NULL) {
+        goto error;
+    }
+
     aws_tls_ctx_options_clean_up(&tls_ctx_opt);
+
+    /* tls_connection_options */
     aws_tls_connection_options_init_from_ctx(&secure_tunnel->tls_con_opt, secure_tunnel->tls_ctx);
-    aws_tls_connection_options_set_server_name(
-        &secure_tunnel->tls_con_opt,
-        connection_config->allocator,
-        (struct aws_byte_cursor *)&connection_config->endpoint_host);
+    if (aws_tls_connection_options_set_server_name(
+            &secure_tunnel->tls_con_opt, options->allocator, (struct aws_byte_cursor *)&options->endpoint_host)) {
+        goto error;
+    }
 
     /* Setup vtable here */
     secure_tunnel->vtable.connect = s_secure_tunneling_connect;
@@ -568,16 +664,34 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     aws_condition_variable_init(&secure_tunnel->send_data_condition_variable);
 
     /* TODO: Release this buffer when there is no data to hold */
-    aws_byte_buf_init(&secure_tunnel->received_data, connection_config->allocator, MAX_WEBSOCKET_PAYLOAD);
+    aws_byte_buf_init(&secure_tunnel->received_data, options->allocator, MAX_WEBSOCKET_PAYLOAD);
 
+    return secure_tunnel;
+error:
+    aws_tls_ctx_options_clean_up(&tls_ctx_opt);
+    aws_secure_tunnel_release(secure_tunnel);
+    return NULL;
+}
+
+struct aws_secure_tunnel *aws_secure_tunnel_acquire(struct aws_secure_tunnel *secure_tunnel) {
+    aws_ref_count_acquire(&secure_tunnel->ref_count);
     return secure_tunnel;
 }
 
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel == NULL) {
+        return;
+    }
+    aws_ref_count_release(&secure_tunnel->ref_count);
+}
+
+static void s_secure_tunnel_destroy(void *user_data) {
+    struct aws_secure_tunnel *secure_tunnel = user_data;
+    aws_secure_tunnel_options_storage_destroy(secure_tunnel->options_storage);
     aws_byte_buf_clean_up(&secure_tunnel->received_data);
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
-    aws_mem_release(secure_tunnel->config.allocator, secure_tunnel);
+    aws_mem_release(secure_tunnel->alloc, secure_tunnel);
 }
 
 int aws_secure_tunnel_connect(struct aws_secure_tunnel *secure_tunnel) {
