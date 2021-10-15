@@ -11,6 +11,21 @@
 #include <aws/common/mutex.h>
 #include <aws/io/tls_channel_handler.h>
 
+struct data_tunnel_pair {
+    struct aws_byte_buf buf;
+    struct aws_byte_cursor cur;
+    const struct aws_secure_tunnel *secure_tunnel;
+    bool length_prefix_written;
+};
+
+struct aws_secure_tunnel_vtable {
+    int (*connect)(struct aws_secure_tunnel *secure_tunnel);
+    int (*send_data)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
+    int (*send_stream_start)(struct aws_secure_tunnel *secure_tunnel);
+    int (*send_stream_reset)(struct aws_secure_tunnel *secure_tunnel);
+    int (*close)(struct aws_secure_tunnel *secure_tunnel);
+};
+
 struct aws_secure_tunnel {
     /* Static settings */
     struct aws_allocator *alloc;

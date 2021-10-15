@@ -12,22 +12,6 @@ enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, A
 struct aws_secure_tunnel;
 struct aws_websocket;
 struct aws_websocket_incoming_frame;
-struct ping_task_context;
-
-struct data_tunnel_pair {
-    struct aws_byte_buf buf;
-    struct aws_byte_cursor cur;
-    const struct aws_secure_tunnel *secure_tunnel;
-    bool length_prefix_written;
-};
-
-/* APIs */
-typedef int(aws_secure_tunneling_connect_fn)(struct aws_secure_tunnel *secure_tunnel);
-typedef int(
-    aws_secure_tunneling_send_data_fn)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
-typedef int(aws_secure_tunneling_send_stream_start_fn)(struct aws_secure_tunnel *secure_tunnel);
-typedef int(aws_secure_tunneling_send_stream_reset_fn)(struct aws_secure_tunnel *secure_tunnel);
-typedef int(aws_secure_tunneling_close_fn)(struct aws_secure_tunnel *secure_tunnel);
 
 /* Callbacks */
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(void *user_data);
@@ -37,14 +21,6 @@ typedef void(aws_secure_tunneling_on_data_receive_fn)(const struct aws_byte_buf 
 typedef void(aws_secure_tunneling_on_stream_start_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_stream_reset_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_session_reset_fn)(void *user_data);
-
-struct aws_secure_tunnel_vtable {
-    aws_secure_tunneling_connect_fn *connect;
-    aws_secure_tunneling_send_data_fn *send_data;
-    aws_secure_tunneling_send_stream_start_fn *send_stream_start;
-    aws_secure_tunneling_send_stream_reset_fn *send_stream_reset;
-    aws_secure_tunneling_close_fn *close;
-};
 
 struct aws_secure_tunneling_connection_options {
     struct aws_allocator *allocator;
@@ -66,6 +42,9 @@ struct aws_secure_tunneling_connection_options {
 
     void *user_data;
 };
+
+/* deprecated: "_config" is renamed "_options" for consistency with similar code in the aws-c libraries */
+#define aws_secure_tunneling_connection_config aws_secure_tunneling_connection_options
 
 /**
  * Persistent storage for aws_secure_tunneling_connection_options.
