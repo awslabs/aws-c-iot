@@ -2,12 +2,10 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#include <aws/common/thread.h>
-#include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/iotdevice.h>
 
-#include <aws/common/allocator.h>
-#include <aws/common/logging.h>
+#include <aws/common/thread.h>
+#include <aws/iotdevice/external/cJSON.h>
 
 static struct aws_allocator *s_library_allocator = NULL;
 

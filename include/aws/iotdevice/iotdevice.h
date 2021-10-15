@@ -5,9 +5,9 @@
 #ifndef AWS_IOTDEVICE_H
 #define AWS_IOTDEVICE_H
 
-#include <aws/common/error.h>
-#include <aws/common/logging.h>
 #include <aws/iotdevice/exports.h>
+
+#include <aws/mqtt/mqtt.h>
 
 #define AWS_C_IOTDEVICE_PACKAGE_ID 13
 

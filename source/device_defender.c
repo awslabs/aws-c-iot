@@ -3,33 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/iotdevice/device_defender.h>
+
 #include <aws/common/condition_variable.h>
 #include <aws/common/mutex.h>
 #include <aws/common/thread.h>
-#include <aws/common/zero.h>
-#include <aws/iotdevice/device_defender.h>
 #include <aws/iotdevice/external/cJSON.h>
-#include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/network.h>
 
-#include <aws/common/allocator.h>
 #include <aws/common/array_list.h>
-#include <aws/common/assert.h>
-#include <aws/common/atomics.h>
-#include <aws/common/byte_buf.h>
 #include <aws/common/clock.h>
-#include <aws/common/error.h>
 #include <aws/common/hash_table.h>
-#include <aws/common/logging.h>
-#include <aws/common/macros.h>
 #include <aws/common/string.h>
 #include <aws/common/task_scheduler.h>
 
 #include <aws/io/event_loop.h>
 
 #include <aws/mqtt/client.h>
-#include <aws/mqtt/mqtt.h>
-#include <string.h>
 
 /**
  * Update s_copy_task_config() and aws_iotdevice_defender_config_destroy()

@@ -6,7 +6,6 @@
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/event_loop.h>
 #include <aws/io/socket.h>
-#include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/iotdevice_internals.h>
 #include <aws/iotdevice/private/serializer.h>
 #include <math.h>

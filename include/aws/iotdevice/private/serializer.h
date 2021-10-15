@@ -5,8 +5,9 @@
 #ifndef AWS_IOTDEVICE_SERIALIZER_H
 #define AWS_IOTDEVICE_SERIALIZER_H
 
+#include <aws/iotdevice/iotdevice.h>
+
 #include <aws/common/byte_buf.h>
-#include <aws/iotdevice/exports.h>
 
 #define AWS_IOT_ST_MESSAGE_TYPEFIELD 1
 #define AWS_IOT_ST_MESSAGE_STREAM_ID 2

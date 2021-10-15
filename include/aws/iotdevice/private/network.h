@@ -5,11 +5,9 @@
 #ifndef AWS_IOTDEVICE_NETWORK_H
 #define AWS_IOTDEVICE_NETWORK_H
 
-#include <aws/common/hash_table.h>
-#include <aws/iotdevice/exports.h>
+#include <aws/iotdevice/iotdevice.h>
 
-#include <stdbool.h>
-#include <stdint.h>
+#include <aws/common/hash_table.h>
 
 struct aws_allocator;
 struct aws_array_list;

@@ -2,7 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
-#include <aws/common/error.h>
 
 #include <aws/iotdevice/private/network.h>
 
@@ -20,7 +19,8 @@ void get_system_network_total(
 int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifconfig, struct aws_allocator *allocator) {
     (void)ifconfig;
     (void)allocator;
-    return AWS_ERROR_UNIMPLEMENTED;
+    return aws_raise_error(AWS_ERROR_UNIMPLEMENTED);
+    ;
 }
 
 int get_network_connections(
@@ -30,7 +30,8 @@ int get_network_connections(
     (void)net_conns;
     (void)ifconfig;
     (void)allocator;
-    return AWS_ERROR_UNIMPLEMENTED;
+    return aws_raise_error(AWS_ERROR_UNIMPLEMENTED);
+    ;
 }
 
 void get_network_total_delta(
