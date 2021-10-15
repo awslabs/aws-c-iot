@@ -20,7 +20,6 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
     (void)ifconfig;
     (void)allocator;
     return aws_raise_error(AWS_ERROR_UNIMPLEMENTED);
-    ;
 }
 
 int get_network_connections(
@@ -31,7 +30,6 @@ int get_network_connections(
     (void)ifconfig;
     (void)allocator;
     return aws_raise_error(AWS_ERROR_UNIMPLEMENTED);
-    ;
 }
 
 void get_network_total_delta(
