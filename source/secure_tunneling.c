@@ -52,7 +52,7 @@ int aws_secure_tunneling_connection_options_validate(const struct aws_secure_tun
 void aws_secure_tunneling_connection_options_storage_destroy(
     struct aws_secure_tunneling_connection_options_storage *storage) {
 
-    if (NULL) {
+    if (storage == NULL) {
         return;
     }
 

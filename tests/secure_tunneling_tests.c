@@ -26,6 +26,9 @@
 
 struct secure_tunneling_test_context {
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
+    struct aws_event_loop_group *elg;
+    struct aws_host_resolver *resolver;
+    struct aws_client_bootstrap *bootstrap;
     struct aws_secure_tunnel *secure_tunnel;
 };
 static struct secure_tunneling_test_context s_test_context = {0};
@@ -85,25 +88,35 @@ static int before(struct aws_allocator *allocator, void *ctx) {
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
-    struct aws_event_loop_group *elg = aws_event_loop_group_new_default(allocator, 1, NULL);
+    test_context->elg = aws_event_loop_group_new_default(allocator, 1, NULL);
     struct aws_host_resolver_default_options host_resolver_default_options;
     AWS_ZERO_STRUCT(host_resolver_default_options);
     host_resolver_default_options.max_entries = 8;
-    host_resolver_default_options.el_group = elg;
+    host_resolver_default_options.el_group = test_context->elg;
     host_resolver_default_options.shutdown_options = NULL;
     host_resolver_default_options.system_clock_override_fn = NULL;
-    struct aws_host_resolver *resolver = aws_host_resolver_new_default(allocator, &host_resolver_default_options);
+    test_context->resolver = aws_host_resolver_new_default(allocator, &host_resolver_default_options);
     struct aws_client_bootstrap_options bootstrap_options = {
-        .event_loop_group = elg,
-        .host_resolver = resolver,
+        .event_loop_group = test_context->elg,
+        .host_resolver = test_context->resolver,
     };
-    struct aws_client_bootstrap *bootstrap = aws_client_bootstrap_new(allocator, &bootstrap_options);
+    test_context->bootstrap = aws_client_bootstrap_new(allocator, &bootstrap_options);
+
+    struct aws_socket_options socket_options;
+    AWS_ZERO_STRUCT(socket_options);
 
     struct aws_secure_tunneling_connection_options options;
     s_init_secure_tunneling_connection_config(
-        allocator, bootstrap, NULL, ACCESS_TOKEN, test_context->local_proxy_mode, ENDPOINT, &options);
+        allocator,
+        test_context->bootstrap,
+        &socket_options,
+        ACCESS_TOKEN,
+        test_context->local_proxy_mode,
+        ENDPOINT,
+        &options);
 
     test_context->secure_tunnel = aws_secure_tunnel_new(&options);
+    ASSERT_NOT_NULL(test_context->secure_tunnel);
 
     return AWS_OP_SUCCESS;
 }
@@ -114,9 +127,9 @@ static int after(struct aws_allocator *allocator, int setup_result, void *ctx) {
 
     struct secure_tunneling_test_context *test_context = ctx;
 
-    aws_host_resolver_release(test_context->secure_tunnel->options->bootstrap->host_resolver);
-    aws_event_loop_group_release(test_context->secure_tunnel->options->bootstrap->event_loop_group);
-    aws_client_bootstrap_release(test_context->secure_tunnel->options->bootstrap);
+    aws_host_resolver_release(test_context->resolver);
+    aws_event_loop_group_release(test_context->elg);
+    aws_client_bootstrap_release(test_context->bootstrap);
 
     aws_secure_tunnel_release(test_context->secure_tunnel);
     aws_iotdevice_library_clean_up();
