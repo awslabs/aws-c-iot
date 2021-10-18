@@ -17,6 +17,7 @@ enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, A
 struct aws_secure_tunnel;
 struct aws_websocket;
 struct aws_websocket_incoming_frame;
+struct aws_http_proxy_options;
 
 /* Callbacks */
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(void *user_data);
@@ -31,6 +32,7 @@ struct aws_secure_tunnel_options {
     struct aws_allocator *allocator;
     struct aws_client_bootstrap *bootstrap;
     struct aws_socket_options *socket_options;
+    struct aws_http_proxy_options *http_proxy_options;
 
     struct aws_byte_cursor access_token;
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
