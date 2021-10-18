@@ -99,7 +99,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
         }
 
         /* Make a copy of http_proxy_options and point to it */
-        storage->http_proxy_options = *src->http_proxy_options;
+        aws_http_proxy_options_init_from_config(&storage->http_proxy_options, storage->http_proxy_config);
         storage->options.http_proxy_options = &storage->http_proxy_options;
     }
 
