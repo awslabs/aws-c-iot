@@ -6,6 +6,7 @@
 #include <aws/iotdevice/private/secure_tunneling_impl.h>
 
 #include <aws/common/string.h>
+#include <aws/http/proxy.h>
 #include <aws/http/request_response.h>
 #include <aws/http/websocket.h>
 #include <aws/io/channel_bootstrap.h>
@@ -27,6 +28,8 @@ struct aws_secure_tunnel_options_storage {
 
     /* backup */
     struct aws_socket_options socket_options;
+    struct aws_http_proxy_options http_proxy_options;
+    struct aws_http_proxy_config *http_proxy_config;
     struct aws_byte_buf cursor_storage;
     struct aws_string *root_ca;
 };
@@ -59,6 +62,7 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
     }
 
     aws_client_bootstrap_release(storage->options.bootstrap);
+    aws_http_proxy_config_destroy(storage->http_proxy_config);
     aws_byte_buf_clean_up(&storage->cursor_storage);
     aws_string_destroy(storage->root_ca);
     aws_mem_release(storage->options.allocator, storage);
@@ -86,6 +90,19 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->socket_options = *src->socket_options;
     storage->options.socket_options = &storage->socket_options;
 
+    /* deep-copy the http-proxy-options to http_proxy_config */
+    if (src->http_proxy_options != NULL) {
+        storage->http_proxy_config =
+            aws_http_proxy_config_new_tunneling_from_proxy_options(alloc, src->http_proxy_options);
+        if (storage->http_proxy_config == NULL) {
+            goto error;
+        }
+
+        /* Make a copy of http_proxy_options and point to it */
+        storage->http_proxy_options = *src->http_proxy_options;
+        storage->options.http_proxy_options = &storage->http_proxy_options;
+    }
+
     /* Store contents of all cursors within single buffer (and update cursors to point into it) */
     aws_byte_buf_init_cache_and_update_cursors(
         &storage->cursor_storage, alloc, &storage->options.access_token, &storage->options.endpoint_host, NULL);
@@ -96,6 +113,10 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     }
 
     return storage;
+
+error:
+    aws_secure_tunnel_options_storage_destroy(storage);
+    return NULL;
 }
 
 static void s_send_websocket_ping(struct aws_websocket *websocket) {
