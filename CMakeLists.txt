@@ -58,6 +58,7 @@ file(GLOB AWS_IOT_PRIV_HEADERS
 
 file(GLOB AWS_IOT_PRIV_EXPOSED_HEADERS
         "include/aws/iotdevice/private/serializer.h"
+        "include/aws/iotdevice/private/secure_tunneling_impl.h"
         )
 
 file(GLOB AWS_IOT_EXTERNAL_HEADERS
