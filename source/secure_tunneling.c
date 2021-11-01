@@ -413,6 +413,7 @@ void init_websocket_client_connection_options(
     websocket_options->handshake_request = s_new_handshake_request(secure_tunnel);
     websocket_options->initial_window_size = MAX_WEBSOCKET_PAYLOAD; /* TODO: followup */
     websocket_options->user_data = secure_tunnel;
+    websocket_options->proxy_options = secure_tunnel->options->http_proxy_options;
     websocket_options->on_connection_setup = s_on_websocket_setup;
     websocket_options->on_connection_shutdown = s_on_websocket_shutdown;
     websocket_options->on_incoming_frame_begin = s_on_websocket_incoming_frame_begin;
