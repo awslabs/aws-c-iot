@@ -20,6 +20,11 @@
 #include <aws/mqtt/private/mqtt_client_test_helper.h>
 #include <aws/testing/aws_test_harness.h>
 
+#ifdef AWS_OS_LINUX
+#    include <errno.h>
+#    include <fcntl.h>
+#endif /* AWS_OS_LINUX */
+
 const char *TM_NUMBER = "TestMetricNumber";
 const char *TM_NUMBER_LIST = "TestMetricNumberList";
 const char *TM_STRING_LIST = "TestMetricStringList";
@@ -337,6 +342,14 @@ static int s_devicedefender_get_network_connections(struct aws_allocator *alloca
     struct aws_iotdevice_network_ifconfig ifconfig;
     AWS_ZERO_STRUCT(ifconfig);
     ASSERT_SUCCESS(get_network_config_and_transfer(&ifconfig, allocator));
+
+#ifdef AWS_OS_LINUX
+    /* Regression test: Check that get_network_config_and_transfer didn't
+     * accidentally close file descriptor 0 (aka stdin) */
+    errno = 0;
+    bool file_descriptor_0_is_closed = (fcntl(0, F_GETFD) == -1) && (errno != 0);
+    ASSERT_FALSE(file_descriptor_0_is_closed);
+#endif /* AWS_OS_LINUX */
 
     struct aws_array_list net_conns;
     AWS_ZERO_STRUCT(net_conns);
