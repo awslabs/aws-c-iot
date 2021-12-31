@@ -338,7 +338,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
         return AWS_OP_ERR;
     }
     int result = AWS_OP_ERR;
-    int fd = 0;
+    int fd = -1;
     struct ifaddrs *address_info = NULL;
     if (getifaddrs(&address_info)) {
         AWS_LOGF_ERROR(
@@ -408,8 +408,10 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
             goto cleanup;
         }
     next_interface:
-        close(fd);
-        fd = 0;
+        if (fd != -1) {
+            close(fd);
+            fd = -1;
+        }
         address = address->ifa_next;
     } /* while */
     result = AWS_OP_SUCCESS;
@@ -421,7 +423,7 @@ cleanup:
     if (address_info) {
         freeifaddrs(address_info);
     }
-    if (fd) {
+    if (fd != -1) {
         close(fd);
     }
     return result;
