@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/common/allocator.h>
+#include <aws/common/byte_buf.h>
+#include <aws/common/device_random.h>
+#include <aws/common/error.h>
 #include <aws/common/string.h>
 #include <aws/common/zero.h>
 #include <aws/http/http.h>
@@ -10,12 +14,16 @@
 #include <aws/http/websocket.h>
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/event_loop.h>
+#include <aws/io/host_resolver.h>
 #include <aws/io/socket.h>
 #include <aws/iotdevice/iotdevice.h>
 #include <aws/iotdevice/private/iotdevice_internals.h>
 #include <aws/iotdevice/private/secure_tunneling_impl.h>
 #include <aws/iotdevice/private/serializer.h>
+#include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
+
+#include <stdint.h>
 
 #define UNUSED(x) (void)(x)
 
@@ -31,12 +39,13 @@
 
 struct secure_tunneling_test_context {
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
+    uint16_t max_threads;
     struct aws_event_loop_group *elg;
     struct aws_host_resolver *resolver;
     struct aws_client_bootstrap *bootstrap;
     struct aws_secure_tunnel *secure_tunnel;
 };
-static struct secure_tunneling_test_context s_test_context = {0};
+static struct secure_tunneling_test_context s_test_context = {.max_threads = 1};
 
 static bool s_on_stream_start_called = false;
 static void s_on_stream_start(void *user_data) {
@@ -87,13 +96,76 @@ static void s_init_secure_tunneling_connection_config(
     /* TODO: Initialize the rest of the callbacks */
 }
 
+/*
+ * Mock aws websocket api used by the secure tunnel.
+ */
+
+int s_mock_aws_websocket_client_connect(const struct aws_websocket_client_connection_options *options) {
+    UNUSED(options);
+    return AWS_OP_SUCCESS;
+}
+
+static size_t s_mock_aws_websocket_send_frame_call_count = 0U;
+
+static size_t s_mock_aws_websocket_send_frame_payload_len = 0U;
+
+int s_mock_aws_websocket_send_frame(
+    struct aws_websocket *websocket,
+    const struct aws_websocket_send_frame_options *options) {
+    UNUSED(websocket);
+    ++s_mock_aws_websocket_send_frame_call_count;
+
+    struct data_tunnel_pair *pair = (struct data_tunnel_pair *)options->user_data;
+    struct aws_byte_buf *buf = &pair->buf;
+    struct aws_byte_cursor cursor = aws_byte_cursor_from_buf(buf);
+
+    /* Deserialize the wire format to obtain original payload. */
+    struct aws_iot_st_msg message;
+    int rc = aws_iot_st_msg_deserialize_from_cursor(&message, &cursor, s_test_context.secure_tunnel->alloc);
+    ASSERT_INT_EQUALS(AWS_OP_SUCCESS, rc);
+    s_mock_aws_websocket_send_frame_payload_len += message.payload.len;
+    aws_byte_buf_clean_up(&message.payload);
+
+    /* Deallocate memory for the buffer holding the wire protocol data and the tunnel context. */
+    aws_byte_buf_clean_up(buf);
+    aws_mem_release(s_test_context.secure_tunnel->alloc, pair);
+
+    return AWS_OP_SUCCESS;
+}
+
+void s_mock_aws_websocket_close(struct aws_websocket *websocket, bool free_scarce_resources_immediately) {
+    UNUSED(websocket);
+    UNUSED(free_scarce_resources_immediately);
+}
+
+void s_mock_aws_websocket_release(struct aws_websocket *websocket) {
+    UNUSED(websocket);
+}
+
+/* s_secure_tunnel_new_mock returns a secure_tunnel that mocks the aws websocket public api. */
+static struct aws_secure_tunnel *s_secure_tunnel_new_mock(const struct aws_secure_tunnel_options *options) {
+    struct aws_secure_tunnel *secure_tunnel = aws_secure_tunnel_new(options);
+    if (!secure_tunnel) {
+        return secure_tunnel;
+    }
+    secure_tunnel->websocket_vtable.client_connect = s_mock_aws_websocket_client_connect;
+    secure_tunnel->websocket_vtable.send_frame = s_mock_aws_websocket_send_frame;
+    secure_tunnel->websocket_vtable.close = s_mock_aws_websocket_close;
+    secure_tunnel->websocket_vtable.release = s_mock_aws_websocket_release;
+    return secure_tunnel;
+}
+
 static int before(struct aws_allocator *allocator, void *ctx) {
     struct secure_tunneling_test_context *test_context = ctx;
 
+    /* Initialize aws-c-http and aws-c-iot libraries. */
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
-    test_context->elg = aws_event_loop_group_new_default(allocator, 1, NULL);
+    /* Initialize event loop. */
+    test_context->elg = aws_event_loop_group_new_default(allocator, test_context->max_threads, NULL);
+
+    /* Initialize dns resolver. */
     struct aws_host_resolver_default_options host_resolver_default_options;
     AWS_ZERO_STRUCT(host_resolver_default_options);
     host_resolver_default_options.max_entries = 8;
@@ -101,15 +173,19 @@ static int before(struct aws_allocator *allocator, void *ctx) {
     host_resolver_default_options.shutdown_options = NULL;
     host_resolver_default_options.system_clock_override_fn = NULL;
     test_context->resolver = aws_host_resolver_new_default(allocator, &host_resolver_default_options);
+
+    /* Initialize client_bootstrap with event loop and dns resolver. */
     struct aws_client_bootstrap_options bootstrap_options = {
         .event_loop_group = test_context->elg,
         .host_resolver = test_context->resolver,
     };
     test_context->bootstrap = aws_client_bootstrap_new(allocator, &bootstrap_options);
 
+    /* Initialize socket_options for secure tunnel. */
     struct aws_socket_options socket_options;
     AWS_ZERO_STRUCT(socket_options);
 
+    /* Initialize secure_tunnel_options with client_bootstrap. */
     struct aws_secure_tunnel_options options;
     s_init_secure_tunneling_connection_config(
         allocator,
@@ -120,7 +196,8 @@ static int before(struct aws_allocator *allocator, void *ctx) {
         ENDPOINT,
         &options);
 
-    test_context->secure_tunnel = aws_secure_tunnel_new(&options);
+    /* Initialize secure_tunnel. */
+    test_context->secure_tunnel = s_secure_tunnel_new_mock(&options);
     ASSERT_NOT_NULL(test_context->secure_tunnel);
 
     return AWS_OP_SUCCESS;
@@ -171,6 +248,33 @@ static int s_test_sent_data(
     const int32_t expected_stream_id,
     const int prefix_bytes,
     const enum aws_iot_st_message_type type) {
+    /*
+     * The public api used to send data over a secure tunnel is aws_secure_tunnel_send_data.
+     *
+     * 1/ The public api accepts an aws_byte_cursor and logically splits this cursor into smaller
+     *    nonoverlapping cursors aka frames using the private secure_tunneling_init_send_frame function.
+     *
+     * 2/ Each frame is written to the websocket connection using the public api aws_websocket_send_frame.
+     *    The websocket api pushes the frame on a fifo queue of frames managed by the event loop.
+     *    The event loop thread pops frames from the queue and writes the data to the websocket connection.
+     *
+     * The function implemented below differs from the public api in some important ways.
+     *
+     * 1/ This function frames a aws_byte_cursor by calling the private api secure_tunneling_init_send_frame.
+     *    As a result, this function does not exercise the logic in the public api aws_secure_tunnel_send_data
+     *    to split the input cursor into multiple frames.
+     *
+     * 2/ This function does not exercise any of the websocket api. Instead this function calls a private api
+     *    secure_tunneling_send_data_call with the websocket set to NULL.  Instead of queueing frames, this
+     *    api writes frames to a second buffer in the websocket wire protocol format. The test compares the
+     *    second buffer to what is expected from the wire format.  In the public api, the functionality to
+     *    write the frame in the websocket wire protocol format is invoked as a callback from the event loop.
+     *
+     * To summarize, the test below has value, but such value is limited by carefully avoiding the public
+     * api to send data over a secure tunnel.  A separate group of tests are required to more directly
+     * exercise the public api.
+     *
+     */
 
     struct aws_iot_st_msg message;
     message.type = type;
@@ -197,11 +301,11 @@ static int s_test_sent_data(
     ASSERT_TRUE(secure_tunneling_send_data_call(NULL, &out_buf, frame_options.user_data));
     struct aws_byte_cursor out_buf_cur = aws_byte_cursor_from_buf(&out_buf);
 
-    ASSERT_INT_EQUALS(out_buf_cur.len - prefix_bytes, serialized_st_msg.len);
+    ASSERT_UINT_EQUALS(out_buf_cur.len - prefix_bytes, serialized_st_msg.len);
 
     uint16_t payload_prefixed_length;
     aws_byte_cursor_read_be16(&out_buf_cur, &payload_prefixed_length);
-    ASSERT_INT_EQUALS((uint16_t)serialized_st_msg.len, payload_prefixed_length);
+    ASSERT_UINT_EQUALS((uint16_t)serialized_st_msg.len, payload_prefixed_length);
     ASSERT_BIN_ARRAYS_EQUALS(serialized_st_msg.buffer, serialized_st_msg.len, out_buf_cur.ptr, out_buf_cur.len);
 
     struct data_tunnel_pair *pair = frame_options.user_data;
@@ -213,6 +317,14 @@ static int s_test_sent_data(
     return AWS_OP_SUCCESS;
 }
 
+static int s_byte_buf_init_rand(struct aws_byte_buf *buf, struct aws_allocator *allocator, size_t capacity) {
+    int rc = aws_byte_buf_init(buf, allocator, capacity);
+    if (rc != AWS_OP_SUCCESS) {
+        return rc;
+    }
+    return aws_device_random_buffer(buf);
+}
+
 AWS_TEST_CASE_FIXTURE(
     secure_tunneling_handle_stream_start_test,
     before,
@@ -220,6 +332,11 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_stream_start_test(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When secure tunnel running in destination mode receives a StreamStart message,
+     * verify the stream start callback is invoked and that the stream ID is parsed from the message.
+     */
+
     struct secure_tunneling_test_context *test_context = ctx;
     test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
@@ -244,6 +361,11 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_data_receive_test(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When secure tunnel running in destination mode receives a Data message,
+     * verify the data callback is invoked with matching message payload.
+     */
+
     struct secure_tunneling_test_context *test_context = ctx;
     test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
@@ -276,6 +398,11 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_stream_reset_test(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When secure tunnel running in destination mode receives a StreamReset message,
+     * verify the stream reset callback is invoked and the stream ID is unset.
+     */
+
     struct secure_tunneling_test_context *test_context = ctx;
     test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
@@ -307,6 +434,11 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_session_reset_test(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When secure tunnel running in destination mode receives a SessionReset message with a valid stream ID,
+     * verify the session reset callback is invoked and the stream ID is unset.
+     */
+
     struct secure_tunneling_test_context *test_context = ctx;
     test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
 
@@ -332,12 +464,47 @@ static int s_secure_tunneling_handle_session_reset_test(struct aws_allocator *al
 }
 
 AWS_TEST_CASE_FIXTURE(
+    secure_tunneling_handle_session_reset_no_stream_test,
+    before,
+    s_secure_tunneling_handle_session_reset_no_stream_test,
+    after,
+    &s_test_context);
+static int s_secure_tunneling_handle_session_reset_no_stream_test(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When secure tunnel running in destination mode receives a SessionReset message without valid stream ID,
+     * verify the session reset callback is not invoked.
+     */
+
+    struct secure_tunneling_test_context *test_context = ctx;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE;
+
+    /* Send StreamReset without existing stream */
+    struct aws_iot_st_msg st_msg;
+    AWS_ZERO_STRUCT(st_msg);
+    st_msg.type = SESSION_RESET;
+    s_on_session_reset_called = false;
+    s_send_secure_tunneling_frame_to_websocket(&st_msg, allocator, test_context->secure_tunnel);
+
+    ASSERT_FALSE(s_on_session_reset_called);
+    ASSERT_INT_EQUALS(INVALID_STREAM_ID, test_context->secure_tunnel->stream_id);
+    ASSERT_UINT_EQUALS(0, test_context->secure_tunnel->received_data.len);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
     secure_tunneling_init_websocket_options_test,
     before,
     s_secure_tunneling_init_websocket_options_test,
     after,
     &s_test_context);
 static int s_secure_tunneling_init_websocket_options_test(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When a client connects to a websocket server,
+     * verify the client handshake includes the aws secure tunneling protocol string and access token
+     * provided by the secure tunneling service when the tunnel is provisioned.
+     */
+
     UNUSED(allocator);
 
     struct secure_tunneling_test_context *test_context = ctx;
@@ -388,6 +555,11 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_send_data(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When a secure tunnel running in source mode sends data to destination,
+     * verify the data are written to the tunnel in the expected websocket wire protocol format.
+     */
+
     UNUSED(allocator);
     const char *expected_payload = "Hi! I'm Paul / Some random payload\n";
     const int32_t expected_stream_id = 1;
@@ -410,6 +582,11 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_send_data_stream_start(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When a secure tunnel running in source mode sends StreamStart to destination,
+     * verify the data are written to the tunnel in the expected websocket wire protocol format.
+     */
+
     UNUSED(allocator);
     const char *expected_payload = "";
     const int32_t expected_stream_id = 1;
@@ -432,6 +609,11 @@ AWS_TEST_CASE_FIXTURE(
     after,
     &s_test_context);
 static int s_secure_tunneling_handle_send_data_stream_reset(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When a secure tunnel running in source mode sends StreamReset to destination,
+     * verify the data are written to the tunnel in the expected websocket wire protocol format.
+     */
+
     UNUSED(allocator);
     const char *expected_payload = "";
     const int32_t expected_stream_id = 1;
@@ -443,6 +625,69 @@ static int s_secure_tunneling_handle_send_data_stream_reset(struct aws_allocator
     test_context->secure_tunnel->stream_id = expected_stream_id;
 
     s_test_sent_data(test_context, expected_payload, expected_stream_id, prefix_bytes, type);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE_FIXTURE(
+    secure_tunneling_handle_send_data_public,
+    before,
+    s_secure_tunneling_handle_send_data_public,
+    after,
+    &s_test_context);
+static int s_secure_tunneling_handle_send_data_public(struct aws_allocator *allocator, void *ctx) {
+    /*
+     * When a secure tunnel running in source mode sends data to destination using the public api,
+     * verify that the payload length matches what the client sends and the number of frames sent
+     * is equal to size of the payload divided by the maximum frame length.
+     */
+
+    struct secure_tunneling_test_context *test_context = ctx;
+    test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
+
+    /* Open the tunnel. */
+    int rc = aws_secure_tunnel_connect(test_context->secure_tunnel);
+    ASSERT_INT_EQUALS(AWS_OP_SUCCESS, rc);
+
+    size_t buf_sizes[] = {10, 100, 1000, AWS_IOT_ST_SPLIT_MESSAGE_SIZE + 1, 2 * AWS_IOT_ST_SPLIT_MESSAGE_SIZE + 1};
+    size_t buf_sizes_len = sizeof(buf_sizes) / sizeof(buf_sizes[0]);
+
+    for (size_t i = 0; i < buf_sizes_len; ++i) {
+        /* Start a stream. */
+        s_mock_aws_websocket_send_frame_call_count = 0U;
+        s_mock_aws_websocket_send_frame_payload_len = 0U;
+        rc = aws_secure_tunnel_stream_start(test_context->secure_tunnel);
+        ASSERT_INT_EQUALS(AWS_OP_SUCCESS, rc);
+        ASSERT_UINT_EQUALS(1U, s_mock_aws_websocket_send_frame_call_count);
+        ASSERT_UINT_EQUALS(0U, s_mock_aws_websocket_send_frame_payload_len);
+
+        /* Initialize buffer of random values to send. */
+        struct aws_byte_buf buf;
+        rc = s_byte_buf_init_rand(&buf, allocator, buf_sizes[i]);
+        ASSERT_INT_EQUALS(AWS_OP_SUCCESS, rc);
+
+        struct aws_byte_cursor cur = aws_byte_cursor_from_buf(&buf);
+
+        /* Call public api to send data over secure tunnel. */
+        s_mock_aws_websocket_send_frame_call_count = 0U;
+        s_mock_aws_websocket_send_frame_payload_len = 0U;
+        rc = aws_secure_tunnel_send_data(test_context->secure_tunnel, &cur);
+        ASSERT_INT_EQUALS(AWS_OP_SUCCESS, rc);
+        int expected_call_count = (int)buf_sizes[i] / AWS_IOT_ST_SPLIT_MESSAGE_SIZE + 1;
+        ASSERT_UINT_EQUALS(expected_call_count, s_mock_aws_websocket_send_frame_call_count);
+        ASSERT_UINT_EQUALS(buf_sizes[i], s_mock_aws_websocket_send_frame_payload_len);
+
+        /* Free buffer. */
+        aws_byte_buf_clean_up(&buf);
+    }
+
+    /* Close the tunnel. */
+    aws_secure_tunnel_close(test_context->secure_tunnel);
+
+    /*
+     * FIXME(marcoaz): Is it a feature or bug that handshake_request is not released when tunnel is closed?
+     */
+    aws_http_message_release(test_context->secure_tunnel->handshake_request);
 
     return AWS_OP_SUCCESS;
 }

@@ -26,6 +26,16 @@ struct aws_secure_tunnel_vtable {
     int (*close)(struct aws_secure_tunnel *secure_tunnel);
 };
 
+struct aws_websocket_client_connection_options;
+struct aws_websocket_send_frame_options;
+
+struct aws_websocket_vtable {
+    int (*client_connect)(const struct aws_websocket_client_connection_options *options);
+    int (*send_frame)(struct aws_websocket *websocket, const struct aws_websocket_send_frame_options *options);
+    void (*close)(struct aws_websocket *websocket, bool free_scarce_resources_immediately);
+    void (*release)(struct aws_websocket *websocket);
+};
+
 struct aws_secure_tunnel {
     /* Static settings */
     struct aws_allocator *alloc;
@@ -34,6 +44,7 @@ struct aws_secure_tunnel {
     struct aws_tls_ctx *tls_ctx;
     struct aws_tls_connection_options tls_con_opt;
     struct aws_secure_tunnel_vtable vtable;
+    struct aws_websocket_vtable websocket_vtable;
 
     struct aws_ref_count ref_count;
 
@@ -49,11 +60,6 @@ struct aws_secure_tunnel {
 
     /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
      * the connection */
-
-    /* Shared State, making websocket send data sync */
-    bool can_send_data;
-    struct aws_mutex send_data_mutex;
-    struct aws_condition_variable send_data_condition_variable;
 
     struct ping_task_context *ping_task_context;
 };
