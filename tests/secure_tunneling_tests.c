@@ -140,6 +140,8 @@ void s_mock_aws_websocket_close(struct aws_websocket *websocket, bool free_scarc
 
 void s_mock_aws_websocket_release(struct aws_websocket *websocket) {
     UNUSED(websocket);
+    /* Release the handshake_request. In a non-mocked context this would occur after handshake completes. */
+    aws_http_message_release(s_test_context.secure_tunnel->handshake_request);
 }
 
 /* s_secure_tunnel_new_mock returns a secure_tunnel that mocks the aws websocket public api. */
@@ -683,11 +685,6 @@ static int s_secure_tunneling_handle_send_data_public(struct aws_allocator *allo
 
     /* Close the tunnel. */
     aws_secure_tunnel_close(test_context->secure_tunnel);
-
-    /*
-     * FIXME(marcoaz): Is it a feature or bug that handshake_request is not released when tunnel is closed?
-     */
-    aws_http_message_release(test_context->secure_tunnel->handshake_request);
 
     return AWS_OP_SUCCESS;
 }
