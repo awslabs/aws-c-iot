@@ -119,7 +119,10 @@ error:
     return NULL;
 }
 
-static void s_send_websocket_ping(struct aws_websocket *websocket) {
+typedef int(
+    websocket_send_frame)(struct aws_websocket *websocket, const struct aws_websocket_send_frame_options *options);
+
+static void s_send_websocket_ping(struct aws_websocket *websocket, websocket_send_frame *send_frame) {
     if (!websocket) {
         return;
     }
@@ -128,7 +131,7 @@ static void s_send_websocket_ping(struct aws_websocket *websocket) {
     AWS_ZERO_STRUCT(frame_options);
     frame_options.opcode = AWS_WEBSOCKET_OPCODE_PING;
     frame_options.fin = true;
-    aws_websocket_send_frame(websocket, &frame_options);
+    send_frame(websocket, &frame_options);
 }
 
 struct ping_task_context {
@@ -138,6 +141,9 @@ struct ping_task_context {
     struct aws_task ping_task;
     struct aws_atomic_var task_cancelled;
     struct aws_websocket *websocket;
+
+    /* The ping_task shares the vtable function used by the secure tunnel to send frames over the websocket. */
+    websocket_send_frame *send_frame;
 };
 
 static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_status task_status) {
@@ -159,7 +165,7 @@ static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_st
         return;
     }
 
-    s_send_websocket_ping(ping_task_context->websocket);
+    s_send_websocket_ping(ping_task_context->websocket, ping_task_context->send_frame);
 
     /* Schedule the next task */
     uint64_t now;
@@ -200,6 +206,7 @@ static void s_on_websocket_setup(
         aws_event_loop_group_get_next_loop(secure_tunnel->options->bootstrap->event_loop_group);
     aws_atomic_store_int(&ping_task_context->task_cancelled, 0);
     ping_task_context->websocket = websocket;
+    ping_task_context->send_frame = secure_tunnel->websocket_vtable.send_frame;
 
     aws_task_init(&ping_task_context->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
     aws_event_loop_schedule_task_now(ping_task_context->event_loop, &ping_task_context->ping_task);
@@ -432,7 +439,7 @@ static int s_secure_tunneling_connect(struct aws_secure_tunnel *secure_tunnel) {
 
     struct aws_websocket_client_connection_options websocket_options;
     init_websocket_client_connection_options(secure_tunnel, &websocket_options);
-    if (aws_websocket_client_connect(&websocket_options)) {
+    if (secure_tunnel->websocket_vtable.client_connect(&websocket_options)) {
         return AWS_OP_ERR;
     }
 
@@ -445,8 +452,8 @@ static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
     }
 
     s_reset_secure_tunnel(secure_tunnel);
-    aws_websocket_close(secure_tunnel->websocket, false);
-    aws_websocket_release(secure_tunnel->websocket);
+    secure_tunnel->websocket_vtable.close(secure_tunnel->websocket, false);
+    secure_tunnel->websocket_vtable.release(secure_tunnel->websocket);
     secure_tunnel->websocket = NULL;
     return AWS_OP_SUCCESS;
 }
@@ -461,12 +468,6 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     secure_tunnel->options->on_send_data_complete(error_code, pair->secure_tunnel->options->user_data);
     aws_byte_buf_clean_up(&pair->buf);
     aws_mem_release(secure_tunnel->alloc, pair);
-
-    aws_mutex_lock(&secure_tunnel->send_data_mutex);
-    secure_tunnel->can_send_data = true;
-    aws_mutex_unlock(&secure_tunnel->send_data_mutex);
-
-    aws_condition_variable_notify_one(&secure_tunnel->send_data_condition_variable);
 }
 
 bool secure_tunneling_send_data_call(struct aws_websocket *websocket, struct aws_byte_buf *out_buf, void *user_data) {
@@ -566,13 +567,7 @@ static int s_secure_tunneling_send(
     if (secure_tunneling_init_send_frame(&frame_options, secure_tunnel, data, type) != AWS_OP_SUCCESS) {
         return AWS_OP_ERR;
     }
-    return aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
-}
-
-static bool s_can_send_data_status(void *user_data) {
-    struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)user_data;
-    bool temp = secure_tunnel->can_send_data;
-    return temp;
+    return secure_tunnel->websocket_vtable.send_frame(secure_tunnel->websocket, &frame_options);
 }
 
 static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
@@ -582,15 +577,6 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
     }
     struct aws_byte_cursor new_data = *data;
     while (new_data.len) {
-        aws_mutex_lock(&secure_tunnel->send_data_mutex);
-        aws_condition_variable_wait_pred(
-            &secure_tunnel->send_data_condition_variable,
-            &secure_tunnel->send_data_mutex,
-            s_can_send_data_status,
-            secure_tunnel);
-        secure_tunnel->can_send_data = false;
-        aws_mutex_unlock(&secure_tunnel->send_data_mutex);
-
         size_t bytes_max = new_data.len;
         size_t amount_to_send = bytes_max < AWS_IOT_ST_SPLIT_MESSAGE_SIZE ? bytes_max : AWS_IOT_ST_SPLIT_MESSAGE_SIZE;
 
@@ -670,20 +656,21 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
         goto error;
     }
 
-    /* Setup vtable here */
+    /* Setup vtables here. */
     secure_tunnel->vtable.connect = s_secure_tunneling_connect;
     secure_tunnel->vtable.close = s_secure_tunneling_close;
     secure_tunnel->vtable.send_data = s_secure_tunneling_send_data;
     secure_tunnel->vtable.send_stream_start = s_secure_tunneling_send_stream_start;
     secure_tunnel->vtable.send_stream_reset = s_secure_tunneling_send_stream_reset;
 
+    secure_tunnel->websocket_vtable.client_connect = aws_websocket_client_connect;
+    secure_tunnel->websocket_vtable.send_frame = aws_websocket_send_frame;
+    secure_tunnel->websocket_vtable.close = aws_websocket_close;
+    secure_tunnel->websocket_vtable.release = aws_websocket_release;
+
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->stream_id = INVALID_STREAM_ID;
     secure_tunnel->websocket = NULL;
-
-    secure_tunnel->can_send_data = true;
-    aws_mutex_init(&secure_tunnel->send_data_mutex);
-    aws_condition_variable_init(&secure_tunnel->send_data_condition_variable);
 
     /* TODO: Release this buffer when there is no data to hold */
     aws_byte_buf_init(&secure_tunnel->received_data, options->allocator, MAX_WEBSOCKET_PAYLOAD);
