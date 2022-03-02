@@ -5,8 +5,8 @@
 
 #include <aws/iotdevice/device_defender.h>
 
-#include <aws/common/json/json.h>
 #include <aws/common/condition_variable.h>
+#include <aws/common/json/json.h>
 #include <aws/common/mutex.h>
 #include <aws/common/thread.h>
 #include <aws/iotdevice/private/network.h>
@@ -365,7 +365,8 @@ static int s_get_metric_report_json(
             }
             aws_json_add_item_to_cjson_array(est_connections, conn);
 
-            if (aws_json_add_string_to_cjson(conn, "local_interface", aws_string_c_str(net_conn->local_interface)) == false) {
+            if (aws_json_add_string_to_cjson(conn, "local_interface", aws_string_c_str(net_conn->local_interface)) ==
+                false) {
                 goto cleanup;
             }
             if (aws_json_add_number_to_cjson(conn, "local_port", net_conn->local_port) == false) {
@@ -398,7 +399,6 @@ static int s_get_metric_report_json(
             if (aws_json_add_number_to_cjson(conn, "port", net_conn->local_port) == false) {
                 goto cleanup;
             }
-
         }
     }
 
@@ -417,10 +417,12 @@ static int s_get_metric_report_json(
         goto cleanup;
     }
 
-    if (aws_json_add_number_to_cjson(network_stats, "bytes_in", net_xfer != NULL ? (double)net_xfer->bytes_in : 0) == false) {
+    if (aws_json_add_number_to_cjson(network_stats, "bytes_in", net_xfer != NULL ? (double)net_xfer->bytes_in : 0) ==
+        false) {
         goto cleanup;
     }
-    if (aws_json_add_number_to_cjson(network_stats, "bytes_out", net_xfer != NULL ? (double)net_xfer->bytes_out : 0) == false) {
+    if (aws_json_add_number_to_cjson(network_stats, "bytes_out", net_xfer != NULL ? (double)net_xfer->bytes_out : 0) ==
+        false) {
         goto cleanup;
     }
     if (aws_json_add_number_to_cjson(
@@ -434,8 +436,7 @@ static int s_get_metric_report_json(
 
     if (custom_metrics_len != 0) {
         struct cJSON *custom_metrics = NULL;
-        if (aws_json_create_and_add_cjson(root, "custom_metrics", custom_metrics) == false)
-        {
+        if (aws_json_create_and_add_cjson(root, "custom_metrics", custom_metrics) == false) {
             goto cleanup;
         }
 
@@ -453,8 +454,7 @@ static int s_get_metric_report_json(
             if (aws_json_create_and_add_cjson_array(
                     custom_metrics,
                     aws_string_c_str(custom_metrics_data[metric_index].metric->metric_name),
-                    spurious_array_container) == false)
-            {
+                    spurious_array_container) == false) {
                 goto cleanup;
             }
 
@@ -483,7 +483,8 @@ static int s_get_metric_report_json(
                         aws_json_add_item_to_cjson_array(json_list, json_value);
                     }
                     break;
-                case DD_METRIC_STRING_LIST: case DD_METRIC_IP_LIST:
+                case DD_METRIC_STRING_LIST:
+                case DD_METRIC_IP_LIST:
                     list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
                     if (custom_metrics_data[metric_index].metric->type == DD_METRIC_STRING_LIST) {
                         if (aws_json_create_and_add_cjson_array(item, "string_list", json_list) == false) {

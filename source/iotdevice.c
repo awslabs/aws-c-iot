@@ -4,8 +4,8 @@
  */
 #include <aws/iotdevice/iotdevice.h>
 
-#include <aws/common/thread.h>
 #include <aws/common/json/json.h>
+#include <aws/common/thread.h>
 
 /*******************************************************************************
  * Library Init
