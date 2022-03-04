@@ -67,7 +67,7 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator) {
         aws_register_error_info(&s_error_list);
         aws_register_log_subject_info_list(&s_logging_subjects_list);
 
-        aws_json_init(allocator);
+        aws_json_module_init(allocator);
         s_iotdevice_library_initialized = true;
     }
 }
@@ -79,7 +79,7 @@ void aws_iotdevice_library_clean_up(void) {
         aws_unregister_error_info(&s_error_list);
         aws_unregister_log_subject_info_list(&s_logging_subjects_list);
 
-        aws_json_clean_up();
+        aws_json_module_cleanup();
         s_iotdevice_library_initialized = false;
     }
 }
