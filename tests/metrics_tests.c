@@ -5,7 +5,7 @@
 
 #include <aws/common/byte_buf.h>
 #include <aws/common/condition_variable.h>
-#include <aws/common/json/json.h>
+#include "aws/common/json.h"
 #include <aws/common/mutex.h>
 #include <aws/common/string.h>
 #include <aws/common/thread.h>
@@ -56,34 +56,34 @@ struct mqtt_connection_test_data {
 static struct mqtt_connection_test_data mqtt_test_data = {0};
 
 static int validate_devicedefender_record(const char *value) {
-    struct aws_json_node *report = aws_json_node_from_string((char *)value);
+    struct aws_json_node *report = aws_json_from_string((char *)value);
     ASSERT_NOT_NULL(report);
 
-    struct aws_json_node *header = aws_json_object_get_node_case_insensitive(report, "header");
-    ASSERT_TRUE(aws_json_node_is_object(header));
-    struct aws_json_node *id = aws_json_object_get_node(header, "report_id");
-    ASSERT_TRUE(aws_json_node_is_number(id));
-    ASSERT_TRUE(*aws_json_node_get_number(id) >= 0);
-    struct aws_json_node *version = aws_json_object_get_node(header, "version");
-    ASSERT_STR_EQUALS("1.0", aws_json_node_get_string(version));
-    struct aws_json_node *metrics = aws_json_object_get_node_case_insensitive(report, "metrics");
+    struct aws_json_node *header = aws_json_object_get_insensitive(report, "header");
+    ASSERT_TRUE(aws_json_is_object(header));
+    struct aws_json_node *id = aws_json_object_get(header, "report_id");
+    ASSERT_TRUE(aws_json_is_number(id));
+    ASSERT_TRUE(*aws_json_number_get(id) >= 0);
+    struct aws_json_node *version = aws_json_object_get(header, "version");
+    ASSERT_STR_EQUALS("1.0", aws_json_string_get(version));
+    struct aws_json_node *metrics = aws_json_object_get_insensitive(report, "metrics");
 
-    struct aws_json_node *tcpPorts = aws_json_object_get_node(metrics, "listening_tcp_ports");
-    ASSERT_TRUE(aws_json_node_is_object(tcpPorts));
-    ASSERT_TRUE(aws_json_node_is_array(aws_json_object_get_node(tcpPorts, "ports")));
+    struct aws_json_node *tcpPorts = aws_json_object_get(metrics, "listening_tcp_ports");
+    ASSERT_TRUE(aws_json_is_object(tcpPorts));
+    ASSERT_TRUE(aws_json_is_array(aws_json_object_get(tcpPorts, "ports")));
 
-    struct aws_json_node *udpPorts = aws_json_object_get_node(metrics, "listening_udp_ports");
-    ASSERT_TRUE(aws_json_node_is_object(udpPorts));
-    ASSERT_TRUE(aws_json_node_is_array(aws_json_object_get_node(udpPorts, "ports")));
+    struct aws_json_node *udpPorts = aws_json_object_get(metrics, "listening_udp_ports");
+    ASSERT_TRUE(aws_json_is_object(udpPorts));
+    ASSERT_TRUE(aws_json_is_array(aws_json_object_get(udpPorts, "ports")));
 
-    struct aws_json_node *netstats = aws_json_object_get_node(metrics, "network_stats");
-    ASSERT_TRUE(aws_json_node_is_object(netstats));
+    struct aws_json_node *netstats = aws_json_object_get(metrics, "network_stats");
+    ASSERT_TRUE(aws_json_is_object(netstats));
 
-    struct aws_json_node *connections = aws_json_object_get_node(metrics, "tcp_connections");
-    ASSERT_TRUE(aws_json_node_is_object(connections));
-    struct aws_json_node *established = aws_json_object_get_node(metrics, "established_connections");
-    ASSERT_TRUE(aws_json_node_is_object(established));
-    ASSERT_TRUE(aws_json_node_is_array(aws_json_object_get_node(established, "connections")));
+    struct aws_json_node *connections = aws_json_object_get(metrics, "tcp_connections");
+    ASSERT_TRUE(aws_json_is_object(connections));
+    struct aws_json_node *established = aws_json_object_get(metrics, "established_connections");
+    ASSERT_TRUE(aws_json_is_object(established));
+    ASSERT_TRUE(aws_json_is_array(aws_json_object_get(established, "connections")));
 
     aws_json_module_cleanup();
     return AWS_OP_SUCCESS;
@@ -102,84 +102,84 @@ const char *cm_ip_list[] = {
 #define dd_value_len 256
 static int validate_devicedefender_custom_record(const char *json_report) {
     char value_to_cmp[dd_value_len]; /* increase size if we ever need larger */
-    struct aws_json_node *report = aws_json_node_from_string((char *)json_report);
+    struct aws_json_node *report = aws_json_from_string((char *)json_report);
     ASSERT_NOT_NULL(report);
 
-    struct aws_json_node *custom_metrics = aws_json_object_get_node_case_insensitive(report, "custom_metrics");
-    ASSERT_TRUE(aws_json_node_is_object(custom_metrics));
+    struct aws_json_node *custom_metrics = aws_json_object_get_insensitive(report, "custom_metrics");
+    ASSERT_TRUE(aws_json_is_object(custom_metrics));
 
-    struct aws_json_node *number_metric = aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricNumber");
-    ASSERT_TRUE(aws_json_node_is_array(number_metric));
-    struct aws_json_node *number_metric_container = aws_json_array_get_node(number_metric, 0);
-    ASSERT_TRUE(aws_json_node_is_object(number_metric_container));
-    struct aws_json_node *number_obj = aws_json_object_get_node_case_insensitive(number_metric_container, "number");
-    aws_json_print_to_string_preallocated(number_obj, value_to_cmp, dd_value_len, false);
+    struct aws_json_node *number_metric = aws_json_object_get_insensitive(custom_metrics, "TestMetricNumber");
+    ASSERT_TRUE(aws_json_is_array(number_metric));
+    struct aws_json_node *number_metric_container = aws_json_array_get(number_metric, 0);
+    ASSERT_TRUE(aws_json_is_object(number_metric_container));
+    struct aws_json_node *number_obj = aws_json_object_get_insensitive(number_metric_container, "number");
+    aws_json_to_string_preallocated(number_obj, value_to_cmp, dd_value_len, false);
     ASSERT_STR_EQUALS("42", value_to_cmp);
 
     struct aws_json_node *number_metric_fail =
-        aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricNumberFail");
+        aws_json_object_get_insensitive(custom_metrics, "TestMetricNumberFail");
     ASSERT_NULL(number_metric_fail);
 
     struct aws_json_node *number_list_metric =
-        aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricNumberList");
-    ASSERT_TRUE(aws_json_node_is_array(number_list_metric));
-    struct aws_json_node *number_list_metric_container = aws_json_array_get_node(number_list_metric, 0);
-    ASSERT_TRUE(aws_json_node_is_object(number_list_metric_container));
+        aws_json_object_get_insensitive(custom_metrics, "TestMetricNumberList");
+    ASSERT_TRUE(aws_json_is_array(number_list_metric));
+    struct aws_json_node *number_list_metric_container = aws_json_array_get(number_list_metric, 0);
+    ASSERT_TRUE(aws_json_is_object(number_list_metric_container));
     struct aws_json_node *number_list_array =
-        aws_json_object_get_node_case_insensitive(number_list_metric_container, "number_list");
-    ASSERT_TRUE(aws_json_node_is_array(number_list_array));
-    aws_json_print_to_string_preallocated(
-        aws_json_array_get_node(number_list_array, 0), value_to_cmp, dd_value_len, false);
+        aws_json_object_get_insensitive(number_list_metric_container, "number_list");
+    ASSERT_TRUE(aws_json_is_array(number_list_array));
+    aws_json_to_string_preallocated(
+        aws_json_array_get(number_list_array, 0), value_to_cmp, dd_value_len, false);
     ASSERT_STR_EQUALS("64", value_to_cmp);
-    aws_json_print_to_string_preallocated(
-        aws_json_array_get_node(number_list_array, 1), value_to_cmp, dd_value_len, false);
+    aws_json_to_string_preallocated(
+        aws_json_array_get(number_list_array, 1), value_to_cmp, dd_value_len, false);
     ASSERT_STR_EQUALS("128", value_to_cmp);
-    aws_json_print_to_string_preallocated(
-        aws_json_array_get_node(number_list_array, 2), value_to_cmp, dd_value_len, false);
+    aws_json_to_string_preallocated(
+        aws_json_array_get(number_list_array, 2), value_to_cmp, dd_value_len, false);
     ASSERT_STR_EQUALS("256", value_to_cmp);
 
     struct aws_json_node *number_list_metric_fail =
-        aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricNumberListFail");
+        aws_json_object_get_insensitive(custom_metrics, "TestMetricNumberListFail");
     ASSERT_NULL(number_list_metric_fail);
 
     struct aws_json_node *string_list_metric =
-        aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricStringList");
-    ASSERT_TRUE(aws_json_node_is_array(string_list_metric));
-    struct aws_json_node *string_list_metric_container = aws_json_array_get_node(string_list_metric, 0);
-    ASSERT_TRUE(aws_json_node_is_object(string_list_metric_container));
+        aws_json_object_get_insensitive(custom_metrics, "TestMetricStringList");
+    ASSERT_TRUE(aws_json_is_array(string_list_metric));
+    struct aws_json_node *string_list_metric_container = aws_json_array_get(string_list_metric, 0);
+    ASSERT_TRUE(aws_json_is_object(string_list_metric_container));
     struct aws_json_node *string_list_array =
-        aws_json_object_get_node_case_insensitive(string_list_metric_container, "string_list");
-    ASSERT_TRUE(aws_json_node_is_array(string_list_array));
-    ASSERT_STR_EQUALS(cm_string_list[0], aws_json_node_get_string(aws_json_array_get_node(string_list_array, 0)));
-    aws_json_print_to_string_preallocated(
-        aws_json_array_get_node(string_list_array, 1), value_to_cmp, dd_value_len, false);
-    ASSERT_STR_EQUALS(cm_string_list[1], aws_json_node_get_string(aws_json_array_get_node(string_list_array, 1)));
-    aws_json_print_to_string_preallocated(
-        aws_json_array_get_node(string_list_array, 2), value_to_cmp, dd_value_len, false);
-    ASSERT_STR_EQUALS(cm_string_list[2], aws_json_node_get_string(aws_json_array_get_node(string_list_array, 2)));
+        aws_json_object_get_insensitive(string_list_metric_container, "string_list");
+    ASSERT_TRUE(aws_json_is_array(string_list_array));
+    ASSERT_STR_EQUALS(cm_string_list[0], aws_json_string_get(aws_json_array_get(string_list_array, 0)));
+    aws_json_to_string_preallocated(
+        aws_json_array_get(string_list_array, 1), value_to_cmp, dd_value_len, false);
+    ASSERT_STR_EQUALS(cm_string_list[1], aws_json_string_get(aws_json_array_get(string_list_array, 1)));
+    aws_json_to_string_preallocated(
+        aws_json_array_get(string_list_array, 2), value_to_cmp, dd_value_len, false);
+    ASSERT_STR_EQUALS(cm_string_list[2], aws_json_string_get(aws_json_array_get(string_list_array, 2)));
 
     struct aws_json_node *string_list_metric_fail =
-        aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricStringListFail");
+        aws_json_object_get_insensitive(custom_metrics, "TestMetricStringListFail");
     ASSERT_NULL(string_list_metric_fail);
 
     struct aws_json_node *ip_list_metric =
-        aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricIpList");
-    ASSERT_TRUE(aws_json_node_is_array(ip_list_metric));
-    struct aws_json_node *ip_list_metric_container = aws_json_array_get_node(ip_list_metric, 0);
-    ASSERT_TRUE(aws_json_node_is_object(ip_list_metric_container));
+        aws_json_object_get_insensitive(custom_metrics, "TestMetricIpList");
+    ASSERT_TRUE(aws_json_is_array(ip_list_metric));
+    struct aws_json_node *ip_list_metric_container = aws_json_array_get(ip_list_metric, 0);
+    ASSERT_TRUE(aws_json_is_object(ip_list_metric_container));
     struct aws_json_node *ip_list_array =
-        aws_json_object_get_node_case_insensitive(ip_list_metric_container, "ip_list");
-    ASSERT_TRUE(aws_json_node_is_array(ip_list_array));
-    ASSERT_STR_EQUALS(cm_ip_list[0], aws_json_node_get_string(aws_json_array_get_node(ip_list_array, 0)));
-    aws_json_print_to_string_preallocated(aws_json_array_get_node(ip_list_array, 1), value_to_cmp, dd_value_len, false);
-    ASSERT_STR_EQUALS(cm_ip_list[1], aws_json_node_get_string(aws_json_array_get_node(ip_list_array, 1)));
-    aws_json_print_to_string_preallocated(aws_json_array_get_node(ip_list_array, 2), value_to_cmp, dd_value_len, false);
-    ASSERT_STR_EQUALS(cm_ip_list[2], aws_json_node_get_string(aws_json_array_get_node(ip_list_array, 2)));
-    aws_json_print_to_string_preallocated(aws_json_array_get_node(ip_list_array, 3), value_to_cmp, dd_value_len, false);
-    ASSERT_STR_EQUALS(cm_ip_list[3], aws_json_node_get_string(aws_json_array_get_node(ip_list_array, 3)));
+        aws_json_object_get_insensitive(ip_list_metric_container, "ip_list");
+    ASSERT_TRUE(aws_json_is_array(ip_list_array));
+    ASSERT_STR_EQUALS(cm_ip_list[0], aws_json_string_get(aws_json_array_get(ip_list_array, 0)));
+    aws_json_to_string_preallocated(aws_json_array_get(ip_list_array, 1), value_to_cmp, dd_value_len, false);
+    ASSERT_STR_EQUALS(cm_ip_list[1], aws_json_string_get(aws_json_array_get(ip_list_array, 1)));
+    aws_json_to_string_preallocated(aws_json_array_get(ip_list_array, 2), value_to_cmp, dd_value_len, false);
+    ASSERT_STR_EQUALS(cm_ip_list[2], aws_json_string_get(aws_json_array_get(ip_list_array, 2)));
+    aws_json_to_string_preallocated(aws_json_array_get(ip_list_array, 3), value_to_cmp, dd_value_len, false);
+    ASSERT_STR_EQUALS(cm_ip_list[3], aws_json_string_get(aws_json_array_get(ip_list_array, 3)));
 
     struct aws_json_node *ip_list_metric_fail =
-        aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricIpListFail");
+        aws_json_object_get_insensitive(custom_metrics, "TestMetricIpListFail");
     ASSERT_NULL(ip_list_metric_fail);
 
     aws_json_module_cleanup();

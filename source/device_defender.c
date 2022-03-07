@@ -6,7 +6,7 @@
 #include <aws/iotdevice/device_defender.h>
 
 #include <aws/common/condition_variable.h>
-#include <aws/common/json/json.h>
+#include "aws/common/json.h"
 #include <aws/common/mutex.h>
 #include <aws/common/thread.h>
 #include <aws/iotdevice/private/network.h>
@@ -293,59 +293,59 @@ static int s_get_metric_report_json(
     int return_value = AWS_OP_ERR;
     const char *json_report = NULL;
 
-    struct aws_json_node *root = aws_json_make_node();
+    struct aws_json_node *root = aws_json_node_new();
     if (root == NULL) {
         goto cleanup;
     }
 
-    struct aws_json_node *header = aws_json_make_node_object();
-    if (aws_json_object_add_node(root, "header", header) == false) {
+    struct aws_json_node *header = aws_json_object_new();
+    if (aws_json_object_add(root, "header", header) == false) {
         goto cleanup;
     }
-    if (aws_json_object_add_node(header, "report_id", aws_json_make_node_number((double)report_id)) == false) {
+    if (aws_json_object_add(header, "report_id", aws_json_number_new((double)report_id)) == false) {
         goto cleanup;
     }
-    if (aws_json_object_add_node(header, "version", aws_json_make_node_string("1.0")) == false) {
-        goto cleanup;
-    }
-
-    struct aws_json_node *metrics = aws_json_make_node_object();
-    if (aws_json_object_add_node(root, "metrics", metrics) == false) {
+    if (aws_json_object_add(header, "version", aws_json_string_new("1.0")) == false) {
         goto cleanup;
     }
 
-    struct aws_json_node *listening_tcp_ports = aws_json_make_node_object();
-    if (aws_json_object_add_node(metrics, "listening_tcp_ports", listening_tcp_ports) == false) {
+    struct aws_json_node *metrics = aws_json_object_new();
+    if (aws_json_object_add(root, "metrics", metrics) == false) {
         goto cleanup;
     }
 
-    struct aws_json_node *tcp_listen_ports = aws_json_make_node_array();
-    if (aws_json_object_add_node(listening_tcp_ports, "ports", tcp_listen_ports) == false) {
+    struct aws_json_node *listening_tcp_ports = aws_json_object_new();
+    if (aws_json_object_add(metrics, "listening_tcp_ports", listening_tcp_ports) == false) {
         goto cleanup;
     }
 
-    struct aws_json_node *tcp_connections = aws_json_make_node_object();
-    if (aws_json_object_add_node(metrics, "tcp_connections", tcp_connections) == false) {
+    struct aws_json_node *tcp_listen_ports = aws_json_array_new();
+    if (aws_json_object_add(listening_tcp_ports, "ports", tcp_listen_ports) == false) {
         goto cleanup;
     }
 
-    struct aws_json_node *established_tcp_conns = aws_json_make_node_object();
-    if (aws_json_object_add_node(tcp_connections, "established_connections", established_tcp_conns) == false) {
+    struct aws_json_node *tcp_connections = aws_json_object_new();
+    if (aws_json_object_add(metrics, "tcp_connections", tcp_connections) == false) {
         goto cleanup;
     }
 
-    struct aws_json_node *est_connections = aws_json_make_node_array();
-    if (aws_json_object_add_node(established_tcp_conns, "connections", est_connections) == false) {
+    struct aws_json_node *established_tcp_conns = aws_json_object_new();
+    if (aws_json_object_add(tcp_connections, "established_connections", established_tcp_conns) == false) {
         goto cleanup;
     }
 
-    struct aws_json_node *listening_udp_ports = aws_json_make_node_object();
-    if (aws_json_object_add_node(metrics, "listening_udp_ports", listening_udp_ports) == false) {
+    struct aws_json_node *est_connections = aws_json_array_new();
+    if (aws_json_object_add(established_tcp_conns, "connections", est_connections) == false) {
         goto cleanup;
     }
 
-    struct aws_json_node *udp_ports = aws_json_make_node_array();
-    if (aws_json_object_add_node(listening_udp_ports, "ports", udp_ports) == false) {
+    struct aws_json_node *listening_udp_ports = aws_json_object_new();
+    if (aws_json_object_add(metrics, "listening_udp_ports", listening_udp_ports) == false) {
+        goto cleanup;
+    }
+
+    struct aws_json_node *udp_ports = aws_json_array_new();
+    if (aws_json_object_add(listening_udp_ports, "ports", udp_ports) == false) {
         goto cleanup;
     }
 
@@ -359,24 +359,23 @@ static int s_get_metric_report_json(
         if (net_conn->state == AWS_IDNCS_ESTABLISHED && net_conn->protocol == AWS_IDNP_TCP) {
             total_established_tcp_conns++;
 
-            struct aws_json_node *conn = aws_json_make_node();
+            struct aws_json_node *conn = aws_json_node_new();
             if (conn == NULL) {
                 goto cleanup;
             }
-            aws_json_array_add_node(est_connections, conn);
+            aws_json_array_add(est_connections, conn);
 
-            if (aws_json_object_add_node(
-                    conn, "local_interface", aws_json_make_node_string((char *)net_conn->local_interface)) == false) {
+            if (aws_json_object_add(conn, "local_interface", aws_json_string_new((char *)net_conn->local_interface)) == false) {
                 goto cleanup;
             }
-            if (aws_json_object_add_node(conn, "local_port", aws_json_make_node_number(net_conn->local_port)) ==
+            if (aws_json_object_add(conn, "local_port", aws_json_number_new(net_conn->local_port)) ==
                 false) {
                 goto cleanup;
             }
 
             char remote_addr[22];
             snprintf(remote_addr, 22, "%s:%u", aws_string_c_str(net_conn->remote_address), net_conn->remote_port);
-            if (aws_json_object_add_node(conn, "remote_addr", aws_json_make_node_string(remote_addr)) == false) {
+            if (aws_json_object_add(conn, "remote_addr", aws_json_string_new(remote_addr)) == false) {
                 goto cleanup;
             }
         } else if (net_conn->state == AWS_IDNCS_LISTEN) {
@@ -388,69 +387,60 @@ static int s_get_metric_report_json(
                 continue; // skip
             }
 
-            struct aws_json_node *conn = aws_json_make_node();
+            struct aws_json_node *conn = aws_json_node_new();
             if (conn == NULL) {
                 goto cleanup;
             }
-            aws_json_array_add_node(tcp_listen_ports, conn);
+            aws_json_array_add(tcp_listen_ports, conn);
 
-            if (aws_json_object_add_node(
-                    conn,
-                    "interface",
-                    aws_json_make_node_string((char *)aws_string_c_str(net_conn->local_interface))) == false) {
+            if (aws_json_object_add(
+                    conn, "interface", aws_json_string_new((char *)aws_string_c_str(net_conn->local_interface))) == false) {
                 goto cleanup;
             }
-            if (aws_json_object_add_node(conn, "port", aws_json_make_node_number(net_conn->local_port)) == false) {
+            if (aws_json_object_add(conn, "port", aws_json_number_new(net_conn->local_port)) == false) {
                 goto cleanup;
             }
         }
     }
 
-    if (aws_json_object_add_node(
-            established_tcp_conns, "total", aws_json_make_node_number(total_established_tcp_conns)) == false) {
+    if (aws_json_object_add(established_tcp_conns, "total", aws_json_number_new(total_established_tcp_conns)) == false) {
         goto cleanup;
     }
-    if (aws_json_object_add_node(listening_tcp_ports, "total", aws_json_make_node_number(total_listening_tcp_ports)) ==
+    if (aws_json_object_add(listening_tcp_ports, "total", aws_json_number_new(total_listening_tcp_ports)) ==
         false) {
         goto cleanup;
     }
-    if (aws_json_object_add_node(listening_udp_ports, "total", aws_json_make_node_number(total_udp_listeners)) ==
+    if (aws_json_object_add(listening_udp_ports, "total", aws_json_number_new(total_udp_listeners)) ==
         false) {
         goto cleanup;
     }
 
-    struct aws_json_node *network_stats = aws_json_make_node_object();
-    if (aws_json_object_add_node(metrics, "network_stats", network_stats) == false) {
+    struct aws_json_node *network_stats = aws_json_object_new();
+    if (aws_json_object_add(metrics, "network_stats", network_stats) == false) {
         goto cleanup;
     }
 
-    if (aws_json_object_add_node(
-            network_stats, "bytes_in", aws_json_make_node_number(net_xfer != NULL ? (double)net_xfer->bytes_in : 0)) ==
+    if (aws_json_object_add(
+            network_stats, "bytes_in", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->bytes_in : 0)) ==
         false) {
         goto cleanup;
     }
-    if (aws_json_object_add_node(
-            network_stats,
-            "bytes_out",
-            aws_json_make_node_number(net_xfer != NULL ? (double)net_xfer->bytes_out : 0)) == false) {
+    if (aws_json_object_add(
+            network_stats, "bytes_out", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->bytes_out : 0)) == false) {
         goto cleanup;
     }
-    if (aws_json_object_add_node(
-            network_stats,
-            "packets_in",
-            aws_json_make_node_number(net_xfer != NULL ? (double)net_xfer->packets_in : 0)) == false) {
+    if (aws_json_object_add(
+            network_stats, "packets_in", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->packets_in : 0)) == false) {
         goto cleanup;
     }
-    if (aws_json_object_add_node(
-            network_stats,
-            "packets_out",
-            aws_json_make_node_number(net_xfer != NULL ? (double)net_xfer->packets_out : 0)) == false) {
+    if (aws_json_object_add(
+            network_stats, "packets_out", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->packets_out : 0)) == false) {
         goto cleanup;
     }
 
     if (custom_metrics_len != 0) {
-        struct aws_json_node *custom_metrics = aws_json_make_node_object();
-        if (aws_json_object_add_node(root, "custom_metrics", custom_metrics) == false) {
+        struct aws_json_node *custom_metrics = aws_json_object_new();
+        if (aws_json_object_add(root, "custom_metrics", custom_metrics) == false) {
             goto cleanup;
         }
 
@@ -465,62 +455,62 @@ static int s_get_metric_report_json(
                 continue;
             }
 
-            spurious_array_container = aws_json_make_node_array();
-            if (aws_json_object_add_node(
+            spurious_array_container = aws_json_array_new();
+            if (aws_json_object_add(
                     custom_metrics,
                     (char *)aws_string_c_str(custom_metrics_data[metric_index].metric->metric_name),
                     spurious_array_container)) {
                 goto cleanup;
             }
 
-            item = aws_json_make_node();
+            item = aws_json_node_new();
             if (item == NULL) {
                 goto cleanup;
             }
-            aws_json_array_add_node(spurious_array_container, item);
+            aws_json_array_add(spurious_array_container, item);
 
             switch (custom_metrics_data[metric_index].metric->type) {
                 case DD_METRIC_NUMBER:
-                    if (aws_json_object_add_node(
+                    if (aws_json_object_add(
                             item,
                             "number",
-                            aws_json_make_node_number((double)custom_metrics_data[metric_index].data.number)) ==
+                            aws_json_number_new((double)custom_metrics_data[metric_index].data.number)) ==
                         false) {
                         goto cleanup;
                     }
                     break;
                 case DD_METRIC_NUMBER_LIST:
                     list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
-                    json_list = aws_json_make_node_array();
-                    if (aws_json_object_add_node(item, "number_list", json_list) == false) {
+                    json_list = aws_json_array_new();
+                    if (aws_json_object_add(item, "number_list", json_list) == false) {
                         goto cleanup;
                     }
                     for (size_t num_index = 0; num_index < list_size; ++num_index) {
                         int64_t number = 0;
                         aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &number, num_index);
-                        json_value = aws_json_make_node_number((double)number);
-                        aws_json_array_add_node(json_list, json_value);
+                        json_value = aws_json_number_new((double)number);
+                        aws_json_array_add(json_list, json_value);
                     }
                     break;
                 case DD_METRIC_STRING_LIST:
                 case DD_METRIC_IP_LIST:
                     list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
                     if (custom_metrics_data[metric_index].metric->type == DD_METRIC_STRING_LIST) {
-                        json_list = aws_json_make_node_array();
-                        if (aws_json_object_add_node(item, "string_list", json_list) == false) {
+                        json_list = aws_json_array_new();
+                        if (aws_json_object_add(item, "string_list", json_list) == false) {
                             goto cleanup;
                         }
                     } else {
-                        json_list = aws_json_make_node_array();
-                        if (aws_json_object_add_node(item, "ip_list", json_list) == false) {
+                        json_list = aws_json_array_new();
+                        if (aws_json_object_add(item, "ip_list", json_list) == false) {
                             goto cleanup;
                         }
                     }
                     for (size_t list_index = 0; list_index < list_size; ++list_index) {
                         struct aws_string *list_value = NULL;
                         aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &list_value, list_index);
-                        json_value = aws_json_make_node_string((char *)aws_string_c_str(list_value));
-                        aws_json_array_add_node(json_list, json_value);
+                        json_value = aws_json_string_new((char *)aws_string_c_str(list_value));
+                        aws_json_array_add(json_list, json_value);
                     }
                     break;
                 case DD_METRIC_UNKNOWN:
@@ -537,7 +527,7 @@ static int s_get_metric_report_json(
         }
     }
 
-    json_report = aws_json_node_to_string(root);
+    json_report = aws_json_to_string(root);
     struct aws_byte_cursor json_report_buf = {.len = strlen(json_report) + 1, .ptr = (uint8_t *)json_report};
     if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(json_out, task->allocator, json_report_buf)) {
         s_invoke_failure_callback(&task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
@@ -548,10 +538,10 @@ static int s_get_metric_report_json(
 
 cleanup:
     if (json_report) {
-        aws_json_node_free((void *)json_report);
+        aws_json_free((void *)json_report);
     }
     if (root) {
-        aws_json_node_delete(root);
+        aws_json_delete(root);
     }
     if (return_value != AWS_OP_SUCCESS) {
         aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
