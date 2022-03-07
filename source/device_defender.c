@@ -365,11 +365,11 @@ static int s_get_metric_report_json(
             }
             aws_json_array_add(est_connections, conn);
 
-            if (aws_json_object_add(conn, "local_interface", aws_json_string_new((char *)net_conn->local_interface)) == false) {
+            if (aws_json_object_add(conn, "local_interface", aws_json_string_new((char *)net_conn->local_interface)) ==
+                false) {
                 goto cleanup;
             }
-            if (aws_json_object_add(conn, "local_port", aws_json_number_new(net_conn->local_port)) ==
-                false) {
+            if (aws_json_object_add(conn, "local_port", aws_json_number_new(net_conn->local_port)) == false) {
                 goto cleanup;
             }
 
@@ -394,7 +394,8 @@ static int s_get_metric_report_json(
             aws_json_array_add(tcp_listen_ports, conn);
 
             if (aws_json_object_add(
-                    conn, "interface", aws_json_string_new((char *)aws_string_c_str(net_conn->local_interface))) == false) {
+                    conn, "interface", aws_json_string_new((char *)aws_string_c_str(net_conn->local_interface))) ==
+                false) {
                 goto cleanup;
             }
             if (aws_json_object_add(conn, "port", aws_json_number_new(net_conn->local_port)) == false) {
@@ -403,15 +404,14 @@ static int s_get_metric_report_json(
         }
     }
 
-    if (aws_json_object_add(established_tcp_conns, "total", aws_json_number_new(total_established_tcp_conns)) == false) {
-        goto cleanup;
-    }
-    if (aws_json_object_add(listening_tcp_ports, "total", aws_json_number_new(total_listening_tcp_ports)) ==
+    if (aws_json_object_add(established_tcp_conns, "total", aws_json_number_new(total_established_tcp_conns)) ==
         false) {
         goto cleanup;
     }
-    if (aws_json_object_add(listening_udp_ports, "total", aws_json_number_new(total_udp_listeners)) ==
-        false) {
+    if (aws_json_object_add(listening_tcp_ports, "total", aws_json_number_new(total_listening_tcp_ports)) == false) {
+        goto cleanup;
+    }
+    if (aws_json_object_add(listening_udp_ports, "total", aws_json_number_new(total_udp_listeners)) == false) {
         goto cleanup;
     }
 
@@ -426,15 +426,18 @@ static int s_get_metric_report_json(
         goto cleanup;
     }
     if (aws_json_object_add(
-            network_stats, "bytes_out", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->bytes_out : 0)) == false) {
+            network_stats, "bytes_out", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->bytes_out : 0)) ==
+        false) {
         goto cleanup;
     }
     if (aws_json_object_add(
-            network_stats, "packets_in", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->packets_in : 0)) == false) {
+            network_stats, "packets_in", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->packets_in : 0)) ==
+        false) {
         goto cleanup;
     }
     if (aws_json_object_add(
-            network_stats, "packets_out", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->packets_out : 0)) == false) {
+            network_stats, "packets_out", aws_json_number_new(net_xfer != NULL ? (double)net_xfer->packets_out : 0)) ==
+        false) {
         goto cleanup;
     }
 
@@ -474,8 +477,7 @@ static int s_get_metric_report_json(
                     if (aws_json_object_add(
                             item,
                             "number",
-                            aws_json_number_new((double)custom_metrics_data[metric_index].data.number)) ==
-                        false) {
+                            aws_json_number_new((double)custom_metrics_data[metric_index].data.number)) == false) {
                         goto cleanup;
                     }
                     break;
