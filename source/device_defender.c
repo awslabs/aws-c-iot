@@ -6,7 +6,7 @@
 #include <aws/iotdevice/device_defender.h>
 
 #include <aws/common/condition_variable.h>
-#include "aws/common/json.h"
+#include <aws/common/json.h>
 #include <aws/common/mutex.h>
 #include <aws/common/thread.h>
 #include <aws/iotdevice/private/network.h>

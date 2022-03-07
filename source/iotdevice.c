@@ -4,7 +4,7 @@
  */
 #include <aws/iotdevice/iotdevice.h>
 
-#include "aws/common/json.h"
+#include <aws/common/json.h>
 #include <aws/common/thread.h>
 
 /*******************************************************************************
