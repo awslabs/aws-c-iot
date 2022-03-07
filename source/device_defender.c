@@ -366,7 +366,7 @@ static int s_get_metric_report_json(
             aws_json_array_add_node(est_connections, conn);
 
             if (aws_json_object_add_node(
-                    conn, "local_interface", aws_json_make_node_string((char*)net_conn->local_interface)) == false) {
+                    conn, "local_interface", aws_json_make_node_string((char *)net_conn->local_interface)) == false) {
                 goto cleanup;
             }
             if (aws_json_object_add_node(conn, "local_port", aws_json_make_node_number(net_conn->local_port)) ==
@@ -397,7 +397,7 @@ static int s_get_metric_report_json(
             if (aws_json_object_add_node(
                     conn,
                     "interface",
-                    aws_json_make_node_string((char*)aws_string_c_str(net_conn->local_interface))) == false) {
+                    aws_json_make_node_string((char *)aws_string_c_str(net_conn->local_interface))) == false) {
                 goto cleanup;
             }
             if (aws_json_object_add_node(conn, "port", aws_json_make_node_number(net_conn->local_port)) == false) {
@@ -468,7 +468,7 @@ static int s_get_metric_report_json(
             spurious_array_container = aws_json_make_node_array();
             if (aws_json_object_add_node(
                     custom_metrics,
-                    (char*)aws_string_c_str(custom_metrics_data[metric_index].metric->metric_name),
+                    (char *)aws_string_c_str(custom_metrics_data[metric_index].metric->metric_name),
                     spurious_array_container)) {
                 goto cleanup;
             }

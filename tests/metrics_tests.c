@@ -153,8 +153,7 @@ static int validate_devicedefender_custom_record(const char *json_report) {
     ASSERT_STR_EQUALS(cm_string_list[0], aws_json_node_get_string(aws_json_array_get_node(string_list_array, 0)));
     aws_json_print_to_string_preallocated(
         aws_json_array_get_node(string_list_array, 1), value_to_cmp, dd_value_len, false);
-    ASSERT_STR_EQUALS(
-        cm_string_list[1], aws_json_node_get_string(aws_json_array_get_node(string_list_array, 1)));
+    ASSERT_STR_EQUALS(cm_string_list[1], aws_json_node_get_string(aws_json_array_get_node(string_list_array, 1)));
     aws_json_print_to_string_preallocated(
         aws_json_array_get_node(string_list_array, 2), value_to_cmp, dd_value_len, false);
     ASSERT_STR_EQUALS(cm_string_list[2], aws_json_node_get_string(aws_json_array_get_node(string_list_array, 2)));
@@ -163,7 +162,8 @@ static int validate_devicedefender_custom_record(const char *json_report) {
         aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricStringListFail");
     ASSERT_NULL(string_list_metric_fail);
 
-    struct aws_json_node *ip_list_metric = aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricIpList");
+    struct aws_json_node *ip_list_metric =
+        aws_json_object_get_node_case_insensitive(custom_metrics, "TestMetricIpList");
     ASSERT_TRUE(aws_json_node_is_array(ip_list_metric));
     struct aws_json_node *ip_list_metric_container = aws_json_array_get_node(ip_list_metric, 0);
     ASSERT_TRUE(aws_json_node_is_object(ip_list_metric_container));
