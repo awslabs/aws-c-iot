@@ -293,12 +293,12 @@ static int s_get_metric_report_json(
     int return_value = AWS_OP_ERR;
     const char *json_report = NULL;
     
-    void *root = aws_json_make_node();
+    struct aws_json_node *root = aws_json_make_node();
     if (root == NULL) {
         goto cleanup;
     }
 
-    void *header = aws_json_make_node_object();
+    struct aws_json_node *header = aws_json_make_node_object();
     if (aws_json_object_add_node(root, "header", header) == false) {
         goto cleanup;
     }
@@ -309,42 +309,42 @@ static int s_get_metric_report_json(
         goto cleanup;
     }
 
-    void *metrics = aws_json_make_node_object();
+    struct aws_json_node *metrics = aws_json_make_node_object();
     if (aws_json_object_add_node(root, "metrics", metrics) == false) {
         goto cleanup;
     }
 
-    void *listening_tcp_ports = aws_json_make_node_object();
+    struct aws_json_node *listening_tcp_ports = aws_json_make_node_object();
     if (aws_json_object_add_node(metrics, "listening_tcp_ports", listening_tcp_ports) == false) {
         goto cleanup;
     }
 
-    void *tcp_listen_ports = aws_json_make_node_array();
+    struct aws_json_node *tcp_listen_ports = aws_json_make_node_array();
     if (aws_json_object_add_node(listening_tcp_ports, "ports", tcp_listen_ports) == false) {
         goto cleanup;
     }
 
-    void *tcp_connections = aws_json_make_node_object();
+    struct aws_json_node *tcp_connections = aws_json_make_node_object();
     if (aws_json_object_add_node(metrics, "tcp_connections", tcp_connections) == false) {
         goto cleanup;
     }
 
-    void *established_tcp_conns = aws_json_make_node_object();
+    struct aws_json_node *established_tcp_conns = aws_json_make_node_object();
     if (aws_json_object_add_node(tcp_connections, "established_connections", established_tcp_conns) == false) {
         goto cleanup;
     }
 
-    void *est_connections = aws_json_make_node_array();
+    struct aws_json_node *est_connections = aws_json_make_node_array();
     if (aws_json_object_add_node(established_tcp_conns, "connections", est_connections) == false) {
         goto cleanup;
     }
 
-    void *listening_udp_ports = aws_json_make_node_object();
+    struct aws_json_node *listening_udp_ports = aws_json_make_node_object();
     if (aws_json_object_add_node(metrics, "listening_udp_ports", listening_udp_ports) == false) {
         goto cleanup;
     }
 
-    void *udp_ports = aws_json_make_node_array();
+    struct aws_json_node *udp_ports = aws_json_make_node_array();
     if (aws_json_object_add_node(listening_udp_ports, "ports", udp_ports) == false) {
         goto cleanup;
     }
@@ -359,7 +359,7 @@ static int s_get_metric_report_json(
         if (net_conn->state == AWS_IDNCS_ESTABLISHED && net_conn->protocol == AWS_IDNP_TCP) {
             total_established_tcp_conns++;
 
-            void *conn = aws_json_make_node();
+            struct aws_json_node *conn = aws_json_make_node();
             if (conn == NULL) {
                 goto cleanup;
             }
@@ -386,7 +386,7 @@ static int s_get_metric_report_json(
                 continue; // skip
             }
 
-            void *conn = aws_json_make_node();
+            struct aws_json_node *conn = aws_json_make_node();
             if (conn == NULL) {
                 goto cleanup;
             }
@@ -411,7 +411,7 @@ static int s_get_metric_report_json(
         goto cleanup;
     }
 
-    void *network_stats = aws_json_make_node_object();
+    struct aws_json_node *network_stats = aws_json_make_node_object();
     if (aws_json_object_add_node(metrics, "network_stats", network_stats) == false) {
         goto cleanup;
     }
@@ -430,16 +430,16 @@ static int s_get_metric_report_json(
     }
 
     if (custom_metrics_len != 0) {
-        void *custom_metrics = aws_json_make_node_object();
+        struct aws_json_node *custom_metrics = aws_json_make_node_object();
         if (aws_json_object_add_node(root, "custom_metrics", custom_metrics) == false) {
             goto cleanup;
         }
 
         size_t list_size = 0;
-        void *json_value = NULL;
-        void *item = NULL;
-        void *json_list = NULL;
-        void *spurious_array_container = NULL;
+        struct aws_json_node *json_value = NULL;
+        struct aws_json_node *item = NULL;
+        struct aws_json_node *json_list = NULL;
+        struct aws_json_node *spurious_array_container = NULL;
         for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
             if (custom_metrics_data[metric_index].callback_result != AWS_OP_SUCCESS) {
                 // if the collection of a metric failed, do not output it to the report
