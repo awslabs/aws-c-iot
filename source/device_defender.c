@@ -554,8 +554,9 @@ static int s_get_metric_report_json(
         }
     }
 
-    struct aws_byte_buf *json_report_buf = aws_json_to_string(root);
-    struct aws_byte_cursor json_report_cursor = aws_byte_cursor_from_buf(json_report_buf);
+    struct aws_byte_cursor json_report_cursor;
+    aws_json_to_string(root, &json_report_cursor);
+    //struct aws_byte_cursor json_report_cursor = aws_byte_cursor_from_buf(&json_report_buf);
     if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(json_out, task->allocator, json_report_cursor)) {
         s_invoke_failure_callback(&task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
         return_value = AWS_OP_ERR;
