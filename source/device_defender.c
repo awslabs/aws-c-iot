@@ -21,8 +21,6 @@
 
 #include <aws/mqtt/client.h>
 
-#include <float.h>
-
 /**
  * Update s_copy_task_config() and aws_iotdevice_defender_config_destroy()
  * when adding new members
@@ -528,7 +526,8 @@ static int s_get_metric_report_json(
                     }
                     break;
                 case DD_METRIC_NUMBER_DOUBLE:
-                    cJSON_AddNumberToObject(item, "number", (double)custom_metrics_data[metric_index].data.number_double);
+                    cJSON_AddNumberToObject(
+                        item, "number", (double)custom_metrics_data[metric_index].data.number_double);
                     break;
                 case DD_METRIC_NUMBER_DOUBLE_LIST:
                     list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
