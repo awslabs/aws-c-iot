@@ -21,6 +21,8 @@
 
 #include <aws/mqtt/client.h>
 
+#include <float.h>
+
 /**
  * Update s_copy_task_config() and aws_iotdevice_defender_config_destroy()
  * when adding new members
@@ -51,6 +53,8 @@ struct defender_custom_metric {
         aws_iotdevice_defender_get_number_list_fn *get_number_list_fn;
         aws_iotdevice_defender_get_string_list_fn *get_string_list_fn;
         aws_iotdevice_defender_get_ip_list_fn *get_ip_list_fn;
+        aws_iotdevice_defender_get_number_double_fn *get_number_double_fn;
+        aws_iotdevice_defender_get_number_double_list_fn *get_number_double_list_fn;
     } supplier_fn;
 };
 
@@ -58,13 +62,14 @@ struct defender_custom_metric {
  * Result of a custom metric's data collection callback function that needs to be
  * populated into a report
  *
- * Data union only needs to physically point to a single number, and single list.
+ * Data union only needs to physically point to a single number, a single double, and single list.
  */
 struct defender_custom_metric_data {
     struct defender_custom_metric *metric;
     union {
         int64_t number;
         struct aws_array_list list;
+        double number_double;
     } data;
     int callback_result;
 };
@@ -522,6 +527,23 @@ static int s_get_metric_report_json(
                         cJSON_AddItemToArray(json_list, array_item);
                     }
                     break;
+                case DD_METRIC_NUMBER_DOUBLE:
+                    cJSON_AddNumberToObject(item, "number", (double)custom_metrics_data[metric_index].data.number_double);
+                    break;
+                case DD_METRIC_NUMBER_DOUBLE_LIST:
+                    list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
+                    json_list = cJSON_CreateArray();
+                    if (NULL == json_list) {
+                        goto cleanup;
+                    }
+                    cJSON_AddItemToObject(item, "number_list", json_list);
+                    for (size_t num_index = 0; num_index < list_size; ++num_index) {
+                        double number = 0;
+                        aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &number, num_index);
+                        array_item = cJSON_CreateNumber(number);
+                        cJSON_AddItemToArray(json_list, array_item);
+                    }
+                    break;
                 case DD_METRIC_UNKNOWN:
                 default:
                     AWS_LOGF_WARN(
@@ -591,6 +613,8 @@ static int s_init_custom_metric_data(
 
             struct defender_custom_metric *metric = metric_data->metric;
             switch (metric->type) {
+                case DD_METRIC_NUMBER_DOUBLE:
+                    /* fall through */
                 case DD_METRIC_NUMBER: /* nothing to do here */
                     break;
                 case DD_METRIC_NUMBER_LIST:
@@ -602,6 +626,10 @@ static int s_init_custom_metric_data(
                 case DD_METRIC_IP_LIST:
                     aws_array_list_init_dynamic(
                         &custom_metric_data[metric_index].data.list, allocator, 0, sizeof(struct aws_string *));
+                    break;
+                case DD_METRIC_NUMBER_DOUBLE_LIST:
+                    aws_array_list_init_dynamic(
+                        &custom_metric_data[metric_index].data.list, allocator, 0, sizeof(double));
                     break;
                 case DD_METRIC_UNKNOWN:
                 default:
@@ -631,6 +659,8 @@ static void s_clean_up_custom_metric_data(
                dereference pointer to metric as it is NULL */
             if (custom_metrics_data[metric_index].metric) {
                 switch (custom_metrics_data[metric_index].metric->type) {
+                    case DD_METRIC_NUMBER_DOUBLE:
+                    /* fall through */
                     case DD_METRIC_NUMBER: /* nothing to do here */
                         break;
                     case DD_METRIC_STRING_LIST:
@@ -645,6 +675,8 @@ static void s_clean_up_custom_metric_data(
                         }
                         aws_array_list_clean_up(
                             &custom_metrics_data[metric_index].data.list); // Destory the list when finished
+                        break;
+                    case DD_METRIC_NUMBER_DOUBLE_LIST:
                     /* fall through */
                     case DD_METRIC_NUMBER_LIST:
                         aws_array_list_clean_up(&custom_metrics_data[metric_index].data.list);
@@ -696,6 +728,18 @@ static void s_get_custom_metrics_data(
                 case DD_METRIC_IP_LIST:
                     custom_metric_data[metric_index].callback_result =
                         custom_metric_data[metric_index].metric->supplier_fn.get_ip_list_fn(
+                            &custom_metric_data[metric_index].data.list,
+                            custom_metric_data[metric_index].metric->metric_cb_userdata);
+                    break;
+                case DD_METRIC_NUMBER_DOUBLE:
+                    custom_metric_data[metric_index].callback_result =
+                        custom_metric_data[metric_index].metric->supplier_fn.get_number_double_fn(
+                            &custom_metric_data[metric_index].data.number_double,
+                            custom_metric_data[metric_index].metric->metric_cb_userdata);
+                    break;
+                case DD_METRIC_NUMBER_DOUBLE_LIST:
+                    custom_metric_data[metric_index].callback_result =
+                        custom_metric_data[metric_index].metric->supplier_fn.get_number_double_list_fn(
                             &custom_metric_data[metric_index].data.list,
                             custom_metric_data[metric_index].metric->metric_cb_userdata);
                     break;
@@ -1354,6 +1398,74 @@ int aws_iotdevice_defender_config_register_ip_list_metric(
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_DEFENDER_TASK,
                 "id=%p: Failed to add IP list custom metric " PRInSTR,
+                (void *)task_config,
+                AWS_BYTE_CURSOR_PRI(*metric_name)); /* wrong subject */
+            aws_string_destroy(custom_metric->metric_name);
+            aws_mem_release(allocator, custom_metric);
+            return AWS_OP_ERR;
+        }
+
+        task_config->custom_metrics_len++;
+        return AWS_OP_SUCCESS;
+    }
+    return AWS_OP_ERR;
+}
+
+int aws_iotdevice_defender_config_register_number_double_metric(
+    struct aws_iotdevice_defender_task_config *task_config,
+    const struct aws_byte_cursor *metric_name,
+    aws_iotdevice_defender_get_number_double_fn *supplier,
+    void *userdata) {
+    AWS_PRECONDITION(task_config != NULL);
+    AWS_PRECONDITION(metric_name != NULL);
+    AWS_PRECONDITION(supplier != NULL);
+
+    struct aws_allocator *allocator = task_config->allocator;
+    struct defender_custom_metric *custom_metric = aws_mem_calloc(allocator, 1, sizeof(struct defender_custom_metric));
+    if (custom_metric) {
+        custom_metric->type = DD_METRIC_NUMBER_DOUBLE;
+        custom_metric->metric_name = aws_string_new_from_cursor(allocator, metric_name);
+        custom_metric->supplier_fn.get_number_double_fn = supplier;
+        custom_metric->metric_cb_userdata = userdata;
+
+        if (AWS_OP_SUCCESS != aws_array_list_push_back(&task_config->custom_metrics, &custom_metric)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to add double number custom metric " PRInSTR,
+                (void *)task_config,
+                AWS_BYTE_CURSOR_PRI(*metric_name)); /* wrong subject */
+            aws_string_destroy(custom_metric->metric_name);
+            aws_mem_release(allocator, custom_metric);
+            return AWS_OP_ERR;
+        }
+
+        task_config->custom_metrics_len++;
+        return AWS_OP_SUCCESS;
+    }
+    return AWS_OP_ERR;
+}
+
+int aws_iotdevice_defender_config_register_number_double_list_metric(
+    struct aws_iotdevice_defender_task_config *task_config,
+    const struct aws_byte_cursor *metric_name,
+    aws_iotdevice_defender_get_number_double_list_fn *supplier,
+    void *userdata) {
+    AWS_PRECONDITION(task_config != NULL)
+    AWS_PRECONDITION(metric_name != NULL);
+    AWS_PRECONDITION(supplier != NULL);
+
+    struct aws_allocator *allocator = task_config->allocator;
+    struct defender_custom_metric *custom_metric = aws_mem_calloc(allocator, 1, sizeof(struct defender_custom_metric));
+    if (custom_metric) {
+        custom_metric->type = DD_METRIC_NUMBER_DOUBLE_LIST;
+        custom_metric->metric_name = aws_string_new_from_cursor(allocator, metric_name);
+        custom_metric->supplier_fn.get_number_double_list_fn = supplier;
+        custom_metric->metric_cb_userdata = userdata;
+
+        if (AWS_OP_SUCCESS != aws_array_list_push_back(&task_config->custom_metrics, &custom_metric)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                "id=%p: Failed to add double number list custom metric " PRInSTR,
                 (void *)task_config,
                 AWS_BYTE_CURSOR_PRI(*metric_name)); /* wrong subject */
             aws_string_destroy(custom_metric->metric_name);
