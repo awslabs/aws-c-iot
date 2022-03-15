@@ -643,7 +643,8 @@ static void s_clean_up_custom_metric_data(
                                 &custom_metrics_data[metric_index].data.list, (void *)&string_or_ip_entry, item_index);
                             aws_string_destroy(string_or_ip_entry);
                         }
-                        aws_array_list_clean_up(&custom_metrics_data[metric_index].data.list); // Destory the list when finished
+                        aws_array_list_clean_up(&
+                            custom_metrics_data[metric_index].data.list); // Destory the list when finished
                     /* fall through */
                     case DD_METRIC_NUMBER_LIST:
                         aws_array_list_clean_up(&custom_metrics_data[metric_index].data.list);
