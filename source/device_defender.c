@@ -486,7 +486,7 @@ static int s_get_metric_report_json(
                         goto cleanup;
                     }
                     cJSON_AddItemToObject(item, "number_list", json_list);
-                    for (size_t num_index = 0; num_index < list_size; ++num_index) {
+                    for (size_t num_index = 0; num_index < list_size; num_index++) {
                         double number = 0;
                         aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &number, num_index);
                         array_item = cJSON_CreateNumber(number);
@@ -500,7 +500,7 @@ static int s_get_metric_report_json(
                         goto cleanup;
                     }
                     cJSON_AddItemToObject(item, "string_list", json_list);
-                    for (size_t string_index = 0; string_index < list_size; ++string_index) {
+                    for (size_t string_index = 0; string_index < list_size; string_index++) {
                         struct aws_string *string_value = NULL;
                         aws_array_list_get_at(
                             &custom_metrics_data[metric_index].data.list, &string_value, string_index);
@@ -515,7 +515,7 @@ static int s_get_metric_report_json(
                         goto cleanup;
                     }
                     cJSON_AddItemToObject(item, "ip_list", json_list);
-                    for (size_t ip_index = 0; ip_index < list_size; ++ip_index) {
+                    for (size_t ip_index = 0; ip_index < list_size; ip_index++) {
                         struct aws_string *ip_value = NULL;
                         aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &ip_value, ip_index);
                         array_item = cJSON_CreateString(aws_string_c_str(ip_value));
