@@ -74,17 +74,17 @@ typedef void(
  *
  * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
-typedef int(aws_iotdevice_defender_get_number_fn)(int64_t *const value, void *userdata);
+typedef int(aws_iotdevice_defender_get_number_fn)(double *value, void *userdata);
 
 /**
  * User callback type invoked to retrieve a number list custom metric
  *
  * List provided will already be initialized and caller must push items into the list
- * of type int64_t.
+ * of type double.
  *
  * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
-typedef int(aws_iotdevice_defender_get_number_list_fn)(struct aws_array_list *const number_list, void *userdata);
+typedef int(aws_iotdevice_defender_get_number_list_fn)(struct aws_array_list *number_list, void *userdata);
 
 /**
  * User callback type invoked to retrieve a string list custom metric
@@ -95,7 +95,7 @@ typedef int(aws_iotdevice_defender_get_number_list_fn)(struct aws_array_list *co
  *
  * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
-typedef int(aws_iotdevice_defender_get_string_list_fn)(struct aws_array_list *const string_list, void *userdata);
+typedef int(aws_iotdevice_defender_get_string_list_fn)(struct aws_array_list *string_list, void *userdata);
 
 /**
  * User callback type invoked to retrieve an ip list custom metric
@@ -106,24 +106,7 @@ typedef int(aws_iotdevice_defender_get_string_list_fn)(struct aws_array_list *co
  *
  * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
  */
-typedef int(aws_iotdevice_defender_get_ip_list_fn)(struct aws_array_list *const ip_list, void *userdata);
-
-/**
- * User callback type invoked to retrieve a double number type custom metric.
- *
- * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
- */
-typedef int(aws_iotdevice_defender_get_number_double_fn)(double *const value, void *userdata);
-
-/**
- * User callback type invoked to retrieve a double number list custom metric
- *
- * List provided will already be initialized and caller must push items into the list
- * of type double.
- *
- * returns: AWS_OP_SUCCESS if the custom metric was successfully added to the task config
- */
-typedef int(aws_iotdevice_defender_get_number_double_list_fn)(struct aws_array_list *const double_list, void *userdata);
+typedef int(aws_iotdevice_defender_get_ip_list_fn)(struct aws_array_list *ip_list, void *userdata);
 
 enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON, AWS_IDDRF_CBOR };
 
@@ -133,12 +116,10 @@ enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON
  */
 enum defender_custom_metric_type {
     DD_METRIC_UNKNOWN,
-    DD_METRIC_NUMBER,            /* int64_t */
-    DD_METRIC_NUMBER_LIST,       /* aws_array_list: int64_t */
+    DD_METRIC_NUMBER,            /* double */
+    DD_METRIC_NUMBER_LIST,       /* aws_array_list: double */
     DD_METRIC_STRING_LIST,       /* aws_array_list: struct aws_string */
     DD_METRIC_IP_LIST,           /* aws_array_list: struct aws_string */
-    DD_METRIC_NUMBER_DOUBLE,     /* double */
-    DD_METRIC_NUMBER_DOUBLE_LIST /* aws_array_list: double */
 };
 
 struct aws_iotdevice_defender_task;
@@ -164,7 +145,7 @@ AWS_IOTDEVICE_API
 int aws_iotdevice_defender_config_create(
     struct aws_iotdevice_defender_task_config **config_out,
     struct aws_allocator *allocator,
-    const struct aws_byte_cursor *thing_name,
+    struct aws_byte_cursor *thing_name,
     enum aws_iotdevice_defender_report_format report_format);
 
 /**
@@ -278,13 +259,11 @@ int aws_iotdevice_defender_config_set_callback_userdata(
  * \param[in]    supplier       callback function to produce the metric value when
  *                          requested at report generation time
  * \param[in]    userdata       specific callback data for the supplier callback function
- * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
- *             task configuration successfully
  */
 AWS_IOTDEVICE_API
-int aws_iotdevice_defender_config_register_number_metric(
+void aws_iotdevice_defender_config_register_number_metric(
     struct aws_iotdevice_defender_task_config *task_config,
-    const struct aws_byte_cursor *metric_name,
+    struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_number_fn *supplier,
     void *userdata);
 
@@ -297,13 +276,11 @@ int aws_iotdevice_defender_config_register_number_metric(
  * \param[in]    supplier       callback function to produce the metric value when
  *                          requested at report generation time
  * \param[in]    userdata       specific callback data for the supplier callback function
- * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
- *             task configuration successfully
  */
 AWS_IOTDEVICE_API
-int aws_iotdevice_defender_config_register_number_list_metric(
+void aws_iotdevice_defender_config_register_number_list_metric(
     struct aws_iotdevice_defender_task_config *task_config,
-    const struct aws_byte_cursor *metric_name,
+    struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_number_list_fn *supplier,
     void *userdata);
 
@@ -316,13 +293,11 @@ int aws_iotdevice_defender_config_register_number_list_metric(
  * \param[in]    supplier       callback function to produce the metric value when
  *                          requested at report generation time
  * \param[in]    userdata       specific callback data for the supplier callback function
- * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
- *             task configuration successfully
  */
 AWS_IOTDEVICE_API
-int aws_iotdevice_defender_config_register_string_list_metric(
+void aws_iotdevice_defender_config_register_string_list_metric(
     struct aws_iotdevice_defender_task_config *task_config,
-    const struct aws_byte_cursor *metric_name,
+    struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_string_list_fn *supplier,
     void *userdata);
 
@@ -335,52 +310,12 @@ int aws_iotdevice_defender_config_register_string_list_metric(
  * \param[in]    supplier       callback function to produce the metric value when
  *                          requested at report generation time
  * \param[in]    userdata       specific callback data for the supplier callback function
- * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
- *             task configuration successfully
  */
 AWS_IOTDEVICE_API
-int aws_iotdevice_defender_config_register_ip_list_metric(
+void aws_iotdevice_defender_config_register_ip_list_metric(
     struct aws_iotdevice_defender_task_config *task_config,
-    const struct aws_byte_cursor *metric_name,
+    struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_ip_list_fn *supplier,
-    void *userdata);
-
-/**
- * Adds double number custom metric to the Device Defender task configuration.
- * Has no impact on a defender task already started using the configuration.
- *
- * \param[in]    task_config    the defender task configuration to register the metric to
- * \param[in]    metric_name    UTF8 byte string of the metric name
- * \param[in]    supplier       callback function to produce the metric value when
- *                          requested at report generation time
- * \param[in]    userdata       specific callback data for the supplier callback function
- * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
- *             task configuration successfully
- */
-AWS_IOTDEVICE_API
-int aws_iotdevice_defender_config_register_number_double_metric(
-    struct aws_iotdevice_defender_task_config *task_config,
-    const struct aws_byte_cursor *metric_name,
-    aws_iotdevice_defender_get_number_double_fn *supplier,
-    void *userdata);
-
-/**
- * Adds double number list custom metric to the Device Defender task configuration.
- * Has no impact on a defender task already started using the configuration.
- *
- * \param[in]    task_config    the defender task configuration to register the metric to
- * \param[in]    metric_name    UTF8 byte string of the metric name
- * \param[in]    supplier       callback function to produce the metric value when
- *                          requested at report generation time
- * \param[in]    userdata       specific callback data for the supplier callback function
- * \returns    AWS_OP_SUCCESS if the custom metric has been associated with the
- *             task configuration successfully
- */
-AWS_IOTDEVICE_API
-int aws_iotdevice_defender_config_register_number_double_list_metric(
-    struct aws_iotdevice_defender_task_config *task_config,
-    const struct aws_byte_cursor *metric_name,
-    aws_iotdevice_defender_get_number_double_list_fn *supplier,
     void *userdata);
 
 /**
@@ -398,7 +333,7 @@ int aws_iotdevice_defender_config_register_number_double_list_metric(
 AWS_IOTDEVICE_API
 int aws_iotdevice_defender_task_create(
     struct aws_iotdevice_defender_task **task_out,
-    const struct aws_iotdevice_defender_task_config *config,
+    struct aws_iotdevice_defender_task_config *config,
     struct aws_mqtt_client_connection *connection,
     struct aws_event_loop *event_loop);
 
@@ -419,7 +354,7 @@ int aws_iotdevice_defender_task_create(
 AWS_IOTDEVICE_API
 int aws_iotdevice_defender_task_create_ex(
     struct aws_iotdevice_defender_task **task_out,
-    const struct aws_iotdevice_defender_task_config *config,
+    struct aws_iotdevice_defender_task_config *config,
     aws_iotdevice_defender_publish_fn *publish_fn,
     struct aws_event_loop *event_loop);
 
