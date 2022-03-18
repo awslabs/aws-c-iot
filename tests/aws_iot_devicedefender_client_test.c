@@ -303,20 +303,18 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_iotdevice_defender_config_set_task_failure_fn(task_config, s_task_failure));
 
     struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
-    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
-        task_config, &name_metric_number, get_number_metric, &args));
+    aws_iotdevice_defender_config_register_number_metric(task_config, &name_metric_number, get_number_metric, &args);
 
     struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str("TestCustomMetricNumberList");
-    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
-        task_config, &name_metric_number_list, get_number_list_metric, &args));
+    aws_iotdevice_defender_config_register_number_list_metric(
+        task_config, &name_metric_number_list, get_number_list_metric, &args);
 
     struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str("TestCustomMetricStringList");
-    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
-        task_config, &name_metric_string_list, get_string_list_metric, &args));
+    aws_iotdevice_defender_config_register_string_list_metric(
+        task_config, &name_metric_string_list, get_string_list_metric, &args);
 
     struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str("TestCustomMetricIpList");
-    ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
-        task_config, &name_metric_ip_list, get_ip_list_metric, &args));
+    aws_iotdevice_defender_config_register_ip_list_metric(task_config, &name_metric_ip_list, get_ip_list_metric, &args);
 
     struct aws_mqtt_connection_options conn_options = {
         .host_name = host_name_cur,
