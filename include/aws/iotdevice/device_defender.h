@@ -116,10 +116,10 @@ enum aws_iotdevice_defender_report_format { AWS_IDDRF_JSON, AWS_IDDRF_SHORT_JSON
  */
 enum defender_custom_metric_type {
     DD_METRIC_UNKNOWN,
-    DD_METRIC_NUMBER,            /* double */
-    DD_METRIC_NUMBER_LIST,       /* aws_array_list: double */
-    DD_METRIC_STRING_LIST,       /* aws_array_list: struct aws_string */
-    DD_METRIC_IP_LIST,           /* aws_array_list: struct aws_string */
+    DD_METRIC_NUMBER,      /* double */
+    DD_METRIC_NUMBER_LIST, /* aws_array_list: double */
+    DD_METRIC_STRING_LIST, /* aws_array_list: struct aws_string */
+    DD_METRIC_IP_LIST,     /* aws_array_list: struct aws_string */
 };
 
 struct aws_iotdevice_defender_task;

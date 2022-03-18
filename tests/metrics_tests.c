@@ -90,8 +90,8 @@ static int validate_devicedefender_record(const char *value) {
     return AWS_OP_SUCCESS;
 }
 
-const int64_t cm_number = 42;
-const int64_t cm_number_list[] = {64, 128, 256};
+const double cm_number = 42;
+const double cm_number_list[] = {64, 128, 256};
 const char *cm_string_list[] = {"foo", "bar", "donkey"};
 const char *cm_ip_list[] = {
     "127.0.0.1",
@@ -172,19 +172,19 @@ static int validate_devicedefender_custom_record(const char *json_report) {
     return AWS_OP_SUCCESS;
 }
 
-static int get_number_metric_fail(int64_t *out, void *userdata) {
+static int get_number_metric_fail(double *out, void *userdata) {
     (void)userdata;
     *out = cm_number;
     return AWS_OP_ERR;
 }
 
-static int get_number_metric(int64_t *out, void *userdata) {
+static int get_number_metric(double *out, void *userdata) {
     (void)userdata;
     *out = cm_number;
     return AWS_OP_SUCCESS; /* let the caller know we wrote the data successfully */
 }
 
-static int get_number_metric_slow(int64_t *out, void *userdata) {
+static int get_number_metric_slow(double *out, void *userdata) {
     (void)userdata;
     *out = cm_number;
     /* 2 seconds */
@@ -194,7 +194,7 @@ static int get_number_metric_slow(int64_t *out, void *userdata) {
 
 static int get_number_list_metric_fail(struct aws_array_list *to_write_list, void *userdata) {
     (void)userdata;
-    int64_t number = cm_number_list[0];
+    double number = cm_number_list[0];
     aws_array_list_push_back(to_write_list, &number);
     number = cm_number_list[1];
     aws_array_list_push_back(to_write_list, &number);
@@ -206,7 +206,7 @@ static int get_number_list_metric_fail(struct aws_array_list *to_write_list, voi
 
 static int get_number_list_metric(struct aws_array_list *to_write_list, void *userdata) {
     (void)userdata;
-    int64_t number = cm_number_list[0];
+    double number = cm_number_list[0];
     aws_array_list_push_back(to_write_list, &number);
     number = cm_number_list[1];
     aws_array_list_push_back(to_write_list, &number);
@@ -511,36 +511,36 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
     aws_iotdevice_defender_config_set_task_period_ns(task_config, 1000000000UL);
 
     /* register working metrics */
-    const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str(TM_NUMBER);
+    struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str(TM_NUMBER);
     ASSERT_SUCCESS(
         aws_iotdevice_defender_config_register_number_metric(task_config, &name_metric_number, get_number_metric, ctx));
 
-    const struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str(TM_NUMBER_LIST);
+    struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str(TM_NUMBER_LIST);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
         task_config, &name_metric_number_list, get_number_list_metric, ctx));
 
-    const struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str(TM_STRING_LIST);
+    struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str(TM_STRING_LIST);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
         task_config, &name_metric_string_list, get_string_list_metric, ctx));
 
-    const struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str(TM_IP_LIST);
+    struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str(TM_IP_LIST);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
         task_config, &name_metric_ip_list, get_ip_list_metric, ctx));
 
     /* register metrics with failing callbacks */
-    const struct aws_byte_cursor name_metric_number_fail = aws_byte_cursor_from_c_str(TM_NUMBER_FAIL);
+    struct aws_byte_cursor name_metric_number_fail = aws_byte_cursor_from_c_str(TM_NUMBER_FAIL);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
         task_config, &name_metric_number_fail, get_number_metric_fail, ctx));
 
-    const struct aws_byte_cursor name_metric_number_list_fail = aws_byte_cursor_from_c_str(TM_NUMBER_LIST_FAIL);
+    struct aws_byte_cursor name_metric_number_list_fail = aws_byte_cursor_from_c_str(TM_NUMBER_LIST_FAIL);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
         task_config, &name_metric_number_list_fail, get_number_list_metric_fail, ctx));
 
-    const struct aws_byte_cursor name_metric_string_list_fail = aws_byte_cursor_from_c_str(TM_STRING_LIST_FAIL);
+    struct aws_byte_cursor name_metric_string_list_fail = aws_byte_cursor_from_c_str(TM_STRING_LIST_FAIL);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
         task_config, &name_metric_string_list_fail, get_string_list_metric_fail, ctx));
 
-    const struct aws_byte_cursor name_metric_ip_list_fail = aws_byte_cursor_from_c_str(TM_IP_LIST_FAIL);
+    struct aws_byte_cursor name_metric_ip_list_fail = aws_byte_cursor_from_c_str(TM_IP_LIST_FAIL);
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
         task_config, &name_metric_ip_list_fail, get_ip_list_metric_fail, ctx));
 

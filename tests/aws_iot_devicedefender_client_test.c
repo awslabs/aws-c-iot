@@ -134,7 +134,7 @@ static void s_mqtt_on_disconnect(struct aws_mqtt_client_connection *connection, 
     aws_mutex_unlock(args->mutex);
 }
 
-static int get_number_metric(int64_t *out, void *userdata) {
+static int get_number_metric(double *out, void *userdata) {
     (void)userdata;
     *out = 42;
     return AWS_OP_SUCCESS;
@@ -142,7 +142,7 @@ static int get_number_metric(int64_t *out, void *userdata) {
 
 static int get_number_list_metric(struct aws_array_list *to_write_list, void *userdata) {
     (void)userdata;
-    int64_t number = 64;
+    double number = 64;
     aws_array_list_push_back(to_write_list, &number);
     number = 128;
     aws_array_list_push_back(to_write_list, &number);
@@ -302,19 +302,19 @@ int main(int argc, char **argv) {
     ASSERT_SUCCESS(aws_iotdevice_defender_config_set_report_rejected_fn(task_config, s_report_rejected));
     ASSERT_SUCCESS(aws_iotdevice_defender_config_set_task_failure_fn(task_config, s_task_failure));
 
-    const struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
+    struct aws_byte_cursor name_metric_number = aws_byte_cursor_from_c_str("TestCustomMetricNumber");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_metric(
         task_config, &name_metric_number, get_number_metric, &args));
 
-    const struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str("TestCustomMetricNumberList");
+    struct aws_byte_cursor name_metric_number_list = aws_byte_cursor_from_c_str("TestCustomMetricNumberList");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_number_list_metric(
         task_config, &name_metric_number_list, get_number_list_metric, &args));
 
-    const struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str("TestCustomMetricStringList");
+    struct aws_byte_cursor name_metric_string_list = aws_byte_cursor_from_c_str("TestCustomMetricStringList");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_string_list_metric(
         task_config, &name_metric_string_list, get_string_list_metric, &args));
 
-    const struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str("TestCustomMetricIpList");
+    struct aws_byte_cursor name_metric_ip_list = aws_byte_cursor_from_c_str("TestCustomMetricIpList");
     ASSERT_SUCCESS(aws_iotdevice_defender_config_register_ip_list_metric(
         task_config, &name_metric_ip_list, get_ip_list_metric, &args));
 
