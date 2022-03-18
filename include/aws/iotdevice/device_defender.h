@@ -145,7 +145,7 @@ AWS_IOTDEVICE_API
 int aws_iotdevice_defender_config_create(
     struct aws_iotdevice_defender_task_config **config_out,
     struct aws_allocator *allocator,
-    struct aws_byte_cursor *thing_name,
+    const struct aws_byte_cursor *thing_name,
     enum aws_iotdevice_defender_report_format report_format);
 
 /**
@@ -333,7 +333,7 @@ void aws_iotdevice_defender_config_register_ip_list_metric(
 AWS_IOTDEVICE_API
 int aws_iotdevice_defender_task_create(
     struct aws_iotdevice_defender_task **task_out,
-    struct aws_iotdevice_defender_task_config *config,
+    const struct aws_iotdevice_defender_task_config *config,
     struct aws_mqtt_client_connection *connection,
     struct aws_event_loop *event_loop);
 
@@ -354,7 +354,7 @@ int aws_iotdevice_defender_task_create(
 AWS_IOTDEVICE_API
 int aws_iotdevice_defender_task_create_ex(
     struct aws_iotdevice_defender_task **task_out,
-    struct aws_iotdevice_defender_task_config *config,
+    const struct aws_iotdevice_defender_task_config *config,
     aws_iotdevice_defender_publish_fn *publish_fn,
     struct aws_event_loop *event_loop);
 

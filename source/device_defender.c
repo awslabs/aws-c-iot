@@ -286,10 +286,10 @@ static int s_get_metric_report_json(
     struct aws_byte_buf *json_out,
     struct aws_iotdevice_defender_task *task,
     uint64_t report_id,
-    struct aws_iotdevice_metric_network_transfer *net_xfer,
-    struct aws_array_list *net_conns,
+    const struct aws_iotdevice_metric_network_transfer *net_xfer,
+    const struct aws_array_list *net_conns,
     size_t custom_metrics_len,
-    struct defender_custom_metric_data *custom_metrics_data) {
+    const struct defender_custom_metric_data *custom_metrics_data) {
     int return_value = AWS_OP_ERR;
     const char *json_report = NULL;
     struct cJSON *root = cJSON_CreateObject();
@@ -660,7 +660,7 @@ static void s_clean_up_custom_metric_data(
 }
 
 static void s_get_custom_metrics_data(
-    struct aws_iotdevice_defender_task *defender_task,
+    const struct aws_iotdevice_defender_task *defender_task,
     struct defender_custom_metric_data *custom_metric_data,
     const size_t custom_metrics_len) {
     if (custom_metrics_len != 0) {
@@ -923,7 +923,7 @@ cleanup:
 int aws_iotdevice_defender_config_create(
     struct aws_iotdevice_defender_task_config **config_out,
     struct aws_allocator *allocator,
-    struct aws_byte_cursor *thing_name,
+    const struct aws_byte_cursor *thing_name,
     enum aws_iotdevice_defender_report_format report_format) {
     AWS_PRECONDITION(config_out != NULL);
     AWS_PRECONDITION(aws_allocator_is_valid(allocator));
@@ -972,7 +972,7 @@ void aws_iotdevice_defender_config_clean_up(struct aws_iotdevice_defender_task_c
 
 struct aws_string *s_build_topic(
     struct aws_allocator *allocator,
-    struct aws_string *thing_name,
+    const struct aws_string *thing_name,
     struct aws_byte_cursor prefix,
     struct aws_byte_cursor suffix) {
     AWS_PRECONDITION(aws_allocator_is_valid(allocator));
@@ -996,7 +996,7 @@ struct aws_string *s_build_topic(
 
 int s_copy_task_config(
     struct aws_iotdevice_defender_task_config *dest_config,
-    struct aws_iotdevice_defender_task_config *src_config) {
+    const struct aws_iotdevice_defender_task_config *src_config) {
     AWS_PRECONDITION(dest_config != NULL);
     AWS_PRECONDITION(src_config != NULL);
 
@@ -1040,7 +1040,7 @@ static void s_delete_dd_task(void *data) {
 
 static int s_defender_task_create(
     struct aws_iotdevice_defender_task **task_out,
-    struct aws_iotdevice_defender_task_config *config,
+    const struct aws_iotdevice_defender_task_config *config,
     aws_iotdevice_defender_publish_fn *publish_fn,
     struct aws_mqtt_client_connection *connection,
     struct aws_event_loop *event_loop) {
@@ -1178,7 +1178,7 @@ cleanup:
 
 int aws_iotdevice_defender_task_create_ex(
     struct aws_iotdevice_defender_task **task_out,
-    struct aws_iotdevice_defender_task_config *config,
+    const struct aws_iotdevice_defender_task_config *config,
     aws_iotdevice_defender_publish_fn *publish_fn,
     struct aws_event_loop *event_loop) {
     return s_defender_task_create(task_out, config, publish_fn, NULL, event_loop);
@@ -1186,7 +1186,7 @@ int aws_iotdevice_defender_task_create_ex(
 
 int aws_iotdevice_defender_task_create(
     struct aws_iotdevice_defender_task **task_out,
-    struct aws_iotdevice_defender_task_config *config,
+    const struct aws_iotdevice_defender_task_config *config,
     struct aws_mqtt_client_connection *connection,
     struct aws_event_loop *event_loop) {
     AWS_PRECONDITION(connection != NULL);
