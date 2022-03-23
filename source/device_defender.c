@@ -377,7 +377,7 @@ static int s_get_metric_report_json(
             if (conn == NULL) {
                 goto cleanup;
             }
-            aws_json_value_add_to_array(est_connections, conn);
+            aws_json_value_add_array_element(est_connections, conn);
 
             if (aws_json_value_add_to_object(
                     conn,
@@ -414,7 +414,7 @@ static int s_get_metric_report_json(
             if (conn == NULL) {
                 goto cleanup;
             }
-            aws_json_value_add_to_array(tcp_listen_ports, conn);
+            aws_json_value_add_array_element(tcp_listen_ports, conn);
 
             if (aws_json_value_add_to_object(
                     conn,
@@ -510,7 +510,7 @@ static int s_get_metric_report_json(
             if (item == NULL) {
                 goto cleanup;
             }
-            aws_json_value_add_to_array(spurious_array_container, item);
+            aws_json_value_add_array_element(spurious_array_container, item);
 
             if (custom_metrics_data[metric_index].metric->type == DD_METRIC_NUMBER) {
                 if (aws_json_value_add_to_object(
@@ -531,7 +531,7 @@ static int s_get_metric_report_json(
                     int64_t number = 0;
                     aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &number, num_index);
                     json_value = aws_json_new_number(allocator, (double)number);
-                    aws_json_value_add_to_array(json_list, json_value);
+                    aws_json_value_add_array_element(json_list, json_value);
                 }
             } else if (
                 custom_metrics_data[metric_index].metric->type == DD_METRIC_STRING_LIST ||
@@ -553,7 +553,7 @@ static int s_get_metric_report_json(
                     struct aws_string *list_value = NULL;
                     aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &list_value, list_index);
                     json_value = aws_json_new_string(allocator, aws_byte_cursor_from_string(list_value));
-                    aws_json_value_add_to_array(json_list, json_value);
+                    aws_json_value_add_array_element(json_list, json_value);
                 }
             } else {
                 AWS_LOGF_WARN(
