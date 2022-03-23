@@ -457,7 +457,7 @@ static int s_get_metric_report_json(
         struct cJSON *spurious_array_container = NULL;
         for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
             if (custom_metrics_data[metric_index].callback_result != AWS_OP_SUCCESS) {
-                /* if the collection of a metric failed, do not output it to the report */
+                // if the collection of a metric failed, do not output it to the report
                 continue;
             }
             spurious_array_container = cJSON_CreateArray();
@@ -486,7 +486,7 @@ static int s_get_metric_report_json(
                         goto cleanup;
                     }
                     cJSON_AddItemToObject(item, "number_list", json_list);
-                    for (size_t num_index = 0; num_index < list_size; num_index++) {
+                    for (size_t num_index = 0; num_index < list_size; ++num_index) {
                         double number = 0;
                         aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &number, num_index);
                         array_item = cJSON_CreateNumber(number);
@@ -500,7 +500,7 @@ static int s_get_metric_report_json(
                         goto cleanup;
                     }
                     cJSON_AddItemToObject(item, "string_list", json_list);
-                    for (size_t string_index = 0; string_index < list_size; string_index++) {
+                    for (size_t string_index = 0; string_index < list_size; ++string_index) {
                         struct aws_string *string_value = NULL;
                         aws_array_list_get_at(
                             &custom_metrics_data[metric_index].data.list, &string_value, string_index);
@@ -515,7 +515,7 @@ static int s_get_metric_report_json(
                         goto cleanup;
                     }
                     cJSON_AddItemToObject(item, "ip_list", json_list);
-                    for (size_t ip_index = 0; ip_index < list_size; ip_index++) {
+                    for (size_t ip_index = 0; ip_index < list_size; ++ip_index) {
                         struct aws_string *ip_value = NULL;
                         aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &ip_value, ip_index);
                         array_item = cJSON_CreateString(aws_string_c_str(ip_value));
@@ -1233,7 +1233,7 @@ void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *de
 
 void aws_iotdevice_defender_config_register_number_metric(
     struct aws_iotdevice_defender_task_config *task_config,
-    struct aws_byte_cursor *metric_name,
+    const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_number_fn *supplier,
     void *userdata) {
     AWS_PRECONDITION(task_config != NULL);
@@ -1253,7 +1253,7 @@ void aws_iotdevice_defender_config_register_number_metric(
 
 void aws_iotdevice_defender_config_register_number_list_metric(
     struct aws_iotdevice_defender_task_config *task_config,
-    struct aws_byte_cursor *metric_name,
+    const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_number_list_fn *supplier,
     void *userdata) {
     AWS_PRECONDITION(task_config != NULL)
@@ -1273,7 +1273,7 @@ void aws_iotdevice_defender_config_register_number_list_metric(
 
 void aws_iotdevice_defender_config_register_string_list_metric(
     struct aws_iotdevice_defender_task_config *task_config,
-    struct aws_byte_cursor *metric_name,
+    const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_string_list_fn *supplier,
     void *userdata) {
     AWS_PRECONDITION(task_config != NULL);
@@ -1293,7 +1293,7 @@ void aws_iotdevice_defender_config_register_string_list_metric(
 
 void aws_iotdevice_defender_config_register_ip_list_metric(
     struct aws_iotdevice_defender_task_config *task_config,
-    struct aws_byte_cursor *metric_name,
+    const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_ip_list_fn *supplier,
     void *userdata) {
     AWS_PRECONDITION(task_config != NULL);
