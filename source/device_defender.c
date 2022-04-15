@@ -293,6 +293,9 @@ static int s_get_metric_report_json(
     int return_value = AWS_OP_ERR;
     const char *json_report = NULL;
 
+    // Avoid unused variable warnings
+    (void)(json_report);
+
     struct aws_allocator *allocator = aws_default_allocator();
 
     struct aws_json_value *root = aws_json_value_new_object(allocator);
@@ -424,7 +427,8 @@ static int s_get_metric_report_json(
                 goto cleanup;
             }
             if (aws_json_value_add_to_object(
-                    conn, aws_byte_cursor_from_c_str("port"),
+                    conn,
+                    aws_byte_cursor_from_c_str("port"),
                     aws_json_value_new_number(allocator, net_conn->local_port)) == AWS_OP_ERR) {
                 goto cleanup;
             }
@@ -567,8 +571,8 @@ static int s_get_metric_report_json(
         }
     }
 
-    struct aws_byte_buf result_string_buf;
-    aws_byte_buf_init(&result_string_buf, task->allocator, 0);
+    struct aws_byte_buf json_report_buf;
+    aws_byte_buf_init(&json_report_buf, task->allocator, 0);
     aws_byte_buf_append_json_string(root, &json_report_buf);
     struct aws_byte_cursor json_report_cursor = aws_byte_cursor_from_buf(&json_report_buf);
     if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(json_out, task->allocator, json_report_cursor)) {
