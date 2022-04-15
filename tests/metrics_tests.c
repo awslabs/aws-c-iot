@@ -55,8 +55,8 @@ struct mqtt_connection_test_data {
 
 static struct mqtt_connection_test_data mqtt_test_data = {0};
 
-static int validate_devicedefender_record(struct aws_allocator allocator, const char *value) {
-    struct aws_json_value *report = aws_json_value_new_from_string(allocator, (char *)value);
+static int validate_devicedefender_record(struct aws_allocator *allocator, const char *value) {
+    struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(value));
     ASSERT_NOT_NULL(report);
 
     struct aws_json_value *header = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("header"));
@@ -112,7 +112,7 @@ static int validate_devicedefender_custom_record(struct aws_allocator *allocator
     struct aws_byte_buf value_to_cmp;
     aws_byte_buf_init(&value_to_cmp, allocator, 0);
 
-    struct aws_json_value *report = aws_json_value_new_from_string(allocator, (char *)json_report);
+    struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(json_report));
     ASSERT_NOT_NULL(report);
 
     struct aws_json_value *custom_metrics =
@@ -175,11 +175,11 @@ static int validate_devicedefender_custom_record(struct aws_allocator *allocator
 
     struct aws_byte_cursor tmp_str;
     aws_json_value_get_string(aws_json_get_array_element(string_list_array, 0), &tmp_str);
-    ASSERT_TRUE(aws_byte_cursor_eq_c_str(tmp_str, cm_string_list[0]));
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_string_list[0]));
     aws_json_value_get_string(aws_json_get_array_element(string_list_array, 1), &tmp_str);
-    ASSERT_TRUE(aws_byte_cursor_eq_c_str(tmp_str, cm_string_list[1]));
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_string_list[1]));
     aws_json_value_get_string(aws_json_get_array_element(string_list_array, 2), &tmp_str);
-    ASSERT_TRUE(aws_byte_cursor_eq_c_str(tmp_str, cm_string_list[2]));
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_string_list[2]));
 
     struct aws_json_value *string_list_metric_fail =
         aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricStringListFail"));
@@ -195,13 +195,13 @@ static int validate_devicedefender_custom_record(struct aws_allocator *allocator
     ASSERT_TRUE(aws_json_value_is_array(ip_list_array));
 
     aws_json_value_get_string(aws_json_get_array_element(ip_list_array, 0), &tmp_str);
-    ASSERT_TRUE(aws_byte_cursor_eq_c_str(tmp_str, cm_ip_list[0]));
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_ip_list[0]));
     aws_json_value_get_string(aws_json_get_array_element(ip_list_array, 1), &tmp_str);
-    ASSERT_TRUE(aws_byte_cursor_eq_c_str(tmp_str, cm_ip_list[1]));
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_ip_list[1]));
     aws_json_value_get_string(aws_json_get_array_element(ip_list_array, 2), &tmp_str);
-    ASSERT_TRUE(aws_byte_cursor_eq_c_str(tmp_str, cm_ip_list[2]));
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_ip_list[2]));
     aws_json_value_get_string(aws_json_get_array_element(ip_list_array, 3), &tmp_str);
-    ASSERT_TRUE(aws_byte_cursor_eq_c_str(tmp_str, cm_ip_list[3]));
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_ip_list[3]));
 
     struct aws_json_value *ip_list_metric_fail =
         aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricIpListFail"));
