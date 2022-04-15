@@ -291,10 +291,6 @@ static int s_get_metric_report_json(
     size_t custom_metrics_len,
     const struct defender_custom_metric_data *custom_metrics_data) {
     int return_value = AWS_OP_ERR;
-    const char *json_report = NULL;
-
-    // Avoid unused variable warnings
-    (void)(json_report);
 
     struct aws_allocator *allocator = aws_default_allocator();
 
@@ -582,7 +578,6 @@ static int s_get_metric_report_json(
         return_value = AWS_OP_SUCCESS;
 
         struct aws_string *tmp = aws_string_new_from_cursor(allocator, &json_report_cursor);
-        json_report = aws_string_c_str(tmp);
         aws_string_destroy_secure(tmp);
     }
     aws_byte_buf_clean_up_secure(&json_report_buf);
