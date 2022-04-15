@@ -82,7 +82,8 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     ASSERT_TRUE(aws_json_value_is_object(udpPorts));
     ASSERT_TRUE(aws_json_value_is_array(aws_json_value_get_from_object(udpPorts, aws_byte_cursor_from_c_str("ports"))));
 
-    struct aws_json_value *netstats = aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("network_stats"));
+    struct aws_json_value *netstats =
+        aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("network_stats"));
     ASSERT_TRUE(aws_json_value_is_object(netstats));
 
     struct aws_json_value *connections =
@@ -91,8 +92,8 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     struct aws_json_value *established =
         aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("established_connections"));
     ASSERT_TRUE(aws_json_value_is_object(established));
-    ASSERT_TRUE(
-        aws_json_value_is_array(aws_json_value_get_from_object(established, aws_byte_cursor_from_c_str("connections"))));
+    ASSERT_TRUE(aws_json_value_is_array(
+        aws_json_value_get_from_object(established, aws_byte_cursor_from_c_str("connections"))));
 
     return AWS_OP_SUCCESS;
 }
