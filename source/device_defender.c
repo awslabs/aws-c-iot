@@ -382,8 +382,8 @@ static int s_get_metric_report_json(
             if (aws_json_value_add_to_object(
                     conn,
                     aws_byte_cursor_from_c_str("local_interface"),
-                    aws_json_value_new_string(allocator, aws_byte_cursor_from_c_str((char *)net_conn->local_interface))) ==
-                AWS_OP_ERR) {
+                    aws_json_value_new_string(
+                        allocator, aws_byte_cursor_from_c_str((char *)net_conn->local_interface))) == AWS_OP_ERR) {
                 goto cleanup;
             }
             if (aws_json_value_add_to_object(
@@ -424,8 +424,8 @@ static int s_get_metric_report_json(
                 goto cleanup;
             }
             if (aws_json_value_add_to_object(
-                    conn, aws_byte_cursor_from_c_str("port"), aws_json_value_new_number(allocator, net_conn->local_port)) ==
-                AWS_OP_ERR) {
+                    conn, aws_byte_cursor_from_c_str("port"),
+                    aws_json_value_new_number(allocator, net_conn->local_port)) == AWS_OP_ERR) {
                 goto cleanup;
             }
         }
