@@ -4,18 +4,8 @@
  */
 #include <aws/iotdevice/iotdevice.h>
 
+#include <aws/common/json.h>
 #include <aws/common/thread.h>
-#include <aws/iotdevice/external/cJSON.h>
-
-static struct aws_allocator *s_library_allocator = NULL;
-
-static void *s_cJSONAlloc(size_t sz) {
-    return aws_mem_acquire(s_library_allocator, sz);
-}
-
-static void s_cJSONFree(void *ptr) {
-    aws_mem_release(s_library_allocator, ptr);
-}
 
 /*******************************************************************************
  * Library Init
@@ -72,15 +62,11 @@ static bool s_iotdevice_library_initialized = false;
 
 void aws_iotdevice_library_init(struct aws_allocator *allocator) {
     AWS_PRECONDITION(aws_allocator_is_valid(allocator));
+    (void)(allocator); // ignore unused warning
 
     if (!s_iotdevice_library_initialized) {
-        s_library_allocator = allocator;
-
         aws_register_error_info(&s_error_list);
         aws_register_log_subject_info_list(&s_logging_subjects_list);
-
-        struct cJSON_Hooks allocation_hooks = {.malloc_fn = s_cJSONAlloc, .free_fn = s_cJSONFree};
-        cJSON_InitHooks(&allocation_hooks);
 
         s_iotdevice_library_initialized = true;
     }
@@ -89,7 +75,6 @@ void aws_iotdevice_library_init(struct aws_allocator *allocator) {
 void aws_iotdevice_library_clean_up(void) {
     if (s_iotdevice_library_initialized) {
         aws_thread_join_all_managed();
-        s_library_allocator = NULL;
 
         aws_unregister_error_info(&s_error_list);
         aws_unregister_log_subject_info_list(&s_logging_subjects_list);
