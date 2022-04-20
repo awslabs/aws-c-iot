@@ -516,7 +516,7 @@ static int s_get_metric_report_json(
                 if (aws_json_value_add_to_object(
                         item,
                         aws_byte_cursor_from_c_str("number"),
-                        aws_json_value_new_number(allocator, (double)custom_metrics_data[metric_index].data.number)) ==
+                        aws_json_value_new_number(allocator, custom_metrics_data[metric_index].data.number)) ==
                     AWS_OP_ERR) {
                     goto cleanup;
                 }
@@ -528,9 +528,9 @@ static int s_get_metric_report_json(
                     goto cleanup;
                 }
                 for (size_t num_index = 0; num_index < list_size; ++num_index) {
-                    int64_t number = 0;
+                    double number = 0;
                     aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &number, num_index);
-                    json_value = aws_json_value_new_number(allocator, (double)number);
+                    json_value = aws_json_value_new_number(allocator, number);
                     aws_json_value_add_array_element(json_list, json_value);
                 }
             } else if (
