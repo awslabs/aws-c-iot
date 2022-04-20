@@ -94,6 +94,9 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     ASSERT_TRUE(aws_json_value_is_object(established));
     ASSERT_TRUE(aws_json_value_is_array(
         aws_json_value_get_from_object(established, aws_byte_cursor_from_c_str("connections"))));
+    
+    // clean up
+    aws_json_value_destroy(report);
 
     return AWS_OP_SUCCESS;
 }

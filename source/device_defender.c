@@ -358,7 +358,8 @@ static int s_get_metric_report_json(
     }
 
     struct aws_json_value *udp_ports = aws_json_value_new_array(allocator);
-    if (aws_json_value_add_to_object(listening_udp_ports, aws_byte_cursor_from_c_str("ports"), udp_ports) == AWS_OP_ERR) {
+    if (aws_json_value_add_to_object(listening_udp_ports, aws_byte_cursor_from_c_str("ports"), udp_ports) ==
+        AWS_OP_ERR) {
         goto cleanup;
     }
 
@@ -382,7 +383,8 @@ static int s_get_metric_report_json(
                     conn,
                     aws_byte_cursor_from_c_str("local_interface"),
                     aws_json_value_new_string(
-                        allocator, aws_byte_cursor_from_c_str(aws_string_c_str(net_conn->local_interface)))) == AWS_OP_ERR) {
+                        allocator, aws_byte_cursor_from_c_str(aws_string_c_str(net_conn->local_interface)))) ==
+                AWS_OP_ERR) {
                 goto cleanup;
             }
 
@@ -484,7 +486,8 @@ static int s_get_metric_report_json(
 
     if (custom_metrics_len != 0) {
         struct aws_json_value *custom_metrics = aws_json_value_new_object(allocator);
-        if (aws_json_value_add_to_object(root, aws_byte_cursor_from_c_str("custom_metrics"), custom_metrics) == AWS_OP_ERR) {
+        if (aws_json_value_add_to_object(root, aws_byte_cursor_from_c_str("custom_metrics"), custom_metrics) ==
+            AWS_OP_ERR) {
             goto cleanup;
         }
 
@@ -546,7 +549,8 @@ static int s_get_metric_report_json(
                     }
                 } else {
                     json_list = aws_json_value_new_array(allocator);
-                    if (aws_json_value_add_to_object(item, aws_byte_cursor_from_c_str("ip_list"), json_list) == AWS_OP_ERR) {
+                    if (aws_json_value_add_to_object(item, aws_byte_cursor_from_c_str("ip_list"), json_list) ==
+                        AWS_OP_ERR) {
                         goto cleanup;
                     }
                 }
