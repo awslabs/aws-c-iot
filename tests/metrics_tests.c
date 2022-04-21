@@ -89,7 +89,7 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     struct aws_json_value *connections =
         aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("tcp_connections"));
     ASSERT_TRUE(aws_json_value_is_object(connections));
-    
+
     struct aws_json_value *established =
         aws_json_value_get_from_object(connections, aws_byte_cursor_from_c_str("established_connections"));
     ASSERT_TRUE(aws_json_value_is_object(established));
