@@ -59,7 +59,6 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(value));
     ASSERT_NOT_NULL(report);
 
-    /*
     struct aws_json_value *header = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("header"));
     ASSERT_TRUE(aws_json_value_is_object(header));
     struct aws_json_value *id = aws_json_value_get_from_object(header, aws_byte_cursor_from_c_str("report_id"));
@@ -73,6 +72,7 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     ASSERT_TRUE(aws_byte_cursor_eq_c_str(&version_cursor, "1.0"));
     struct aws_json_value *metrics = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("metrics"));
 
+    /*
     struct aws_json_value *tcpPorts =
         aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("listening_tcp_ports"));
     ASSERT_TRUE(aws_json_value_is_object(tcpPorts));
