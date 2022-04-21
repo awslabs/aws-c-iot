@@ -56,10 +56,10 @@ struct mqtt_connection_test_data {
 static struct mqtt_connection_test_data mqtt_test_data = {0};
 
 static int validate_devicedefender_record(struct aws_allocator *allocator, const char *value) {
-    /*
     struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(value));
     ASSERT_NOT_NULL(report);
 
+    /*
     struct aws_json_value *header = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("header"));
     ASSERT_TRUE(aws_json_value_is_object(header));
     struct aws_json_value *id = aws_json_value_get_from_object(header, aws_byte_cursor_from_c_str("report_id"));
@@ -95,10 +95,10 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     ASSERT_TRUE(aws_json_value_is_object(established));
     ASSERT_TRUE(aws_json_value_is_array(
         aws_json_value_get_from_object(established, aws_byte_cursor_from_c_str("connections"))));
+    */
 
     // clean up
     aws_json_value_destroy(report);
-    */
 
     return AWS_OP_SUCCESS;
 }
