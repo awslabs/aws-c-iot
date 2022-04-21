@@ -72,7 +72,6 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     ASSERT_TRUE(aws_byte_cursor_eq_c_str(&version_cursor, "1.0"));
     struct aws_json_value *metrics = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("metrics"));
 
-    /*
     struct aws_json_value *tcpPorts =
         aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("listening_tcp_ports"));
     ASSERT_TRUE(aws_json_value_is_object(tcpPorts));
@@ -90,12 +89,12 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     struct aws_json_value *connections =
         aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("tcp_connections"));
     ASSERT_TRUE(aws_json_value_is_object(connections));
+    
     struct aws_json_value *established =
-        aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("established_connections"));
+        aws_json_value_get_from_object(connections, aws_byte_cursor_from_c_str("established_connections"));
     ASSERT_TRUE(aws_json_value_is_object(established));
     ASSERT_TRUE(aws_json_value_is_array(
         aws_json_value_get_from_object(established, aws_byte_cursor_from_c_str("connections"))));
-    */
 
     // clean up
     aws_json_value_destroy(report);
@@ -115,7 +114,6 @@ const char *cm_ip_list[] = {
 
 #define dd_value_len 256
 static int validate_devicedefender_custom_record(struct aws_allocator *allocator, const char *json_report) {
-    /*
     struct aws_byte_buf value_to_cmp;
     aws_byte_buf_init(&value_to_cmp, allocator, 0);
 
@@ -215,7 +213,6 @@ static int validate_devicedefender_custom_record(struct aws_allocator *allocator
     ASSERT_NULL(ip_list_metric_fail);
 
     aws_json_value_destroy(report);
-    */
 
     return AWS_OP_SUCCESS;
 }
