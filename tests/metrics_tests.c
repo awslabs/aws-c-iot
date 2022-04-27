@@ -55,9 +55,9 @@ struct mqtt_connection_test_data {
 
 static struct mqtt_connection_test_data mqtt_test_data = {0};
 
-static int validate_devicedefender_record(struct aws_allocator *allocator, const char *value) {
+static int validate_devicedefender_record(struct aws_allocator *allocator, struct aws_byte_cursor *value) {
 
-    struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(value));
+    struct aws_json_value *report = aws_json_value_new_from_string(allocator, *value);
     ASSERT_NOT_NULL(report);
 
     /*
@@ -536,7 +536,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
 
     // TEST - skip validation temporarily to see if that is what is causing heap overflow.
     struct aws_byte_cursor payload = aws_byte_cursor_from_buf(&state_test_data->payload);
-    validate_devicedefender_record(allocator, (const char *)payload.ptr);
+    validate_devicedefender_record(allocator, &payload);
 
     return AWS_OP_SUCCESS;
 }
@@ -666,7 +666,8 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
     AWS_ZERO_STRUCT(payload);
     aws_mqtt_client_get_payload_for_outstanding_publish_packet(
         state_test_data->mqtt_connection, packet_id, allocator, &payload);
-    validate_devicedefender_record(allocator, (const char *)payload.buffer);
+    struct aws_byte_cursor payload_cursor = aws_byte_cursor_from_buf(&payload);
+    validate_devicedefender_record(allocator, &payload_cursor);
     return AWS_OP_SUCCESS;
 }
 
