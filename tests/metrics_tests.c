@@ -57,9 +57,6 @@ static struct mqtt_connection_test_data mqtt_test_data = {0};
 
 static int validate_devicedefender_record(struct aws_allocator *allocator, const char *value) {
 
-    return AWS_OP_SUCCESS; // TEST return early
-
-    /*
     struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(value));
     ASSERT_NOT_NULL(report);
 
@@ -74,8 +71,9 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     struct aws_byte_cursor version_cursor;
     ASSERT_INT_EQUALS(AWS_OP_SUCCESS, aws_json_value_get_string(version, &version_cursor));
     ASSERT_TRUE(aws_byte_cursor_eq_c_str(&version_cursor, "1.0"));
-    struct aws_json_value *metrics = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("metrics"));
 
+    /*
+    struct aws_json_value *metrics = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("metrics"));
     struct aws_json_value *tcpPorts =
         aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("listening_tcp_ports"));
     ASSERT_TRUE(aws_json_value_is_object(tcpPorts));
@@ -99,12 +97,12 @@ static int validate_devicedefender_record(struct aws_allocator *allocator, const
     ASSERT_TRUE(aws_json_value_is_object(established));
     ASSERT_TRUE(aws_json_value_is_array(
         aws_json_value_get_from_object(established, aws_byte_cursor_from_c_str("connections"))));
+    */
 
     // clean up
     aws_json_value_destroy(report);
 
     return AWS_OP_SUCCESS;
-    */
 }
 
 const double cm_number = 42;
