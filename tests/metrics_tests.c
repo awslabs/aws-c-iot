@@ -113,6 +113,7 @@ const char *cm_ip_list[] = {
 };
 
 #define dd_value_len 256
+/*
 static int validate_devicedefender_custom_record(struct aws_allocator *allocator, const char *json_report) {
     struct aws_byte_buf value_to_cmp;
     aws_byte_buf_init(&value_to_cmp, allocator, 0);
@@ -216,6 +217,7 @@ static int validate_devicedefender_custom_record(struct aws_allocator *allocator
 
     return AWS_OP_SUCCESS;
 }
+*/
 
 static int get_number_metric_fail(double *out, void *userdata) {
     (void)userdata;
