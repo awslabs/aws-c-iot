@@ -114,12 +114,11 @@ const char *cm_ip_list[] = {
 };
 
 #define dd_value_len 256
-/*
-static int validate_devicedefender_custom_record(struct aws_allocator *allocator, const char *json_report) {
+static int validate_devicedefender_custom_record(struct aws_allocator *allocator, struct aws_byte_cursor *json_report) {
     struct aws_byte_buf value_to_cmp;
     aws_byte_buf_init(&value_to_cmp, allocator, 0);
 
-    struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(json_report));
+    struct aws_json_value *report = aws_json_value_new_from_string(allocator, json_report);
     ASSERT_NOT_NULL(report);
 
     struct aws_json_value *custom_metrics =
@@ -218,7 +217,6 @@ static int validate_devicedefender_custom_record(struct aws_allocator *allocator
 
     return AWS_OP_SUCCESS;
 }
-*/
 
 static int get_number_metric_fail(double *out, void *userdata) {
     (void)userdata;
@@ -532,7 +530,6 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     aws_iotdevice_defender_task_clean_up(defender_task);
     defender_task = NULL;
 
-    // TEST - skip validation temporarily to see if that is what is causing heap overflow.
     struct aws_byte_cursor payload = aws_byte_cursor_from_buf(&state_test_data->payload);
     validate_devicedefender_record(allocator, &payload);
 
@@ -606,9 +603,8 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
 
     ASSERT_TRUE(state_test_data->task_stopped);
 
-    // TEST - skip validation temporarily to see if that is what is causing heap overflow.
-    //struct aws_byte_cursor payload = aws_byte_cursor_from_buf(&state_test_data->payload);
-    //validate_devicedefender_custom_record(allocator, (const char *)payload.ptr);
+    struct aws_byte_cursor payload = aws_byte_cursor_from_buf(&state_test_data->payload);
+    validate_devicedefender_custom_record(allocator, payload);
 
     return AWS_OP_SUCCESS;
 }
