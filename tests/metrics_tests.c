@@ -5,6 +5,7 @@
 
 #include <aws/common/byte_buf.h>
 #include <aws/common/condition_variable.h>
+#include <aws/common/json.h>
 #include <aws/common/mutex.h>
 #include <aws/common/string.h>
 #include <aws/common/thread.h>
@@ -13,7 +14,6 @@
 #include <aws/io/host_resolver.h>
 #include <aws/io/socket.h>
 #include <aws/iotdevice/device_defender.h>
-#include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/private/network.h>
 #include <aws/mqtt/client.h>
 #include <aws/mqtt/mqtt.h>
@@ -55,38 +55,46 @@ struct mqtt_connection_test_data {
 
 static struct mqtt_connection_test_data mqtt_test_data = {0};
 
-static int validate_devicedefender_record(const char *value) {
-    cJSON *report = cJSON_Parse(value);
+static int validate_devicedefender_record(struct aws_allocator *allocator, const char *value) {
+    struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(value));
     ASSERT_NOT_NULL(report);
 
-    cJSON *header = cJSON_GetObjectItemCaseSensitive(report, "header");
-    ASSERT_TRUE(cJSON_IsObject(header));
-    cJSON *id = cJSON_GetObjectItem(header, "report_id");
-    ASSERT_TRUE(cJSON_IsNumber(id));
-    ASSERT_TRUE(id->valueint >= 0);
-    cJSON *version = cJSON_GetObjectItem(header, "version");
-    ASSERT_STR_EQUALS("1.0", cJSON_GetStringValue(version));
+    struct aws_json_value *header = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("header"));
+    ASSERT_TRUE(aws_json_value_is_object(header));
+    struct aws_json_value *id = aws_json_value_get_from_object(header, aws_byte_cursor_from_c_str("report_id"));
+    ASSERT_TRUE(aws_json_value_is_number(id));
+    double id_number = 0;
+    ASSERT_INT_EQUALS(AWS_OP_SUCCESS, aws_json_value_get_number(id, &id_number));
+    ASSERT_TRUE(id_number >= 0);
+    struct aws_json_value *version = aws_json_value_get_from_object(header, aws_byte_cursor_from_c_str("version"));
+    struct aws_byte_cursor version_cursor;
+    ASSERT_INT_EQUALS(AWS_OP_SUCCESS, aws_json_value_get_string(version, &version_cursor));
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&version_cursor, "1.0"));
+    struct aws_json_value *metrics = aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("metrics"));
 
-    cJSON *metrics = cJSON_GetObjectItemCaseSensitive(report, "metrics");
+    struct aws_json_value *tcpPorts =
+        aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("listening_tcp_ports"));
+    ASSERT_TRUE(aws_json_value_is_object(tcpPorts));
+    ASSERT_TRUE(aws_json_value_is_array(aws_json_value_get_from_object(tcpPorts, aws_byte_cursor_from_c_str("ports"))));
 
-    cJSON *tcpPorts = cJSON_GetObjectItem(metrics, "listening_tcp_ports");
-    ASSERT_TRUE(cJSON_IsObject(tcpPorts));
-    ASSERT_TRUE(cJSON_IsArray(cJSON_GetObjectItem(tcpPorts, "ports")));
+    struct aws_json_value *udpPorts =
+        aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("listening_udp_ports"));
+    ASSERT_TRUE(aws_json_value_is_object(udpPorts));
+    ASSERT_TRUE(aws_json_value_is_array(aws_json_value_get_from_object(udpPorts, aws_byte_cursor_from_c_str("ports"))));
 
-    cJSON *udpPorts = cJSON_GetObjectItem(metrics, "listening_udp_ports");
-    ASSERT_TRUE(cJSON_IsObject(udpPorts));
-    ASSERT_TRUE(cJSON_IsArray(cJSON_GetObjectItem(udpPorts, "ports")));
+    struct aws_json_value *netstats =
+        aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("network_stats"));
+    ASSERT_TRUE(aws_json_value_is_object(netstats));
 
-    cJSON *netstats = cJSON_GetObjectItem(metrics, "network_stats");
-    ASSERT_TRUE(cJSON_IsObject(netstats));
+    struct aws_json_value *connections =
+        aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("tcp_connections"));
+    ASSERT_TRUE(aws_json_value_is_object(connections));
+    struct aws_json_value *established =
+        aws_json_value_get_from_object(metrics, aws_byte_cursor_from_c_str("established_connections"));
+    ASSERT_TRUE(aws_json_value_is_object(established));
+    ASSERT_TRUE(aws_json_value_is_array(
+        aws_json_value_get_from_object(established, aws_byte_cursor_from_c_str("connections"))));
 
-    cJSON *connections = cJSON_GetObjectItem(metrics, "tcp_connections");
-    ASSERT_TRUE(cJSON_IsObject(connections));
-    cJSON *established = cJSON_GetObjectItem(connections, "established_connections");
-    ASSERT_TRUE(cJSON_IsObject(established));
-    ASSERT_TRUE(cJSON_IsArray(cJSON_GetObjectItem(established, "connections")));
-
-    cJSON_Delete(report);
     return AWS_OP_SUCCESS;
 }
 
@@ -101,74 +109,105 @@ const char *cm_ip_list[] = {
 };
 
 #define dd_value_len 256
-static int validate_devicedefender_custom_record(const char *json_report) {
-    char value_to_cmp[dd_value_len]; /* increase size if we ever need larger */
-    cJSON *report = cJSON_Parse(json_report);
+static int validate_devicedefender_custom_record(struct aws_allocator *allocator, const char *json_report) {
+    struct aws_byte_buf value_to_cmp;
+    aws_byte_buf_init(&value_to_cmp, allocator, 0);
+
+    struct aws_json_value *report = aws_json_value_new_from_string(allocator, aws_byte_cursor_from_c_str(json_report));
     ASSERT_NOT_NULL(report);
 
-    cJSON *custom_metrics = cJSON_GetObjectItemCaseSensitive(report, "custom_metrics");
-    ASSERT_TRUE(cJSON_IsObject(custom_metrics));
+    struct aws_json_value *custom_metrics =
+        aws_json_value_get_from_object(report, aws_byte_cursor_from_c_str("custom_metrics"));
+    ASSERT_TRUE(aws_json_value_is_object(custom_metrics));
 
-    cJSON *number_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricNumber");
-    ASSERT_TRUE(cJSON_IsArray(number_metric));
-    cJSON *number_metric_container = cJSON_GetArrayItem(number_metric, 0);
-    ASSERT_TRUE(cJSON_IsObject(number_metric_container));
-    cJSON *number_obj = cJSON_GetObjectItemCaseSensitive(number_metric_container, "number");
-    cJSON_PrintPreallocated(number_obj, value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS("42", value_to_cmp);
+    struct aws_json_value *number_metric =
+        aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricNumber"));
+    ASSERT_TRUE(aws_json_value_is_array(number_metric));
+    struct aws_json_value *number_metric_container = aws_json_get_array_element(number_metric, 0);
+    ASSERT_TRUE(aws_json_value_is_object(number_metric_container));
+    struct aws_json_value *number_obj =
+        aws_json_value_get_from_object(number_metric_container, aws_byte_cursor_from_c_str("number"));
 
-    cJSON *number_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricNumberFail");
+    aws_byte_buf_init(&value_to_cmp, allocator, 0);
+    aws_byte_buf_append_json_string(number_obj, &value_to_cmp);
+    ASSERT_TRUE(aws_byte_buf_eq_c_str(&value_to_cmp, "42"));
+    aws_byte_buf_clean_up_secure(&value_to_cmp);
+
+    struct aws_json_value *number_metric_fail =
+        aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricNumberFail"));
     ASSERT_NULL(number_metric_fail);
 
-    cJSON *number_list_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricNumberList");
-    ASSERT_TRUE(cJSON_IsArray(number_list_metric));
-    cJSON *number_list_metric_container = cJSON_GetArrayItem(number_list_metric, 0);
-    ASSERT_TRUE(cJSON_IsObject(number_list_metric_container));
-    cJSON *number_list_array = cJSON_GetObjectItemCaseSensitive(number_list_metric_container, "number_list");
-    ASSERT_TRUE(cJSON_IsArray(number_list_array));
-    cJSON_PrintPreallocated(cJSON_GetArrayItem(number_list_array, 0), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS("64", value_to_cmp);
-    cJSON_PrintPreallocated(cJSON_GetArrayItem(number_list_array, 1), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS("128", value_to_cmp);
-    cJSON_PrintPreallocated(cJSON_GetArrayItem(number_list_array, 2), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS("256", value_to_cmp);
+    struct aws_json_value *number_list_metric =
+        aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricNumberList"));
+    ASSERT_TRUE(aws_json_value_is_array(number_list_metric));
+    struct aws_json_value *number_list_metric_container = aws_json_get_array_element(number_list_metric, 0);
+    ASSERT_TRUE(aws_json_value_is_object(number_list_metric_container));
+    struct aws_json_value *number_list_array =
+        aws_json_value_get_from_object(number_list_metric_container, aws_byte_cursor_from_c_str("number_list"));
+    ASSERT_TRUE(aws_json_value_is_array(number_list_array));
 
-    cJSON *number_list_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricNumberListFail");
+    aws_byte_buf_init(&value_to_cmp, allocator, 0);
+    aws_byte_buf_append_json_string(aws_json_get_array_element(number_list_array, 0), &value_to_cmp);
+    ASSERT_TRUE(aws_byte_buf_eq_c_str(&value_to_cmp, "64"));
+    aws_byte_buf_clean_up_secure(&value_to_cmp);
+
+    aws_byte_buf_init(&value_to_cmp, allocator, 0);
+    aws_byte_buf_append_json_string(aws_json_get_array_element(number_list_array, 1), &value_to_cmp);
+    ASSERT_TRUE(aws_byte_buf_eq_c_str(&value_to_cmp, "128"));
+    aws_byte_buf_clean_up_secure(&value_to_cmp);
+
+    aws_byte_buf_init(&value_to_cmp, allocator, 0);
+    aws_byte_buf_append_json_string(aws_json_get_array_element(number_list_array, 2), &value_to_cmp);
+    ASSERT_TRUE(aws_byte_buf_eq_c_str(&value_to_cmp, "256"));
+    aws_byte_buf_clean_up_secure(&value_to_cmp);
+
+    struct aws_json_value *number_list_metric_fail =
+        aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricNumberListFail"));
     ASSERT_NULL(number_list_metric_fail);
 
-    cJSON *string_list_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricStringList");
-    ASSERT_TRUE(cJSON_IsArray(string_list_metric));
-    cJSON *string_list_metric_container = cJSON_GetArrayItem(string_list_metric, 0);
-    ASSERT_TRUE(cJSON_IsObject(string_list_metric_container));
-    cJSON *string_list_array = cJSON_GetObjectItemCaseSensitive(string_list_metric_container, "string_list");
-    ASSERT_TRUE(cJSON_IsArray(string_list_array));
-    ASSERT_STR_EQUALS(cm_string_list[0], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 0)));
-    cJSON_PrintPreallocated(cJSON_GetArrayItem(string_list_array, 1), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(cm_string_list[1], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 1)));
-    cJSON_PrintPreallocated(cJSON_GetArrayItem(string_list_array, 2), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(cm_string_list[2], cJSON_GetStringValue(cJSON_GetArrayItem(string_list_array, 2)));
+    struct aws_json_value *string_list_metric =
+        aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricStringList"));
+    ASSERT_TRUE(aws_json_value_is_array(string_list_metric));
+    struct aws_json_value *string_list_metric_container = aws_json_get_array_element(string_list_metric, 0);
+    ASSERT_TRUE(aws_json_value_is_object(string_list_metric_container));
+    struct aws_json_value *string_list_array =
+        aws_json_value_get_from_object(string_list_metric_container, aws_byte_cursor_from_c_str("string_list"));
+    ASSERT_TRUE(aws_json_value_is_array(string_list_array));
 
-    cJSON *string_list_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricStringListFail");
+    struct aws_byte_cursor tmp_str;
+    aws_json_value_get_string(aws_json_get_array_element(string_list_array, 0), &tmp_str);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_string_list[0]));
+    aws_json_value_get_string(aws_json_get_array_element(string_list_array, 1), &tmp_str);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_string_list[1]));
+    aws_json_value_get_string(aws_json_get_array_element(string_list_array, 2), &tmp_str);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_string_list[2]));
+
+    struct aws_json_value *string_list_metric_fail =
+        aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricStringListFail"));
     ASSERT_NULL(string_list_metric_fail);
 
-    cJSON *ip_list_metric = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricIpList");
-    ASSERT_TRUE(cJSON_IsArray(ip_list_metric));
-    cJSON *ip_list_metric_container = cJSON_GetArrayItem(ip_list_metric, 0);
-    ASSERT_TRUE(cJSON_IsObject(ip_list_metric_container));
-    cJSON *ip_list_array = cJSON_GetObjectItemCaseSensitive(ip_list_metric_container, "ip_list");
-    ASSERT_TRUE(cJSON_IsArray(ip_list_array));
-    ASSERT_STR_EQUALS(cm_ip_list[0], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 0)));
-    cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 1), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(cm_ip_list[1], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 1)));
-    cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 2), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(cm_ip_list[2], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 2)));
-    cJSON_PrintPreallocated(cJSON_GetArrayItem(ip_list_array, 3), value_to_cmp, dd_value_len, cJSON_False);
-    ASSERT_STR_EQUALS(cm_ip_list[3], cJSON_GetStringValue(cJSON_GetArrayItem(ip_list_array, 3)));
+    struct aws_json_value *ip_list_metric =
+        aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricIpList"));
+    ASSERT_TRUE(aws_json_value_is_array(ip_list_metric));
+    struct aws_json_value *ip_list_metric_container = aws_json_get_array_element(ip_list_metric, 0);
+    ASSERT_TRUE(aws_json_value_is_object(ip_list_metric_container));
+    struct aws_json_value *ip_list_array =
+        aws_json_value_get_from_object(ip_list_metric_container, aws_byte_cursor_from_c_str("ip_list"));
+    ASSERT_TRUE(aws_json_value_is_array(ip_list_array));
 
-    cJSON *ip_list_metric_fail = cJSON_GetObjectItemCaseSensitive(custom_metrics, "TestMetricIpListFail");
+    aws_json_value_get_string(aws_json_get_array_element(ip_list_array, 0), &tmp_str);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_ip_list[0]));
+    aws_json_value_get_string(aws_json_get_array_element(ip_list_array, 1), &tmp_str);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_ip_list[1]));
+    aws_json_value_get_string(aws_json_get_array_element(ip_list_array, 2), &tmp_str);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_ip_list[2]));
+    aws_json_value_get_string(aws_json_get_array_element(ip_list_array, 3), &tmp_str);
+    ASSERT_TRUE(aws_byte_cursor_eq_c_str(&tmp_str, cm_ip_list[3]));
+
+    struct aws_json_value *ip_list_metric_fail =
+        aws_json_value_get_from_object(custom_metrics, aws_byte_cursor_from_c_str("TestMetricIpListFail"));
     ASSERT_NULL(ip_list_metric_fail);
 
-    cJSON_Delete(report);
     return AWS_OP_SUCCESS;
 }
 
@@ -485,7 +524,7 @@ static int s_devicedefender_success_test(struct aws_allocator *allocator, void *
     defender_task = NULL;
 
     struct aws_byte_cursor payload = aws_byte_cursor_from_buf(&state_test_data->payload);
-    validate_devicedefender_record((const char *)payload.ptr);
+    validate_devicedefender_record(allocator, (const char *)payload.ptr);
 
     return AWS_OP_SUCCESS;
 }
@@ -560,7 +599,7 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
     ASSERT_TRUE(state_test_data->task_stopped);
 
     struct aws_byte_cursor payload = aws_byte_cursor_from_buf(&state_test_data->payload);
-    validate_devicedefender_custom_record((const char *)payload.ptr);
+    validate_devicedefender_custom_record(allocator, (const char *)payload.ptr);
 
     return AWS_OP_SUCCESS;
 }
@@ -617,7 +656,7 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
     AWS_ZERO_STRUCT(payload);
     aws_mqtt_client_get_payload_for_outstanding_publish_packet(
         state_test_data->mqtt_connection, packet_id, allocator, &payload);
-    validate_devicedefender_record((const char *)payload.buffer);
+    validate_devicedefender_record(allocator, (const char *)payload.buffer);
     return AWS_OP_SUCCESS;
 }
 

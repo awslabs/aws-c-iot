@@ -6,9 +6,9 @@
 #include <aws/iotdevice/device_defender.h>
 
 #include <aws/common/condition_variable.h>
+#include <aws/common/json.h>
 #include <aws/common/mutex.h>
 #include <aws/common/thread.h>
-#include <aws/iotdevice/external/cJSON.h>
 #include <aws/iotdevice/private/network.h>
 
 #include <aws/common/array_list.h>
@@ -291,71 +291,76 @@ static int s_get_metric_report_json(
     size_t custom_metrics_len,
     const struct defender_custom_metric_data *custom_metrics_data) {
     int return_value = AWS_OP_ERR;
-    const char *json_report = NULL;
-    struct cJSON *root = cJSON_CreateObject();
+
+    struct aws_allocator *allocator = aws_default_allocator();
+
+    struct aws_json_value *root = aws_json_value_new_object(allocator);
     if (root == NULL) {
         goto cleanup;
     }
-    struct cJSON *header = cJSON_CreateObject();
-    if (header == NULL) {
+
+    struct aws_json_value *header = aws_json_value_new_object(allocator);
+    if (aws_json_value_add_to_object(root, aws_byte_cursor_from_c_str("header"), header) == false) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(root, "header", header);
-    if (NULL == cJSON_AddNumberToObject(header, "report_id", (double)report_id)) {
+    if (aws_json_value_add_to_object(
+            header, aws_byte_cursor_from_c_str("report_id"), aws_json_value_new_number(allocator, (double)report_id)) ==
+        AWS_OP_ERR) {
+        goto cleanup;
+    }
+    if (aws_json_value_add_to_object(
+            header,
+            aws_byte_cursor_from_c_str("version"),
+            aws_json_value_new_string(allocator, aws_byte_cursor_from_c_str("1.0"))) == AWS_OP_ERR) {
         goto cleanup;
     }
 
-    if (NULL == cJSON_AddStringToObject(header, "version", "1.0")) {
+    struct aws_json_value *metrics = aws_json_value_new_object(allocator);
+    if (aws_json_value_add_to_object(root, aws_byte_cursor_from_c_str("metrics"), metrics) == AWS_OP_ERR) {
         goto cleanup;
     }
 
-    struct cJSON *metrics = cJSON_CreateObject();
-    if (metrics == NULL) {
+    struct aws_json_value *listening_tcp_ports = aws_json_value_new_object(allocator);
+    if (aws_json_value_add_to_object(metrics, aws_byte_cursor_from_c_str("listening_tcp_ports"), listening_tcp_ports) ==
+        AWS_OP_ERR) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(root, "metrics", metrics);
 
-    struct cJSON *listening_tcp_ports = cJSON_CreateObject();
-    if (listening_tcp_ports == NULL) {
+    struct aws_json_value *tcp_listen_ports = aws_json_value_new_array(allocator);
+    if (aws_json_value_add_to_object(listening_tcp_ports, aws_byte_cursor_from_c_str("ports"), tcp_listen_ports) ==
+        AWS_OP_ERR) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(metrics, "listening_tcp_ports", listening_tcp_ports);
 
-    struct cJSON *tcp_listen_ports = cJSON_CreateArray();
-    if (tcp_listen_ports == NULL) {
+    struct aws_json_value *tcp_connections = aws_json_value_new_object(allocator);
+    if (aws_json_value_add_to_object(metrics, aws_byte_cursor_from_c_str("tcp_connections"), tcp_connections) ==
+        AWS_OP_ERR) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(listening_tcp_ports, "ports", tcp_listen_ports);
 
-    struct cJSON *tcp_connections = cJSON_CreateObject();
-    if (tcp_connections == NULL) {
+    struct aws_json_value *established_tcp_conns = aws_json_value_new_object(allocator);
+    if (aws_json_value_add_to_object(
+            tcp_connections, aws_byte_cursor_from_c_str("established_connections"), established_tcp_conns) ==
+        AWS_OP_ERR) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(metrics, "tcp_connections", tcp_connections);
 
-    struct cJSON *established_tcp_conns = cJSON_CreateObject();
-    if (established_tcp_conns == NULL) {
+    struct aws_json_value *est_connections = aws_json_value_new_array(allocator);
+    if (aws_json_value_add_to_object(
+            established_tcp_conns, aws_byte_cursor_from_c_str("connections"), est_connections) == false) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(tcp_connections, "established_connections", established_tcp_conns);
 
-    struct cJSON *est_connections = cJSON_CreateArray();
-    if (est_connections == NULL) {
+    struct aws_json_value *listening_udp_ports = aws_json_value_new_object(allocator);
+    if (aws_json_value_add_to_object(metrics, aws_byte_cursor_from_c_str("listening_udp_ports"), listening_udp_ports) ==
+        false) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(established_tcp_conns, "connections", est_connections);
 
-    struct cJSON *listening_udp_ports = cJSON_CreateObject();
-    if (listening_udp_ports == NULL) {
+    struct aws_json_value *udp_ports = aws_json_value_new_array(allocator);
+    if (aws_json_value_add_to_object(listening_udp_ports, aws_byte_cursor_from_c_str("ports"), udp_ports) == false) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(metrics, "listening_udp_ports", listening_udp_ports);
-
-    struct cJSON *udp_ports = cJSON_CreateArray();
-    if (udp_ports == NULL) {
-        goto cleanup;
-    }
-    cJSON_AddItemToObject(listening_udp_ports, "ports", udp_ports);
 
     int total_listening_tcp_ports = 0;
     int total_established_tcp_conns = 0;
@@ -366,191 +371,220 @@ static int s_get_metric_report_json(
         aws_array_list_get_at_ptr(net_conns, (void **)&net_conn, tcp_index);
         if (net_conn->state == AWS_IDNCS_ESTABLISHED && net_conn->protocol == AWS_IDNP_TCP) {
             total_established_tcp_conns++;
-            struct cJSON *conn = cJSON_CreateObject();
+
+            struct aws_json_value *conn = aws_json_value_new_object(allocator);
             if (conn == NULL) {
                 goto cleanup;
             }
-            cJSON_AddItemToArray(est_connections, conn);
-            if (NULL == cJSON_AddStringToObject(conn, "local_interface", aws_string_c_str(net_conn->local_interface))) {
+            aws_json_value_add_array_element(est_connections, conn);
+
+            if (aws_json_value_add_to_object(
+                    conn,
+                    aws_byte_cursor_from_c_str("local_interface"),
+                    aws_json_value_new_string(
+                        allocator, aws_byte_cursor_from_c_str((char *)net_conn->local_interface))) == AWS_OP_ERR) {
                 goto cleanup;
             }
-            if (NULL == cJSON_AddNumberToObject(conn, "local_port", net_conn->local_port)) {
+            if (aws_json_value_add_to_object(
+                    conn,
+                    aws_byte_cursor_from_c_str("local_port"),
+                    aws_json_value_new_number(allocator, net_conn->local_port)) == AWS_OP_ERR) {
                 goto cleanup;
             }
+
             char remote_addr[22];
             snprintf(remote_addr, 22, "%s:%u", aws_string_c_str(net_conn->remote_address), net_conn->remote_port);
-            if (NULL == cJSON_AddStringToObject(conn, "remote_addr", remote_addr)) {
+            if (aws_json_value_add_to_object(
+                    conn,
+                    aws_byte_cursor_from_c_str("remote_addr"),
+                    aws_json_value_new_string(allocator, aws_byte_cursor_from_c_str(remote_addr))) == AWS_OP_ERR) {
                 goto cleanup;
             }
-        } else if (net_conn->state == AWS_IDNCS_LISTEN && net_conn->protocol == AWS_IDNP_TCP) {
-            total_listening_tcp_ports++;
-            struct cJSON *conn = cJSON_CreateObject();
+        } else if (net_conn->state == AWS_IDNCS_LISTEN) {
+            if (net_conn->protocol == AWS_IDNP_TCP) {
+                total_listening_tcp_ports++;
+            } else if (net_conn->protocol == AWS_IDNP_UDP) {
+                ++total_udp_listeners;
+            } else {
+                continue; // skip
+            }
+
+            struct aws_json_value *conn = aws_json_value_new_object(allocator);
             if (conn == NULL) {
                 goto cleanup;
             }
-            cJSON_AddItemToArray(tcp_listen_ports, conn);
-            if (NULL == cJSON_AddStringToObject(conn, "interface", aws_string_c_str(net_conn->local_interface))) {
+            aws_json_value_add_array_element(tcp_listen_ports, conn);
+
+            if (aws_json_value_add_to_object(
+                    conn,
+                    aws_byte_cursor_from_c_str("interface"),
+                    aws_json_value_new_string(allocator, aws_byte_cursor_from_string(net_conn->local_interface))) ==
+                AWS_OP_ERR) {
                 goto cleanup;
             }
-            if (NULL == cJSON_AddNumberToObject(conn, "port", net_conn->local_port)) {
-                goto cleanup;
-            }
-        } else if (net_conn->state == AWS_IDNCS_LISTEN && net_conn->protocol == AWS_IDNP_UDP) {
-            ++total_udp_listeners;
-            struct cJSON *conn = cJSON_CreateObject();
-            if (conn == NULL) {
-                goto cleanup;
-            }
-            cJSON_AddItemToArray(udp_ports, conn);
-            if (NULL == cJSON_AddStringToObject(conn, "interface", aws_string_c_str(net_conn->local_interface))) {
-                goto cleanup;
-            }
-            if (NULL == cJSON_AddNumberToObject(conn, "port", net_conn->local_port)) {
+            if (aws_json_value_add_to_object(
+                    conn,
+                    aws_byte_cursor_from_c_str("port"),
+                    aws_json_value_new_number(allocator, net_conn->local_port)) == AWS_OP_ERR) {
                 goto cleanup;
             }
         }
     }
 
-    if (NULL == cJSON_AddNumberToObject(established_tcp_conns, "total", total_established_tcp_conns)) {
+    if (aws_json_value_add_to_object(
+            established_tcp_conns,
+            aws_byte_cursor_from_c_str("total"),
+            aws_json_value_new_number(allocator, total_established_tcp_conns)) == AWS_OP_ERR) {
         goto cleanup;
     }
-    if (NULL == cJSON_AddNumberToObject(listening_tcp_ports, "total", total_listening_tcp_ports)) {
+    if (aws_json_value_add_to_object(
+            listening_tcp_ports,
+            aws_byte_cursor_from_c_str("total"),
+            aws_json_value_new_number(allocator, total_listening_tcp_ports)) == AWS_OP_ERR) {
         goto cleanup;
     }
-    if (NULL == cJSON_AddNumberToObject(listening_udp_ports, "total", (double)total_udp_listeners)) {
+    if (aws_json_value_add_to_object(
+            listening_udp_ports,
+            aws_byte_cursor_from_c_str("total"),
+            aws_json_value_new_number(allocator, total_udp_listeners)) == AWS_OP_ERR) {
         goto cleanup;
     }
 
-    struct cJSON *network_stats = cJSON_CreateObject();
-    if (network_stats == NULL) {
+    struct aws_json_value *network_stats = aws_json_value_new_object(allocator);
+    if (aws_json_value_add_to_object(metrics, aws_byte_cursor_from_c_str("network_stats"), network_stats) ==
+        AWS_OP_ERR) {
         goto cleanup;
     }
-    cJSON_AddItemToObject(metrics, "network_stats", network_stats);
 
-    if (NULL == cJSON_AddNumberToObject(network_stats, "bytes_in", net_xfer != NULL ? (double)net_xfer->bytes_in : 0)) {
+    if (aws_json_value_add_to_object(
+            network_stats,
+            aws_byte_cursor_from_c_str("bytes_in"),
+            aws_json_value_new_number(allocator, net_xfer != NULL ? (double)net_xfer->bytes_in : 0)) == AWS_OP_ERR) {
         goto cleanup;
     }
-    if (NULL ==
-        cJSON_AddNumberToObject(network_stats, "bytes_out", net_xfer != NULL ? (double)net_xfer->bytes_out : 0)) {
+    if (aws_json_value_add_to_object(
+            network_stats,
+            aws_byte_cursor_from_c_str("bytes_out"),
+            aws_json_value_new_number(allocator, net_xfer != NULL ? (double)net_xfer->bytes_out : 0)) == AWS_OP_ERR) {
         goto cleanup;
     }
-    if (NULL ==
-        cJSON_AddNumberToObject(network_stats, "packets_in", net_xfer != NULL ? (double)net_xfer->packets_in : 0)) {
+    if (aws_json_value_add_to_object(
+            network_stats,
+            aws_byte_cursor_from_c_str("packets_in"),
+            aws_json_value_new_number(allocator, net_xfer != NULL ? (double)net_xfer->packets_in : 0)) == AWS_OP_ERR) {
         goto cleanup;
     }
-    if (NULL ==
-        cJSON_AddNumberToObject(network_stats, "packets_out", net_xfer != NULL ? (double)net_xfer->packets_out : 0)) {
+    if (aws_json_value_add_to_object(
+            network_stats,
+            aws_byte_cursor_from_c_str("packets_out"),
+            aws_json_value_new_number(allocator, net_xfer != NULL ? (double)net_xfer->packets_out : 0)) == AWS_OP_ERR) {
         goto cleanup;
     }
 
     if (custom_metrics_len != 0) {
-        struct cJSON *custom_metrics = cJSON_CreateObject();
-        if (NULL == custom_metrics) {
+        struct aws_json_value *custom_metrics = aws_json_value_new_object(allocator);
+        if (aws_json_value_add_to_object(root, aws_byte_cursor_from_c_str("custom_metrics"), custom_metrics) == false) {
             goto cleanup;
         }
-        cJSON_AddItemToObject(root, "custom_metrics", custom_metrics);
 
         size_t list_size = 0;
-        struct cJSON *array_item = NULL;
-        struct cJSON *item = NULL;
-        struct cJSON *json_list = NULL;
-        struct cJSON *spurious_array_container = NULL;
+        struct aws_json_value *json_value = NULL;
+        struct aws_json_value *item = NULL;
+        struct aws_json_value *json_list = NULL;
+        struct aws_json_value *spurious_array_container = NULL;
         for (size_t metric_index = 0; metric_index < custom_metrics_len; ++metric_index) {
             if (custom_metrics_data[metric_index].callback_result != AWS_OP_SUCCESS) {
-                /* if the collection of a metric failed, do not output it to the report */
+                // if the collection of a metric failed, do not output it to the report
                 continue;
             }
-            spurious_array_container = cJSON_CreateArray();
-            if (NULL == spurious_array_container) {
+
+            spurious_array_container = aws_json_value_new_array(allocator);
+            if (aws_json_value_add_to_object(
+                    custom_metrics,
+                    aws_byte_cursor_from_string(custom_metrics_data[metric_index].metric->metric_name),
+                    spurious_array_container)) {
                 goto cleanup;
             }
-            cJSON_AddItemToObject(
-                custom_metrics,
-                aws_string_c_str(custom_metrics_data[metric_index].metric->metric_name),
-                spurious_array_container);
 
-            item = cJSON_CreateObject();
-            if (NULL == item) {
+            item = aws_json_value_new_object(allocator);
+            if (item == NULL) {
                 goto cleanup;
             }
-            cJSON_AddItemToArray(spurious_array_container, item);
+            aws_json_value_add_array_element(spurious_array_container, item);
 
-            switch (custom_metrics_data[metric_index].metric->type) {
-                case DD_METRIC_NUMBER:
-                    cJSON_AddNumberToObject(item, "number", (double)custom_metrics_data[metric_index].data.number);
-                    break;
-                case DD_METRIC_NUMBER_LIST:
-                    list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
-                    json_list = cJSON_CreateArray();
-                    if (NULL == json_list) {
+            if (custom_metrics_data[metric_index].metric->type == DD_METRIC_NUMBER) {
+                if (aws_json_value_add_to_object(
+                        item,
+                        aws_byte_cursor_from_c_str("number"),
+                        aws_json_value_new_number(allocator, (double)custom_metrics_data[metric_index].data.number)) ==
+                    AWS_OP_ERR) {
+                    goto cleanup;
+                }
+            } else if (custom_metrics_data[metric_index].metric->type == DD_METRIC_NUMBER_LIST) {
+                list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
+                json_list = aws_json_value_new_array(allocator);
+                if (aws_json_value_add_to_object(item, aws_byte_cursor_from_c_str("number_list"), json_list) ==
+                    AWS_OP_ERR) {
+                    goto cleanup;
+                }
+                for (size_t num_index = 0; num_index < list_size; ++num_index) {
+                    int64_t number = 0;
+                    aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &number, num_index);
+                    json_value = aws_json_value_new_number(allocator, (double)number);
+                    aws_json_value_add_array_element(json_list, json_value);
+                }
+            } else if (
+                custom_metrics_data[metric_index].metric->type == DD_METRIC_STRING_LIST ||
+                custom_metrics_data[metric_index].metric->type == DD_METRIC_IP_LIST) {
+                list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
+                if (custom_metrics_data[metric_index].metric->type == DD_METRIC_STRING_LIST) {
+                    json_list = aws_json_value_new_array(allocator);
+                    if (aws_json_value_add_to_object(item, aws_byte_cursor_from_c_str("string_list"), json_list) ==
+                        AWS_OP_ERR) {
                         goto cleanup;
                     }
-                    cJSON_AddItemToObject(item, "number_list", json_list);
-                    for (size_t num_index = 0; num_index < list_size; ++num_index) {
-                        int64_t number = 0;
-                        aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &number, num_index);
-                        array_item = cJSON_CreateNumber((double)number);
-                        cJSON_AddItemToArray(json_list, array_item);
-                    }
-                    break;
-                case DD_METRIC_STRING_LIST:
-                    list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
-                    json_list = cJSON_CreateArray();
-                    if (NULL == json_list) {
+                } else {
+                    json_list = aws_json_value_new_array(allocator);
+                    if (aws_json_value_add_to_object(item, aws_byte_cursor_from_c_str("ip_list"), json_list) == false) {
                         goto cleanup;
                     }
-                    cJSON_AddItemToObject(item, "string_list", json_list);
-                    for (size_t string_index = 0; string_index < list_size; ++string_index) {
-                        struct aws_string *string_value = NULL;
-                        aws_array_list_get_at(
-                            &custom_metrics_data[metric_index].data.list, &string_value, string_index);
-                        array_item = cJSON_CreateString(aws_string_c_str(string_value));
-                        cJSON_AddItemToArray(json_list, array_item);
-                    }
-                    break;
-                case DD_METRIC_IP_LIST:
-                    list_size = aws_array_list_length(&custom_metrics_data[metric_index].data.list);
-                    json_list = cJSON_CreateArray();
-                    if (NULL == json_list) {
-                        goto cleanup;
-                    }
-                    cJSON_AddItemToObject(item, "ip_list", json_list);
-                    for (size_t ip_index = 0; ip_index < list_size; ++ip_index) {
-                        struct aws_string *ip_value = NULL;
-                        aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &ip_value, ip_index);
-                        array_item = cJSON_CreateString(aws_string_c_str(ip_value));
-                        cJSON_AddItemToArray(json_list, array_item);
-                    }
-                    break;
-                case DD_METRIC_UNKNOWN:
-                default:
-                    AWS_LOGF_WARN(
-                        AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                        "id=%p: Unknown custom metrics type found during report generation: %d, name %s",
-                        (void *)task,
-                        custom_metrics_data[metric_index].metric->type,
-                        aws_string_c_str(custom_metrics_data[metric_index].metric->metric_name));
-                    continue;
-                    break;
+                }
+                for (size_t list_index = 0; list_index < list_size; ++list_index) {
+                    struct aws_string *list_value = NULL;
+                    aws_array_list_get_at(&custom_metrics_data[metric_index].data.list, &list_value, list_index);
+                    json_value = aws_json_value_new_string(allocator, aws_byte_cursor_from_string(list_value));
+                    aws_json_value_add_array_element(json_list, json_value);
+                }
+            } else {
+                AWS_LOGF_WARN(
+                    AWS_LS_IOTDEVICE_DEFENDER_TASK,
+                    "id=%p: Unknown custom metrics type found during report generation: %d, name %s",
+                    (void *)task,
+                    custom_metrics_data[metric_index].metric->type,
+                    aws_string_c_str(custom_metrics_data[metric_index].metric->metric_name));
+                continue;
             }
         }
     }
 
-    json_report = cJSON_PrintUnformatted(root);
-    struct aws_byte_cursor json_report_buf = {.len = strlen(json_report) + 1, .ptr = (uint8_t *)json_report};
-    if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(json_out, task->allocator, json_report_buf)) {
+    struct aws_byte_buf json_report_buf;
+    aws_byte_buf_init(&json_report_buf, task->allocator, 0);
+    aws_byte_buf_append_json_string(root, &json_report_buf);
+    struct aws_byte_cursor json_report_cursor = aws_byte_cursor_from_buf(&json_report_buf);
+    if (AWS_OP_SUCCESS != aws_byte_buf_init_copy_from_cursor(json_out, task->allocator, json_report_cursor)) {
         s_invoke_failure_callback(&task->config, false, AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);
         return_value = AWS_OP_ERR;
     } else {
         return_value = AWS_OP_SUCCESS;
+
+        struct aws_string *tmp = aws_string_new_from_cursor(allocator, &json_report_cursor);
+        aws_string_destroy_secure(tmp);
     }
+    aws_byte_buf_clean_up_secure(&json_report_buf);
 
 cleanup:
-    if (json_report) {
-        cJSON_free((void *)json_report);
-    }
     if (root) {
-        cJSON_Delete(root);
+        aws_json_value_destroy(root);
     }
     if (return_value != AWS_OP_SUCCESS) {
         aws_raise_error(AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE);

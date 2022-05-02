@@ -72,27 +72,17 @@ file(GLOB AWS_IOT_PRIV_EXPOSED_HEADERS
         "include/aws/iotdevice/private/secure_tunneling_impl.h"
         )
 
-file(GLOB AWS_IOT_EXTERNAL_HEADERS
-        "include/aws/iotdevice/external/*.h"
-        )
-
 file(GLOB AWS_IOT_SRC
         "source/*.c"
-        )
-
-file(GLOB AWS_IOT_EXTERNAL_SRC
-        "source/external/*.c"
         )
 
 file(GLOB IOT_HEADERS
         ${AWS_IOT_HEADERS}
         ${AWS_IOT_PRIV_HEADERS}
-        ${AWS_IOT_EXTERNAL_HEADERS}
         )
 
 file(GLOB IOT_SRC
         ${AWS_IOT_SRC}
-        ${AWS_IOT_EXTERNAL_SRC}
         ${AWS_IOT_OS_SRC}
         ${AWS_IOT_PRIV_HEADERS}
         )
