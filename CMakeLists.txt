@@ -38,9 +38,9 @@ include(CheckIncludeFile)
 CHECK_INCLUDE_FILE("linux/if_link.h" LINUX_HAVE_IF_LINK_H)
 # Set a compiler definition so we can check against it in code (See network.c for use)
 if (${LINUX_HAVE_IF_LINK_H} MATCHES 1)
-       add_compile_definitions("LINUX_HAVE_IF_LINK_H=1")
+       add_definitions("-DLINUX_HAVE_IF_LINK_H=1")
 else()
-       add_compile_definitions("LINUX_HAVE_IF_LINK_H=0")
+       add_definitions("-DLINUX_HAVE_IF_LINK_H=0")
 endif()
 
 # Platform specific includes and source
