@@ -31,6 +31,20 @@ include(AwsSharedLibSetup)
 include(AwsSanitizers)
 include(CheckCCompilerFlag)
 include(AwsFindPackage)
+include(CheckIncludeFileCXX)
+
+# Platform specific header checks
+# Check for if_link.h - needed for REL5 support as REL5 does not have if_link.h
+set(LINUX_HAVE_IF_LINK_H "LINUX_HAVE_IF_LINK_H")
+CHECK_INCLUDE_FILE_CXX("linux/if_link.h" ${LINUX_HAVE_IF_LINK_H})
+# Set a compiler definition so we can check against it in code (See network.c for use)
+if (${LINUX_HAVE_IF_LINK_H} MATCHES 1)
+       message("FOUND THE HEADER")
+       add_compile_definitions("LINUX_HAVE_IF_LINK_H=1")
+else()
+       message("DID NOT FIND HEADER")
+       add_compile_definitions("LINUX_HAVE_IF_LINK_H=0")
+endif()
 
 # Platform specific includes and source
 

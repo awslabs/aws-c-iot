@@ -11,7 +11,19 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <ifaddrs.h>
+
+#define HEADER_PRESENT 1
+#define HEADER_ABSENT 0
+
+#ifdef LINUX_HAVE_IF_LINK_H
+#if LINUX_HAVE_IF_LINK_H == HEADER_PRESENT
 #include <linux/if_link.h>
+#endif
+#else
+// If it is not set, then CMAKE did not set it. Assume it is not present.
+#define LINUX_HAVE_IF_LINK_H 0
+#endif
+
 #include <net/if.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -389,6 +401,8 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
         strncpy(iface->iface_name, ifr.ifr_name, IFACE_NAME_SIZE);
         iface->iface_name[IFACE_NAME_SIZE - 1] = 0;
 
+#if LINUX_HAVE_IF_LINK_H == HEADER_PRESENT
+// Use if_link.h only if it exists
         if (address->ifa_data) {
             struct rtnl_link_stats *stats = address->ifa_data;
             iface->metrics.bytes_in = stats->rx_bytes;
@@ -396,6 +410,15 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
             iface->metrics.packets_in = stats->rx_packets;
             iface->metrics.packets_out = stats->tx_packets;
         }
+#else
+// If if_link.h does not exist, then just report nothing going in or out
+        if (address->ifa_data) {
+            iface->metrics.bytes_in = 0;
+            iface->metrics.bytes_out = 0;
+            iface->metrics.packets_in = 0;
+            iface->metrics.packets_out = 0;
+        }
+#endif
 
         if ((result = aws_hash_table_put(&ifconfig->iface_name_to_info, iface->ipv4_addr_str, iface, NULL))) {
             AWS_LOGF_ERROR(
