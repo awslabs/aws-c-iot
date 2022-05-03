@@ -13,9 +13,6 @@
 #include <errno.h>
 #include <ifaddrs.h>
 
-#define HEADER_PRESENT 1
-#define HEADER_ABSENT 0
-
 #if defined(AWS_HAVE_LINUX_IF_LINK_H)
 #    include <linux/if_link.h>
 #endif
