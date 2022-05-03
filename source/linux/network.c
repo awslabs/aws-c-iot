@@ -5,13 +5,18 @@
 
 #include <aws/iotdevice/private/network.h>
 
+#include <aws/common/config.h>
 #include <aws/common/hash_table.h>
 #include <aws/common/string.h>
 
 #include <arpa/inet.h>
 #include <errno.h>
 #include <ifaddrs.h>
-#include <linux/if_link.h>
+
+#if defined(AWS_HAVE_LINUX_IF_LINK_H)
+#    include <linux/if_link.h>
+#endif
+
 #include <net/if.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -389,6 +394,8 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
         strncpy(iface->iface_name, ifr.ifr_name, IFACE_NAME_SIZE);
         iface->iface_name[IFACE_NAME_SIZE - 1] = 0;
 
+#if defined(AWS_HAVE_LINUX_IF_LINK_H)
+        // Only populate if_link.h exists
         if (address->ifa_data) {
             struct rtnl_link_stats *stats = address->ifa_data;
             iface->metrics.bytes_in = stats->rx_bytes;
@@ -396,6 +403,7 @@ int get_network_config_and_transfer(struct aws_iotdevice_network_ifconfig *ifcon
             iface->metrics.packets_in = stats->rx_packets;
             iface->metrics.packets_out = stats->tx_packets;
         }
+#endif
 
         if ((result = aws_hash_table_put(&ifconfig->iface_name_to_info, iface->ipv4_addr_str, iface, NULL))) {
             AWS_LOGF_ERROR(
