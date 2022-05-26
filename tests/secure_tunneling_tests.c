@@ -47,9 +47,9 @@ struct secure_tunneling_test_context {
 };
 static struct secure_tunneling_test_context s_test_context = {.max_threads = 1};
 
-/* Dummy websocket for  */
+/* Dummy websocket for unit test only. */
 struct aws_websocket {};
-static struct aws_websocket s_aws_websocket = {};
+static struct aws_websocket s_aws_websocket;
 
 static bool s_on_stream_start_called = false;
 static void s_on_stream_start(void *user_data) {
