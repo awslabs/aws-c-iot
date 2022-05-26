@@ -452,9 +452,11 @@ static int s_secure_tunneling_close(struct aws_secure_tunnel *secure_tunnel) {
     }
 
     s_reset_secure_tunnel(secure_tunnel);
-    secure_tunnel->websocket_vtable.close(secure_tunnel->websocket, false);
-    secure_tunnel->websocket_vtable.release(secure_tunnel->websocket);
-    secure_tunnel->websocket = NULL;
+    if (secure_tunnel->websocket != NULL) {
+        secure_tunnel->websocket_vtable.close(secure_tunnel->websocket, false);
+        secure_tunnel->websocket_vtable.release(secure_tunnel->websocket);
+        secure_tunnel->websocket = NULL;
+    }
     return AWS_OP_SUCCESS;
 }
 

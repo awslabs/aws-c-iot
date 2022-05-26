@@ -47,6 +47,10 @@ struct secure_tunneling_test_context {
 };
 static struct secure_tunneling_test_context s_test_context = {.max_threads = 1};
 
+/* Dummy websocket for  */
+struct aws_websocket { };
+static struct aws_websocket s_aws_websocket = { };
+
 static bool s_on_stream_start_called = false;
 static void s_on_stream_start(void *user_data) {
     UNUSED(user_data);
@@ -154,6 +158,18 @@ static struct aws_secure_tunnel *s_secure_tunnel_new_mock(const struct aws_secur
     secure_tunnel->websocket_vtable.send_frame = s_mock_aws_websocket_send_frame;
     secure_tunnel->websocket_vtable.close = s_mock_aws_websocket_close;
     secure_tunnel->websocket_vtable.release = s_mock_aws_websocket_release;
+
+    /*
+     * Initialize a dummy websocket when the tunnel is created.
+     *
+     * In the non-mock implementation this websocket would be initialized when
+     * an http upgrade request is received sometime after the tunnel is created.
+     *
+     * Since no http request is exercised by these tests we initialize a dummy
+     * websocket as soon as the tunnel is created.
+     */
+    secure_tunnel->websocket = &s_aws_websocket;
+
     return secure_tunnel;
 }
 
