@@ -154,6 +154,19 @@ static struct aws_secure_tunnel *s_secure_tunnel_new_mock(const struct aws_secur
     secure_tunnel->websocket_vtable.send_frame = s_mock_aws_websocket_send_frame;
     secure_tunnel->websocket_vtable.close = s_mock_aws_websocket_close;
     secure_tunnel->websocket_vtable.release = s_mock_aws_websocket_release;
+
+    /*
+     * Initialize a dummy websocket when the tunnel is created.
+     *
+     * In the non-mock implementation this websocket would be initialized when
+     * an http upgrade request is received sometime after the tunnel is created.
+     *
+     * Since no http request is exercised by these tests we initialize a websocket
+     * as soon as the tunnel is created. Since the aws_websocket struct is opaque
+     * to this module, we use the placeholder value 1 to set the member non-null.
+     */
+    secure_tunnel->websocket = (void *)1;
+
     return secure_tunnel;
 }
 
