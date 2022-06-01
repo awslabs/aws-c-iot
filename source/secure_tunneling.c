@@ -219,7 +219,9 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     struct aws_secure_tunnel *secure_tunnel = user_data;
     aws_atomic_store_int(&secure_tunnel->ping_task_context->task_cancelled, 1);
     secure_tunnel->ping_task_context->websocket = NULL;
-    secure_tunnel->options->on_connection_shutdown(secure_tunnel->options->user_data);
+    if (secure_tunnel->options->on_connection_shutdown != NULL) {
+        secure_tunnel->options->on_connection_shutdown(secure_tunnel->options->user_data);
+    }
 }
 
 static bool s_on_websocket_incoming_frame_begin(
@@ -694,6 +696,14 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
         return;
     }
     aws_ref_count_release(&secure_tunnel->ref_count);
+}
+
+void aws_secure_tunnel_clear_connection_shutdown_callback(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel != NULL) {
+        if (secure_tunnel->options != NULL) {
+            secure_tunnel->options->on_connection_shutdown = NULL;
+        }
+    }
 }
 
 static void s_secure_tunnel_destroy(void *user_data) {

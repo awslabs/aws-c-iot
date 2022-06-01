@@ -70,6 +70,9 @@ AWS_IOTDEVICE_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
+void aws_secure_tunnel_clear_connection_shutdown_callback(struct aws_secure_tunnel *secure_tunnel);
+
+AWS_IOTDEVICE_API
 int aws_secure_tunnel_connect(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
