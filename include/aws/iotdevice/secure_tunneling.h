@@ -27,6 +27,7 @@ typedef void(aws_secure_tunneling_on_data_receive_fn)(const struct aws_byte_buf 
 typedef void(aws_secure_tunneling_on_stream_start_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_stream_reset_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_session_reset_fn)(void *user_data);
+typedef void(aws_secure_tunneling_on_termination_complete_fn)(void *user_data);
 
 struct aws_secure_tunnel_options {
     struct aws_allocator *allocator;
@@ -46,6 +47,7 @@ struct aws_secure_tunnel_options {
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
+    aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
 
     void *user_data;
 };

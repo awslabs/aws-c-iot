@@ -71,6 +71,12 @@ static void s_on_session_reset(void *user_data) {
     s_on_session_reset_called = true;
 }
 
+static bool s_on_termination_complete_called = false;
+static void s_on_termination_complete(void *user_data) {
+    UNUSED(user_data);
+    s_on_termination_complete_called = true;
+}
+
 static void s_init_secure_tunneling_connection_config(
     struct aws_allocator *allocator,
     struct aws_client_bootstrap *bootstrap,
@@ -93,6 +99,7 @@ static void s_init_secure_tunneling_connection_config(
     options->on_data_receive = s_on_data_receive;
     options->on_stream_reset = s_on_stream_reset;
     options->on_session_reset = s_on_session_reset;
+    options->on_termination_complete = s_on_termination_complete;
     /* TODO: Initialize the rest of the callbacks */
 }
 
@@ -229,6 +236,15 @@ static int after(struct aws_allocator *allocator, int setup_result, void *ctx) {
     aws_client_bootstrap_release(test_context->bootstrap);
 
     aws_secure_tunnel_release(test_context->secure_tunnel);
+
+    /*
+     * Under normal circumstances you would need to do a wait on a condition variable signal for the async
+     * destruction process to unwind.  But these tests all use mocks so termination completion happens synchronously
+     */
+    ASSERT_TRUE(s_on_termination_complete_called);
+
+    aws_thread_join_all_managed();
+
     aws_iotdevice_library_clean_up();
     aws_http_library_clean_up();
 
