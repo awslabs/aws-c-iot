@@ -649,14 +649,14 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
         goto error;
     }
 
-    aws_tls_ctx_options_clean_up(&tls_ctx_opt);
-
     /* tls_connection_options */
     aws_tls_connection_options_init_from_ctx(&secure_tunnel->tls_con_opt, secure_tunnel->tls_ctx);
     if (aws_tls_connection_options_set_server_name(
             &secure_tunnel->tls_con_opt, options->allocator, (struct aws_byte_cursor *)&options->endpoint_host)) {
         goto error;
     }
+
+    aws_tls_ctx_options_clean_up(&tls_ctx_opt);
 
     /* Setup vtables here. */
     secure_tunnel->vtable.connect = s_secure_tunneling_connect;
@@ -678,6 +678,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
     aws_byte_buf_init(&secure_tunnel->received_data, options->allocator, MAX_WEBSOCKET_PAYLOAD);
 
     return secure_tunnel;
+
 error:
     aws_tls_ctx_options_clean_up(&tls_ctx_opt);
     aws_secure_tunnel_release(secure_tunnel);
@@ -698,11 +699,23 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
 
 static void s_secure_tunnel_destroy(void *user_data) {
     struct aws_secure_tunnel *secure_tunnel = user_data;
+
+    aws_secure_tunneling_on_termination_complete_fn *on_termination_complete = NULL;
+    void *termination_complete_user_data = NULL;
+    if (secure_tunnel->options != NULL) {
+        on_termination_complete = secure_tunnel->options->on_termination_complete;
+        termination_complete_user_data = secure_tunnel->options->user_data;
+    }
+
     aws_secure_tunnel_options_storage_destroy(secure_tunnel->options_storage);
     aws_byte_buf_clean_up(&secure_tunnel->received_data);
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
     aws_mem_release(secure_tunnel->alloc, secure_tunnel);
+
+    if (on_termination_complete != NULL) {
+        (*on_termination_complete)(termination_complete_user_data);
+    }
 }
 
 int aws_secure_tunnel_connect(struct aws_secure_tunnel *secure_tunnel) {
