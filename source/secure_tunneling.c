@@ -181,35 +181,36 @@ static void s_on_websocket_setup(
     size_t num_handshake_response_headers,
     void *user_data) {
 
-    UNUSED(error_code);
     UNUSED(handshake_response_status);
     UNUSED(handshake_response_header_array);
     UNUSED(num_handshake_response_headers);
 
-    /* TODO: Handle error
-     * https://github.com/aws-samples/aws-iot-securetunneling-localproxy/blob/master/WebsocketProtocolGuide.md#handshake-error-responses
-     */
+    /* Setup callback contract is: if error_code is non-zero then websocket is NULL. */
+    AWS_FATAL_ASSERT((error_code != 0) == (websocket == NULL));
 
     struct aws_secure_tunnel *secure_tunnel = user_data;
     aws_http_message_release(secure_tunnel->handshake_request);
     secure_tunnel->handshake_request = NULL;
 
-    secure_tunnel->websocket = websocket;
+    secure_tunnel->connection_error_code = error_code;
     secure_tunnel->options->on_connection_complete(secure_tunnel->options->user_data);
 
-    struct ping_task_context *ping_task_context =
-        aws_mem_acquire(secure_tunnel->alloc, sizeof(struct ping_task_context));
-    secure_tunnel->ping_task_context = ping_task_context;
-    AWS_ZERO_STRUCT(*ping_task_context);
-    ping_task_context->allocator = secure_tunnel->alloc;
-    ping_task_context->event_loop =
-        aws_event_loop_group_get_next_loop(secure_tunnel->options->bootstrap->event_loop_group);
-    aws_atomic_store_int(&ping_task_context->task_cancelled, 0);
-    ping_task_context->websocket = websocket;
-    ping_task_context->send_frame = secure_tunnel->websocket_vtable.send_frame;
+    if (websocket) {
+        secure_tunnel->websocket = websocket;
+        struct ping_task_context *ping_task_context =
+            aws_mem_acquire(secure_tunnel->alloc, sizeof(struct ping_task_context));
+        secure_tunnel->ping_task_context = ping_task_context;
+        AWS_ZERO_STRUCT(*ping_task_context);
+        ping_task_context->allocator = secure_tunnel->alloc;
+        ping_task_context->event_loop =
+            aws_event_loop_group_get_next_loop(secure_tunnel->options->bootstrap->event_loop_group);
+        aws_atomic_store_int(&ping_task_context->task_cancelled, 0);
+        ping_task_context->websocket = websocket;
+        ping_task_context->send_frame = secure_tunnel->websocket_vtable.send_frame;
 
-    aws_task_init(&ping_task_context->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
-    aws_event_loop_schedule_task_now(ping_task_context->event_loop, &ping_task_context->ping_task);
+        aws_task_init(&ping_task_context->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
+        aws_event_loop_schedule_task_now(ping_task_context->event_loop, &ping_task_context->ping_task);
+    }
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {

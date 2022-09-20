@@ -69,6 +69,9 @@ AWS_IOTDEVICE_API
 struct aws_secure_tunnel *aws_secure_tunnel_acquire(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
+int aws_secure_tunnel_get_connection_error_code(struct aws_secure_tunnel *secure_tunnel);
+
+AWS_IOTDEVICE_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_IOTDEVICE_API
