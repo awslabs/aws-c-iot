@@ -21,7 +21,7 @@ int secure_tunneling_init_send_frame(
     struct aws_websocket_send_frame_options *frame_options,
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *data,
-    enum aws_iot_st_message_type type);
+    enum aws_secure_tunnel_message_type type);
 
 AWS_IOTDEVICE_API
 void init_websocket_client_connection_options(
@@ -33,7 +33,7 @@ int secure_tunneling_init_send_frame(
     struct aws_websocket_send_frame_options *frame_options,
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *data,
-    enum aws_iot_st_message_type type);
+    enum aws_secure_tunnel_message_type type);
 
 AWS_IOTDEVICE_API
 bool secure_tunneling_send_data_call(struct aws_websocket *websocket, struct aws_byte_buf *out_buf, void *user_data);

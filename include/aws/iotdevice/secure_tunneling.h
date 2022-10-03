@@ -24,6 +24,11 @@ typedef void(aws_secure_tunneling_on_connection_complete_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_data_receive_fn)(const struct aws_byte_buf *data, void *user_data);
+typedef void(aws_secure_tunneling_on_data_receive_v3_fn)(
+    const struct aws_byte_cursor service_id,
+    int connection_id,
+    const struct aws_byte_buf *data,
+    void *user_data);
 typedef void(aws_secure_tunneling_on_stream_start_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_stream_reset_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_session_reset_fn)(void *user_data);
@@ -44,6 +49,7 @@ struct aws_secure_tunnel_options {
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_data_receive_fn *on_data_receive;
+    aws_secure_tunneling_on_data_receive_v3_fn *on_data_receive_v3;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;

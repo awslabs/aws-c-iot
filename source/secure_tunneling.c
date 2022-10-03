@@ -21,8 +21,6 @@
 #define PAYLOAD_BYTE_LENGTH_PREFIX 2
 #define PING_TASK_INTERVAL ((uint64_t)20 * 1000000000)
 
-#define UNUSED(x) (void)(x)
-
 struct aws_secure_tunnel_options_storage {
     struct aws_secure_tunnel_options options;
 
@@ -181,9 +179,9 @@ static void s_on_websocket_setup(
     size_t num_handshake_response_headers,
     void *user_data) {
 
-    UNUSED(handshake_response_status);
-    UNUSED(handshake_response_header_array);
-    UNUSED(num_handshake_response_headers);
+    (void)handshake_response_status;
+    (void)handshake_response_header_array;
+    (void)num_handshake_response_headers;
 
     /* Setup callback contract is: if error_code is non-zero then websocket is NULL. */
     AWS_FATAL_ASSERT((error_code != 0) == (websocket == NULL));
@@ -214,8 +212,8 @@ static void s_on_websocket_setup(
 }
 
 static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
-    UNUSED(websocket);
-    UNUSED(error_code);
+    (void)websocket;
+    (void)error_code;
 
     struct aws_secure_tunnel *secure_tunnel = user_data;
     aws_atomic_store_int(&secure_tunnel->ping_task_context->task_cancelled, 1);
@@ -227,9 +225,9 @@ static bool s_on_websocket_incoming_frame_begin(
     struct aws_websocket *websocket,
     const struct aws_websocket_incoming_frame *frame,
     void *user_data) {
-    UNUSED(websocket);
-    UNUSED(frame);
-    UNUSED(user_data);
+    (void)websocket;
+    (void)frame;
+    (void)user_data;
     return true;
 }
 
@@ -282,19 +280,23 @@ static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct
     /* TODO: Check stream_id, send reset? */
 
     switch (st_msg->type) {
-        case DATA:
+        case AWS_SECURE_TUNNEL_MT_DATA:
             secure_tunnel->options->on_data_receive(&st_msg->payload, secure_tunnel->options->user_data);
             break;
-        case STREAM_START:
+        case AWS_SECURE_TUNNEL_MT_STREAM_START:
             s_handle_stream_start(secure_tunnel, st_msg);
             break;
-        case STREAM_RESET:
+        case AWS_SECURE_TUNNEL_MT_STREAM_RESET:
             s_handle_stream_reset(secure_tunnel, st_msg);
             break;
-        case SESSION_RESET:
+        case AWS_SECURE_TUNNEL_MT_SESSION_RESET:
             s_handle_session_reset(secure_tunnel);
             break;
-        case UNKNOWN:
+            /* Steve todo implement processing of new message types */
+        case AWS_SECURE_TUNNEL_MT_SERVICE_IDS:
+        case AWS_SECURE_TUNNEL_MT_CONNECTION_START:
+        case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
+        case AWS_SECURE_TUNNEL_MT_UNKNOWN:
         default:
             if (!st_msg->ignorable) {
                 AWS_LOGF_WARN(
@@ -325,7 +327,7 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         aws_iot_st_msg_deserialize_from_cursor(&st_msg, &st_frame, secure_tunnel->alloc);
         s_process_iot_st_msg(secure_tunnel, &st_msg);
 
-        if (st_msg.type == DATA) {
+        if (st_msg.type == AWS_SECURE_TUNNEL_MT_DATA) {
             aws_byte_buf_clean_up(&st_msg.payload);
         }
     }
@@ -339,14 +341,18 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
     }
 }
 
+/*****************************************************************************************************************
+ *                                    SECURE TUNNEL DECODING
+ *****************************************************************************************************************/
+
 bool on_websocket_incoming_frame_payload(
     struct aws_websocket *websocket,
     const struct aws_websocket_incoming_frame *frame,
     struct aws_byte_cursor data,
     void *user_data) {
 
-    UNUSED(websocket);
-    UNUSED(frame);
+    (void)websocket;
+    (void)frame;
 
     if (data.len > 0) {
         struct aws_secure_tunnel *secure_tunnel = user_data;
@@ -362,10 +368,10 @@ static bool s_on_websocket_incoming_frame_complete(
     const struct aws_websocket_incoming_frame *frame,
     int error_code,
     void *user_data) {
-    UNUSED(websocket);
-    UNUSED(frame);
-    UNUSED(error_code);
-    UNUSED(user_data);
+    (void)websocket;
+    (void)frame;
+    (void)error_code;
+    (void)user_data;
 
     /* TODO: Check error_code */
 
@@ -465,7 +471,7 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     struct aws_websocket *websocket,
     int error_code,
     void *user_data) {
-    UNUSED(websocket);
+    (void)websocket;
     struct data_tunnel_pair *pair = user_data;
     struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)pair->secure_tunnel;
     secure_tunnel->options->on_send_data_complete(error_code, pair->secure_tunnel->options->user_data);
@@ -474,7 +480,7 @@ static void s_secure_tunneling_on_send_data_complete_callback(
 }
 
 bool secure_tunneling_send_data_call(struct aws_websocket *websocket, struct aws_byte_buf *out_buf, void *user_data) {
-    UNUSED(websocket);
+    (void)websocket;
     struct data_tunnel_pair *pair = user_data;
     size_t space_available = out_buf->capacity - out_buf->len;
     if ((pair->length_prefix_written == false) && (space_available >= PAYLOAD_BYTE_LENGTH_PREFIX)) {
@@ -517,7 +523,7 @@ static int s_init_data_tunnel_pair(
     struct data_tunnel_pair *pair,
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *data,
-    enum aws_iot_st_message_type type) {
+    enum aws_secure_tunnel_message_type type) {
     struct aws_iot_st_msg message;
     message.stream_id = secure_tunnel->stream_id;
     message.ignorable = 0;
@@ -551,7 +557,7 @@ int secure_tunneling_init_send_frame(
     struct aws_websocket_send_frame_options *frame_options,
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *data,
-    enum aws_iot_st_message_type type) {
+    enum aws_secure_tunnel_message_type type) {
     struct data_tunnel_pair *pair =
         (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->alloc, sizeof(struct data_tunnel_pair));
     if (s_init_data_tunnel_pair(pair, secure_tunnel, data, type) != AWS_OP_SUCCESS) {
@@ -564,7 +570,7 @@ int secure_tunneling_init_send_frame(
 static int s_secure_tunneling_send(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *data,
-    enum aws_iot_st_message_type type) {
+    enum aws_secure_tunnel_message_type type) {
 
     struct aws_websocket_send_frame_options frame_options;
     if (secure_tunneling_init_send_frame(&frame_options, secure_tunnel, data, type) != AWS_OP_SUCCESS) {
@@ -586,7 +592,7 @@ static int s_secure_tunneling_send_data(struct aws_secure_tunnel *secure_tunnel,
         struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&new_data, amount_to_send);
         AWS_FATAL_ASSERT(send_cursor.len > 0);
         if (send_cursor.len) {
-            if (s_secure_tunneling_send(secure_tunnel, &send_cursor, DATA) != AWS_OP_SUCCESS) {
+            if (s_secure_tunneling_send(secure_tunnel, &send_cursor, AWS_SECURE_TUNNEL_MT_DATA) != AWS_OP_SUCCESS) {
                 AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
                 return AWS_OP_ERR;
             }
@@ -604,7 +610,7 @@ static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure
     if (secure_tunnel->stream_id == 0) {
         secure_tunnel->stream_id += 1;
     }
-    return s_secure_tunneling_send(secure_tunnel, NULL, STREAM_START);
+    return s_secure_tunneling_send(secure_tunnel, NULL, AWS_SECURE_TUNNEL_MT_STREAM_START);
 }
 
 static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
@@ -613,7 +619,7 @@ static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure
         return AWS_ERROR_IOTDEVICE_SECUTRE_TUNNELING_INVALID_STREAM;
     }
 
-    int result = s_secure_tunneling_send(secure_tunnel, NULL, STREAM_RESET);
+    int result = s_secure_tunneling_send(secure_tunnel, NULL, AWS_SECURE_TUNNEL_MT_STREAM_RESET);
     s_reset_secure_tunnel(secure_tunnel);
     return result;
 }
