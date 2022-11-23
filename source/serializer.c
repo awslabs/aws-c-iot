@@ -131,6 +131,7 @@ static int s_iot_st_get_varint_size(size_t value, size_t *encode_size) {
 }
 
 static int s_iot_st_compute_message_length(const struct aws_iot_st_msg *message, size_t *message_length) {
+    fprintf(stdout, "\ns_iot_st_compute_message_length()\ntype: %d\n", message->type);
     size_t local_length = 0;
 
     /*
@@ -151,6 +152,7 @@ static int s_iot_st_compute_message_length(const struct aws_iot_st_msg *message,
         }
 
         local_length += (1 + stream_id_length);
+        fprintf(stdout, "adding stream_id:%d total:%zu\n", message->stream_id, local_length);
     }
 
     if (message->ignorable != 0) {
@@ -159,24 +161,35 @@ static int s_iot_st_compute_message_length(const struct aws_iot_st_msg *message,
          * 1 byte ignorable varint
          */
         local_length += 2;
+        fprintf(stdout, "adding ignorable total:%zu\n", local_length);
     }
 
     if (message->payload.len != 0) {
         /*
          * 1 byte key
+         * 1-4 byte payload length varint
          * n bytes payload.len
          */
-
-        local_length += (1 + message->payload.len);
+        size_t payload_length = 0;
+        if (s_iot_st_get_varint_size((uint32_t)message->payload.len, &payload_length)) {
+            return AWS_OP_ERR;
+        }
+        local_length += (1 + message->payload.len + payload_length);
+        fprintf(stdout, "adding message total:%zu\n", local_length);
     }
 
     if (message->service_id.len != 0) {
         /*
          * 1 byte key
+         * 1-4 byte payload length varint
          * n bytes service_id.len
          */
-
-        local_length += (1 + message->service_id.len);
+        size_t service_id_length = 0;
+        if (s_iot_st_get_varint_size((uint32_t)message->service_id.len, &service_id_length)) {
+            return AWS_OP_ERR;
+        }
+        local_length += (1 + message->service_id.len + service_id_length);
+        fprintf(stdout, "adding service_id total:%zu\n", local_length);
     }
 
     if (message->connection_id != 0) {
@@ -191,6 +204,7 @@ static int s_iot_st_compute_message_length(const struct aws_iot_st_msg *message,
         }
 
         local_length += (1 + connection_id_length);
+        fprintf(stdout, "adding connection_id total:%zu\n", local_length);
     }
 
     *message_length = local_length;
@@ -201,6 +215,7 @@ int aws_iot_st_msg_serialize_from_struct(
     struct aws_byte_buf *buffer,
     struct aws_allocator *allocator,
     struct aws_iot_st_msg message) {
+    fprintf(stdout, "\naws_iot_st_msg_serialize_from_struct()\n");
 
     size_t message_total_length = 0;
     if (s_iot_st_compute_message_length(&message, &message_total_length)) {
@@ -217,35 +232,42 @@ int aws_iot_st_msg_serialize_from_struct(
         }
     }
 
+    fprintf(stdout, "message type encoded. buf length: %zu\n", buffer->len);
+
     if (message.stream_id != 0) {
         if (s_iot_st_encode_stream_id(message.stream_id, buffer)) {
             goto cleanup;
         }
     }
+    fprintf(stdout, "stream id encoded. buf length: %zu\n", buffer->len);
 
     if (message.ignorable != 0) {
         if (s_iot_st_encode_ignorable(message.ignorable, buffer)) {
             goto cleanup;
         }
     }
+    fprintf(stdout, "ignorable encoded. buf length: %zu\n", buffer->len);
 
     if (message.payload.len != 0) {
         if (s_iot_st_encode_payload(&message.payload, buffer)) {
             goto cleanup;
         }
     }
+    fprintf(stdout, "payload encoded. buf length: %zu\n", buffer->len);
 
     if (message.service_id.len != 0) {
         if (s_iot_st_encode_service_id(&message.service_id, buffer)) {
             goto cleanup;
         }
     }
+    fprintf(stdout, "service id encoded. buf length: %zu\n", buffer->len);
 
     if (message.connection_id != 0) {
         if (s_iot_st_encode_connection_id(message.connection_id, buffer)) {
             goto cleanup;
         }
     }
+    fprintf(stdout, "connection id encoded. buf length: %zu\n", buffer->len);
 
     AWS_RETURN_ERROR_IF2(buffer->capacity < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     return AWS_OP_SUCCESS;
@@ -290,6 +312,7 @@ int aws_iot_st_msg_deserialize_from_cursor(
     struct aws_iot_st_msg *message,
     struct aws_byte_cursor *cursor,
     struct aws_allocator *allocator) {
+    fprintf(stdout, "\naws_iot_st_msg_deserialize_from_cursor()");
     AWS_RETURN_ERROR_IF2(cursor->len < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     uint8_t wire_type;
     uint8_t field_number;
@@ -377,4 +400,35 @@ cleanup:
     aws_byte_buf_clean_up(&message->payload);
     aws_byte_buf_clean_up(&message->service_id);
     return AWS_OP_ERR;
+}
+
+const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type) {
+    switch (message_type) {
+        case AWS_SECURE_TUNNEL_MT_UNKNOWN:
+            return "UNKNOWN";
+
+        case AWS_SECURE_TUNNEL_MT_DATA:
+            return "DATA";
+
+        case AWS_SECURE_TUNNEL_MT_STREAM_START:
+            return "STREAM START";
+
+        case AWS_SECURE_TUNNEL_MT_STREAM_RESET:
+            return "STREAM RESET";
+
+        case AWS_SECURE_TUNNEL_MT_SESSION_RESET:
+            return "SESSION RESET";
+
+        case AWS_SECURE_TUNNEL_MT_SERVICE_IDS:
+            return "SERVICE IDS";
+
+        case AWS_SECURE_TUNNEL_MT_CONNECTION_START:
+            return "CONNECTION START";
+
+        case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
+            return "CONNECTION RESET";
+
+        default:
+            return "UNKNOWN";
+    }
 }

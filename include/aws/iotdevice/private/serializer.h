@@ -15,7 +15,6 @@
 #define AWS_IOT_ST_MAX_MESSAGE_SIZE 64 * 1024
 #define AWS_IOT_ST_MAX_PAYLOAD_SIZE 64512
 
-
 enum aws_secure_tunnel_field_number {
     AWS_SECURE_TUNNEL_FN_TYPE = 1,
     AWS_SECURE_TUNNEL_FN_STREAM_ID = 2,
@@ -112,6 +111,9 @@ int aws_iot_st_msg_deserialize_from_cursor(
     struct aws_iot_st_msg *message,
     struct aws_byte_cursor *cursor,
     struct aws_allocator *allocator);
+
+AWS_IOTDEVICE_API
+const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type);
 
 AWS_EXTERN_C_END
 
