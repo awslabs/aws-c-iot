@@ -35,9 +35,9 @@ static int s_secure_tunneling_send(
     const struct aws_byte_cursor *payload_data,
     const struct aws_byte_cursor *service_id_data,
     enum aws_secure_tunnel_message_type type);
-static int s_websocket_connect(struct aws_secure_tunnel *secure_tunnel) {
-    return 0;
-}
+
+static int s_websocket_connect(struct aws_secure_tunnel *secure_tunnel){};
+
 static int s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aws_secure_tunnel_operation *operation);
 static void s_reevaluate_service_task(struct aws_secure_tunnel *secure_tunnel);
 
@@ -545,9 +545,7 @@ static void s_secure_tunnel_shutdown(
         secure_tunnel->slot = NULL;
     }
 
-    /* Fail all queued operations */
-    s_complete_operation_list(
-        secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY);
+    aws_secure_tunnel_on_disconnection_update_operational_state(secure_tunnel);
 
     if (secure_tunnel->desired_state == AWS_STS_CONNECTED) {
         s_change_current_state(secure_tunnel, AWS_STS_PENDING_RECONNECT);
@@ -701,7 +699,7 @@ struct aws_secure_tunnel_websocket_transform_complete_task {
     struct aws_secure_tunnel *secure_tunnel;
     int error_code;
     struct aws_http_message *handshake;
-}
+};
 
 void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, enum aws_task_status status) {
     (void)task;
@@ -964,12 +962,16 @@ static void s_aws_secure_tunnel_shutdown_channel(struct aws_secure_tunnel *secur
 /*********************************************************************************************************************
  * State Related
  ********************************************************************************************************************/
-static void s_complete_operation_list(struct aws_secure_tunnel *secure_tunnel, int error_code);
+static void s_complete_operation_list(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_linked_list *operation_list,
+    int error_code);
 
 static void s_change_current_state_to_stopped(struct aws_secure_tunnel *secure_tunnel) {
     secure_tunnel->current_state = AWS_STS_STOPPED;
 
-    s_complete_operation_list(secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP);
+    s_aws_secure_tunnel_operational_state_reset(
+        secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP);
 
     /* Stop works as a complete session wipe, and so the next time we connect, we want it to be clean */
     s_reset_secure_tunnel(secure_tunnel);
@@ -1080,6 +1082,120 @@ static void s_change_current_state(struct aws_secure_tunnel *secure_tunnel, enum
     }
 
     s_reevaluate_service_task(secure_tunnel);
+}
+
+static bool s_is_valid_desired_state(enum aws_secure_tunnel_state desired_state) {
+    switch (desired_state) {
+        case AWS_STS_STOPPED:
+        case AWS_STS_CONNECTED:
+        case AWS_STS_TERMINATED:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void s_change_state_task_fn(struct aws_task *task, void *arg, enum aws_task_status status) {
+    (void)task;
+
+    struct aws_secure_tunnel_change_desired_state_task *change_state_task = arg;
+    struct aws_secure_tunnel *secure_tunnel = change_state_task->secure_tunnel;
+    enum aws_secure_tunnel_state desired_state = change_state_task->desired_state;
+    if (status != AWS_TASK_STATUS_RUN_READY) {
+        goto done;
+    }
+
+    if (secure_tunnel->desired_state != desired_state) {
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: changing desired secure_tunnel state from %s to %s",
+            (void *)secure_tunnel,
+            aws_secure_tunnel_state_to_c_string(secure_tunnel->desired_state),
+            aws_secure_tunnel_state_to_c_string(desired_state));
+
+        secure_tunnel->desired_state = desired_state;
+
+        struct aws_secure_tunnel_operation_disconnect *disconnect_op = change_state_task->disconnect_operation;
+        if (desired_state == AWS_STS_STOPPED && disconnect_op != NULL) {
+            s_aws_secure_tunnel_shutdown_channel_with_disconnect(
+                secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP, disconnect_op);
+        }
+
+        s_reevaluate_service_task(secure_tunnel);
+    }
+
+done:
+
+    aws_secure_tunnel_operation_disconnect_release(change_state_task->disconnect_operation);
+    if (desired_state != AWS_STS_TERMINATED) {
+        aws_secure_tunnel_release(secure_tunnel);
+    }
+
+    aws_mem_release(change_state_task->allocator, change_state_task);
+}
+
+static struct aws_secure_tunnel_change_desired_state_task *s_aws_secure_tunnel_change_desired_state_task_new(
+    struct aws_allocator *allocator,
+    struct aws_secure_tunnel *secure_tunnel,
+    enum aws_secure_tunnel_state desired_state,
+    struct aws_secure_tunnel_operation_disconnect *disconnect_operation) {
+
+    struct aws_secure_tunnel_change_desired_state_task *change_state_task =
+        aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_change_desired_state_task));
+    if (change_state_task == NULL) {
+        return NULL;
+    }
+
+    aws_task_init(&change_state_task->task, s_change_state_task_fn, (void *)change_state_task, "ChangeStateTask");
+    change_state_task->allocator = secure_tunnel->allocator;
+    change_state_task->secure_tunnel =
+        (desired_state == AWS_STS_TERMINATED) ? secure_tunnel : aws_secure_tunnel_acquire(secure_tunnel);
+    change_state_task->desired_state = desired_state;
+    change_state_task->disconnect_operation = aws_secure_tunnel_operation_disconnect_acquire(disconnect_operation);
+
+    return change_state_task;
+}
+
+struct aws_secure_tunnel_change_desired_state_task {
+    struct aws_task task;
+    struct aws_allocator *allocator;
+    struct aws_secure_tunnel *secure_tunnel;
+    enum aws_secure_tunnel_state desired_state;
+    struct aws_secure_tunnel_operation_disconnect *disconnect_operation;
+};
+
+static int s_aws_secure_tunnel_change_desired_state(
+    struct aws_secure_tunnel *secure_tunnel,
+    enum aws_secure_tunnel_state desired_state,
+    struct aws_secure_tunnel_operation_disconnect *disconnect_operation) {
+    AWS_FATAL_ASSERT(secure_tunnel != NULL);
+    AWS_FATAL_ASSERT(secure_tunnel->loop != NULL);
+    AWS_FATAL_ASSERT(disconnect_operation == NULL || desired_state == AWS_STS_STOPPED);
+
+    if (!s_is_valid_desired_state(desired_state)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: invalid desired state argument %d(%s)",
+            (void *)secure_tunnel,
+            (int)desired_state,
+            aws_secure_tunnel_state_to_c_string(desired_state));
+
+        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
+    }
+
+    struct aws_secure_tunnel_change_desired_state_task *task = s_aws_secure_tunnel_change_desired_state_task_new(
+        secure_tunnel->allocator, secure_tunnel, desired_state, disconnect_operation);
+    if(task == NULL{
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: failed to create change desired state task",
+            (void *)secure_tunnel);
+        return AWS_OP_ERR;
+    }
+
+    aws_event_loop_schedule_task_now(secure_tunnel->loop, &task->task);
+
+    return AWS_OP_SUCCESS;
 }
 
 /*********************************************************************************************************************
@@ -1384,7 +1500,10 @@ static int s_secure_tunneling_send(
  * Operations
  ********************************************************************************************************************/
 
-int aws_secure_tunnel_get_stream_id_for_service(struct aws_secure_tunnel *secure_tunnel) {}
+int aws_secure_tunnel_get_stream_id_for_service(struct aws_secure_tunnel *secure_tunnel) {
+    /* Todo Steve Implement this */
+    (void)secure_tunnel;
+}
 
 int aws_secure_tunnel_operation_bind_stream_id(
     struct aws_secure_tunnel_operation *operation,
@@ -1453,7 +1572,82 @@ static void s_aws_secure_tunnel_on_socket_write_completion_secure_tunnel_connect
         s_aws_secure_tunnel_shutdown_channel(secure_tunnel, error_code);
         return;
     }
-} // Steve TODO THIS IS WHERE I LEFT OFF BEFORE MQTT5 MIGRATION.
+
+    s_reevaluate_service_task(secure_tunnel);
+}
+
+static void s_awssecure_tunnel_on_socket_write_completion_connected(
+    struct aws_secure_tunnel *secure_tunnel,
+    int error_code) {
+    if (error_code != AWS_ERROR_SUCCESS) {
+        s_aws_secure_tunnel_shutdown_channel(secure_tunnel, error_code);
+        return;
+    }
+
+    s_reevaluate_service_task(secure_tunnel);
+}
+
+static void s_aws_secure_tunnel_on_socket_write_completion(
+    struct aws_channel *channel,
+    struct aws_io_message *message,
+    int error_code,
+    void *user_data) {
+
+    (void)channel;
+    (void)message;
+
+    struct aws_secure_tunnel *secure_tunnel = user_data;
+    secure_tunnel->pending_write_completion = false;
+
+    if (error_code != AWS_ERROR_SUCCESS) {
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: socket write completion invoked with error %d(%s)",
+            (void *)secure_tunnel,
+            error_code,
+            aws_error_debug_str(error_code));
+    }
+
+    switch (secure_tunnel->current_state) {
+        case AWS_STS_SECURE_TUNNEL_CONNECT:
+            s_aws_secure_tunnel_on_socket_write_completion_secure_tunnel_connect(secure_tunnel, error_code);
+            break;
+
+        case AWS_STS_CONNECTED:
+            s_aws_secure_tunnel_on_socket_write_completion_connected(secure_tunnel, error_code);
+            break;
+
+        case AWS_STS_CLEAN_DISCONNECT:
+            /* the CONNECTED callback works just fine for CLEAN_DISCONNECT */
+            s_aws_secure_tunnel_on_socket_write_completion_connected(secure_tunnel, error_code);
+            break;
+
+        default:
+            break;
+    }
+
+    s_complete_operation_list(secure_tunnel, &secure_tunnel->write_completion_operations, error_code);
+}
+
+void aws_secure_tunnel_on_disconnection_update_operational_state(struct aws_secure_tunnel *secure_tunnel) {
+    /* move current operation to the head of the queue */
+    if (secure_tunnel->current_operation != NULL) {
+        aws_linked_list_push_front(&secure_tunnel->queued_operations, &secure_tunnel->current_operation->node);
+        secure_tunnel->current_operation = NULL;
+    }
+
+    /* fail everything in pending write completion */
+    s_complete_operation_list(
+        secure_tunnel,
+        &secure_tunnel->write_completion_operations,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY);
+
+    /* fail everything in the pending operations list */
+    s_complete_operation_list(
+        secure_tunnel,
+        &secure_tunnel->queued_operations,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY);
+}
 
 /*
  * Check whether secure tunnel currently has work left to do based on its current state
@@ -1528,6 +1722,8 @@ static bool s_aws_secure_tunnel_should_service_operational_state(
 
 int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure_tunnel) {
     struct aws_channel_slot *slot = secure_tunnel->slot;
+    const struct aws_secure_tunnel_vtable *vtable = secure_tunnel->vtable;
+
     // steve TODO voiding slot for warning atm
     (void)slot;
 }
@@ -1544,10 +1740,13 @@ static void s_complete_operation(
     aws_secure_tunnel_operation_release(operation);
 }
 
-static void s_complete_operation_list(struct aws_secure_tunnel *secure_tunnel, int error_code) {
+static void s_complete_operation_list(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_linked_list *operation_list,
+    int error_code) {
 
-    struct aws_linked_list_node *node = aws_linked_list_begin(&secure_tunnel->queued_operations);
-    while (node != aws_linked_list_end(&secure_tunnel->queued_operations)) {
+    struct aws_linked_list_node *node = aws_linked_list_begin(operation_list);
+    while (node != aws_linked_list_end(operation_list)) {
         struct aws_secure_tunnel_operation *operation =
             AWS_CONTAINER_OF(node, struct aws_secure_tunnel_operation, node);
 
@@ -1557,7 +1756,13 @@ static void s_complete_operation_list(struct aws_secure_tunnel *secure_tunnel, i
     }
 
     /* we've released everything, so reset the list to empty */
-    aws_linked_list_init(&secure_tunnel->queued_operations);
+    aws_linked_list_init(operation_list);
+}
+
+void aws_secure_tunnel_operational_state_clean_up(struct aws_secure_tunnel *secure_tunnel) {
+    AWS_ASSERT(secure_tunnel->current_operation == NULL);
+
+    s_aws_secure_tunnel_operational_state_reset(secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_TERMINATED);
 }
 
 static void s_check_ping_timeout(struct aws_secure_tunnel *secure_tunnel, uint64_t now) {
@@ -1743,6 +1948,13 @@ static void s_enqueue_operation_front(
 
     s_reevaluate_service_task(secure_tunnel);
 }
+
+static void s_aws_secure_tunnel_operational_state_reset(
+    struct aws_secure_tunnel *secure_tunnel,
+    int completion_error_code) {
+    s_complete_operation_list(secure_tunnel, &secure_tunnel->queued_operations, completion_error_code);
+    s_complete_operation_list(secure_tunnel, &secure_tunnel->write_completion_operations, completion_error_code);
+}
 struct aws_secure_tunnel_submit_operation_task {
     struct aws_task task;
     struct aws_allocator *allocator;
@@ -1825,8 +2037,10 @@ int aws_secure_tunnel_bind_stream_id(
     return AWS_OP_ERR;
 }
 
-static void s_secure_tunnel_destroy(void *user_data) {
-    struct aws_secure_tunnel *secure_tunnel = user_data;
+static void s_secure_tunnel_final_destroy(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel == NULL) {
+        return;
+    }
 
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete = NULL;
     void *termination_complete_user_data = NULL;
@@ -1835,12 +2049,11 @@ static void s_secure_tunnel_destroy(void *user_data) {
         termination_complete_user_data = secure_tunnel->options->user_data;
     }
 
-    /* Clean up pending operations */
-    AWS_ASSERT(secure_tunnel->current_operation == NULL);
-    s_complete_operation_list(secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_SECURE_TUNNEL_TERMINATED);
+    aws_secure_tunnel_operational_state_clean_up(secure_tunnel);
 
     /* Clean up all memory */
     aws_secure_tunnel_options_storage_destroy(secure_tunnel->config);
+    aws_http_message_release(secure_tunnel->handshake_request);
     aws_byte_buf_clean_up(&secure_tunnel->received_data);
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
@@ -1849,6 +2062,12 @@ static void s_secure_tunnel_destroy(void *user_data) {
     if (on_termination_complete != NULL) {
         (*on_termination_complete)(termination_complete_user_data);
     }
+}
+
+static void s_on_secure_tunnel_zero_ref_count(void *user_data) {
+    struct aws_secure_tunnel *secure_tunnel = user_data;
+
+    s_aws_secure_tunnel_client_change_desired_state(secure_tunnel, AWS_STS_TERMINATED, NULL);
 }
 
 /*********************************************************************************************************************
@@ -1860,7 +2079,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
 
     struct aws_secure_tunnel *secure_tunnel = aws_mem_calloc(options->allocator, 1, sizeof(struct aws_secure_tunnel));
     secure_tunnel->allocator = options->allocator;
-    aws_ref_count_init(&secure_tunnel->ref_count, secure_tunnel, s_secure_tunnel_destroy);
+    aws_ref_count_init(&secure_tunnel->ref_count, secure_tunnel, s_on_secure_tunnel_zero_ref_count);
 
     aws_linked_list_init(&secure_tunnel->queued_operations);
     secure_tunnel->current_operation = NULL;

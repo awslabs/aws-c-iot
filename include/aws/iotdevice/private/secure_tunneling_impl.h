@@ -223,7 +223,7 @@ struct aws_secure_tunnel {
     struct aws_tls_ctx *tls_ctx;
     struct aws_tls_connection_options tls_con_opt;
 
-    struct aws_secure_tunnel_vtable vtable;
+    const struct aws_secure_tunnel_vtable vtable;
     struct aws_websocket_vtable websocket_vtable;
 
     struct aws_ref_count ref_count;
@@ -310,6 +310,7 @@ struct aws_secure_tunnel {
     bool in_service;
 
     struct aws_linked_list queued_operations;
+    struct aws_linked_list write_completion_operations;
     struct aws_secure_tunnel_operation *current_operation;
 
     /*

@@ -83,6 +83,19 @@ struct aws_secure_tunnel_options {
     void *user_data;
 };
 
+/**
+ * Signature of callback to invoke when a DISCONNECT is fully written to the socket (or fails to be)
+ */
+typedef void(aws_secure_tunnel_disconnect_completion_fn)(int error_code, void *complete_ctx);
+
+/**
+ * Public completion callback options for the DISCONNECT operation
+ */
+struct aws_secure_tunnel_disconnect_completion_options {
+    aws_secure_tunnel_disconnect_completion_fn *completion_callback;
+    void *completion_user_data;
+}
+
 /* deprecated: "_config" is renamed "_options" for consistency with similar code in the aws-c libraries */
 #define aws_secure_tunneling_connection_config aws_secure_tunnel_options
 
