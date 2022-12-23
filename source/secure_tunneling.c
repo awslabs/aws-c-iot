@@ -173,18 +173,7 @@ static void s_ping_task(struct aws_task *task, void *user_data, enum aws_task_st
     aws_event_loop_schedule_task_future(ping_task_context->event_loop, task, now + PING_TASK_INTERVAL);
 }
 
-static void s_on_websocket_setup(
-    struct aws_websocket *websocket,
-    int error_code,
-    int handshake_response_status,
-    const struct aws_http_header *handshake_response_header_array,
-    size_t num_handshake_response_headers,
-    void *user_data) {
-
-    UNUSED(error_code);
-    UNUSED(handshake_response_status);
-    UNUSED(handshake_response_header_array);
-    UNUSED(num_handshake_response_headers);
+static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_data *setup, void *user_data) {
 
     /* TODO: Handle error
      * https://github.com/aws-samples/aws-iot-securetunneling-localproxy/blob/master/WebsocketProtocolGuide.md#handshake-error-responses
@@ -194,7 +183,7 @@ static void s_on_websocket_setup(
     aws_http_message_release(secure_tunnel->handshake_request);
     secure_tunnel->handshake_request = NULL;
 
-    secure_tunnel->websocket = websocket;
+    secure_tunnel->websocket = setup->websocket;
     secure_tunnel->options->on_connection_complete(secure_tunnel->options->user_data);
 
     struct ping_task_context *ping_task_context =
@@ -205,7 +194,7 @@ static void s_on_websocket_setup(
     ping_task_context->event_loop =
         aws_event_loop_group_get_next_loop(secure_tunnel->options->bootstrap->event_loop_group);
     aws_atomic_store_int(&ping_task_context->task_cancelled, 0);
-    ping_task_context->websocket = websocket;
+    ping_task_context->websocket = setup->websocket;
     ping_task_context->send_frame = secure_tunnel->websocket_vtable.send_frame;
 
     aws_task_init(&ping_task_context->ping_task, s_ping_task, ping_task_context, "SecureTunnelingPingTask");
