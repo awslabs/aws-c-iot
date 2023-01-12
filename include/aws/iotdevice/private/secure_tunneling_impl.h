@@ -182,11 +182,10 @@ struct aws_secure_tunnel {
     /* Static settings */
     struct aws_allocator *allocator;
     struct aws_secure_tunnel_options_storage *config;
-    struct aws_secure_tunnel_options *options;
     struct aws_tls_ctx *tls_ctx;
     struct aws_tls_connection_options tls_con_opt;
 
-    const struct aws_secure_tunnel_vtable vtable;
+    struct aws_secure_tunnel_vtable vtable;
     struct aws_websocket_vtable websocket_vtable;
 
     struct aws_ref_count ref_count;
@@ -202,6 +201,7 @@ struct aws_secure_tunnel {
      * that we'd like to shutdown the channel with while CLEAN_DISCONNECT is processed.
      */
     int clean_disconnect_error_code;
+
     /*
      * handshake_request exists between the transform completion timepoint and the websocket setup callback.
      */

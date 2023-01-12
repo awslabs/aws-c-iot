@@ -31,6 +31,8 @@ struct aws_secure_tunnel_message_storage {
     struct aws_allocator *allocator;
     struct aws_secure_tunnel_message_view storage_view;
 
+    enum aws_secure_tunnel_message_type type;
+    bool ignorable;
     int32_t stream_id;
     struct aws_byte_cursor service_id;
     struct aws_byte_cursor payload;
@@ -112,7 +114,6 @@ struct aws_secure_tunnel_options_storage {
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
 
     struct aws_string *endpoint_host;
-    struct aws_string *root_ca;
 
     /* Stream related info */
     int32_t stream_id;
@@ -122,6 +123,22 @@ struct aws_secure_tunnel_options_storage {
     int32_t service_id_2_stream_id;
     struct aws_string *service_id_3;
     int32_t service_id_3_stream_id;
+
+    /* Callbacks */
+    aws_secure_tunnel_message_received_fn *on_message_received;
+
+    void *user_data;
+
+    /* STEVE TODO we can depricate/remove these. Client only supports destination mode */
+    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
+    aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
+    aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
+    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
+    aws_secure_tunneling_on_data_receive_fn *on_data_receive;
+    aws_secure_tunneling_on_stream_start_fn *on_stream_start;
+    aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
+    aws_secure_tunneling_on_session_reset_fn *on_session_reset;
+    aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
 };
 
 AWS_EXTERN_C_BEGIN

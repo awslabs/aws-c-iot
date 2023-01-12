@@ -26,9 +26,11 @@
 
 // Steve TODO check if these need to be implemented or re-organized
 static void s_change_current_state(struct aws_secure_tunnel *secure_tunnel, enum aws_secure_tunnel_state next_state);
+
 int aws_secure_tunnel_bind_stream_id(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_operation_data *operation);
+
 static int s_secure_tunneling_send(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *payload_data,
@@ -86,6 +88,8 @@ static const char *s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy
  * Close and reset all stream ids
  */
 static void s_reset_secure_tunnel(struct aws_secure_tunnel *secure_tunnel) {
+    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: Secure tunnel session reset.", (void *)secure_tunnel);
+
     secure_tunnel->config->stream_id = INVALID_STREAM_ID;
     secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
     secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
@@ -94,162 +98,92 @@ static void s_reset_secure_tunnel(struct aws_secure_tunnel *secure_tunnel) {
     secure_tunnel->received_data.len = 0; /* Drop any incomplete secure tunnel frame */
 }
 
-static void s_handle_data(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
-    // Old way of handling a data message
-    secure_tunnel->options->on_data_receive(&st_msg->payload, secure_tunnel->options->user_data);
+static int s_aws_secure_tunnel_set_stream_id(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_byte_cursor *service_id,
+    int32_t stream_id) {
+    /* No service id means V1 protocol is being used */
+    if (service_id->len == 0) {
+        secure_tunnel->config->stream_id = stream_id;
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Secure tunnel stream_id set to %d",
+            (void *)secure_tunnel,
+            stream_id);
+        return AWS_OP_SUCCESS;
+    }
 
-    /* Steve TODO sort the message against service ids */
-}
+    struct aws_string *service_id_to_set = aws_string_new_from_buf(secure_tunnel->allocator, service_id);
+    if (service_id_to_set == NULL) {
+        return AWS_OP_ERR;
+    }
 
-static void s_handle_stream_start(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
-
-    if (secure_tunnel->options->local_proxy_mode == AWS_SECURE_TUNNELING_SOURCE_MODE) {
-        /* Source mode tunnel clients SHOULD treat receiving StreamStart as an error and close the active data stream
-         * and WebSocket connection. */
+    if (secure_tunnel->config->service_id_1 != NULL &&
+        aws_string_compare(secure_tunnel->config->service_id_1, service_id_to_set) == 0) {
+        secure_tunnel->config->service_id_1_stream_id = stream_id;
+    } else if (
+        secure_tunnel->config->service_id_2 != NULL &&
+        aws_string_compare(secure_tunnel->config->service_id_2, service_id_to_set) == 0) {
+        secure_tunnel->config->service_id_2_stream_id = stream_id;
+    } else if (
+        secure_tunnel->config->service_id_3 != NULL &&
+        aws_string_compare(secure_tunnel->config->service_id_3, service_id_to_set) == 0) {
+        secure_tunnel->config->service_id_3_stream_id = stream_id;
+    } else {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Received StreamStart in source mode. Closing the tunnel.",
-            (void *)secure_tunnel);
-        secure_tunnel->vtable.close(secure_tunnel);
-    } else {
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Received StreamStart in destination mode. service_id= " PRInSTR " stream_id=%d",
+            "id=%p: Secure tunnel request for unsupported service_id: " PRInSTR,
             (void *)secure_tunnel,
-            AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_buf(&st_msg->service_id)),
-            st_msg->stream_id);
-
-        // Steve TODO there may be a better way to check if a service_id is being used in the StreamStart
-        if (st_msg->service_id.len > 0) {
-            struct aws_string *service_id = NULL;
-            service_id = aws_string_new_from_buf(secure_tunnel->allocator, &st_msg->service_id);
-
-            if (service_id == NULL) {
-                aws_string_destroy(service_id);
-                /* Steve TODO log error? */
-                return;
-            }
-
-            // Check if stream_id is valid and then set the stream_id
-            // Steve TODO a Stream Reset MAY be sent by the destination to source for replaced stream ID if the stream
-            // previously existed. On the fence about whether to do this or not since it's optional in the protocol
-            if (secure_tunnel->config->service_id_1 != NULL &&
-                aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
-                secure_tunnel->config->service_id_1_stream_id = st_msg->stream_id;
-            } else if (
-                secure_tunnel->config->service_id_2 != NULL &&
-                aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
-                secure_tunnel->config->service_id_2_stream_id = st_msg->stream_id;
-            } else if (
-                secure_tunnel->config->service_id_3 != NULL &&
-                aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
-                secure_tunnel->config->service_id_3_stream_id = st_msg->stream_id;
-            } else {
-                // service ID is not supported Steve TODO log error
-                AWS_LOGF_ERROR(
-                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                    "id=%p: Received StreamStart request for unsupported service_id: " PRInSTR,
-                    (void *)secure_tunnel,
-                    AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_buf(&st_msg->service_id)));
-                return;
-            }
-
-        } else {
-            // No Service Id used indicating V1 Protocol or no multiplexing
-            secure_tunnel->config->stream_id = st_msg->stream_id;
-        }
-        // Steve TODO There doesn't really seem to be a point in calling this callback because it doesn't send anything
-        // Useful. We should have added a struct that contains the service_id and stream_id.
-        secure_tunnel->options->on_stream_start(secure_tunnel->options->user_data);
-    }
-}
-
-static void s_handle_stream_reset(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
-
-    if (st_msg->service_id.len > 0) {
-        struct aws_string *service_id = NULL;
-        service_id = aws_string_new_from_buf(secure_tunnel->allocator, &st_msg->service_id);
-
-        if (service_id == NULL) {
-            // Steve TODO destroy not necessary on a NULL service_id?
-            aws_string_destroy(service_id);
-            /* Steve TODO log error? */
-            return;
-        }
-
-        // Check if stream_id is valid and then reset the stream_id
-        if (secure_tunnel->config->service_id_1 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
-            secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
-        } else if (
-            secure_tunnel->config->service_id_2 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
-            secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
-        } else if (
-            secure_tunnel->config->service_id_3 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
-            secure_tunnel->config->service_id_3_stream_id = INVALID_STREAM_ID;
-        } else {
-            // service ID is not supported Steve TODO log error
-            AWS_LOGF_ERROR(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Received StreamReset request for unsupported service_id: " PRInSTR,
-                (void *)secure_tunnel,
-                AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_buf(&st_msg->service_id)));
-            return;
-        }
-
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Service Id: " PRInSTR " stream reset.",
-            (void *)secure_tunnel,
-            AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_buf(&st_msg->service_id)));
-    } else {
-        // No Service ID provided, assuming this is a non-multiplexing request
-        if (secure_tunnel->config->stream_id == INVALID_STREAM_ID ||
-            secure_tunnel->config->stream_id != st_msg->stream_id) {
-            AWS_LOGF_WARN(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "Received StreamReset with stream_id different than the active stream_id. Ignoring. "
-                "st_msg->stream_id=%d "
-                "secure_tunnel->config->stream_id=%d",
-                st_msg->stream_id,
-                secure_tunnel->config->stream_id);
-            return;
-        }
-
-        secure_tunnel->config->stream_id = INVALID_STREAM_ID;
-        // s_reset_secure_tunnel(secure_tunnel);
-        AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: Stream reset.", (void *)secure_tunnel);
+            AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_buf(service_id)));
+        aws_string_destroy(service_id_to_set);
+        return AWS_OP_ERR;
     }
 
-    // Steve TODO Indicate that a stream has been reset.
-    secure_tunnel->options->on_stream_reset(secure_tunnel->options->user_data);
+    AWS_LOGF_INFO(
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: Secure tunnel service_id '" PRInSTR "' stream_id set to %d",
+        (void *)secure_tunnel,
+        AWS_BYTE_CURSOR_PRI(*service_id),
+        stream_id);
+
+    aws_string_destroy(service_id_to_set);
+    return AWS_OP_SUCCESS;
 }
 
-static void s_handle_session_reset(struct aws_secure_tunnel *secure_tunnel) {
+static void s_aws_secure_tunnel_on_stream_start_received(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_message_view *message_view) {
+    int result = s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_view->service_id, message_view->stream_id);
+    secure_tunnel->config->on_stream_start(message_view, result, secure_tunnel->config->user_data);
+}
+
+static void s_aws_secure_tunnel_on_stream_reset_received(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_message_view *message_view) {
+    int result = s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_view->service_id, INVALID_STREAM_ID);
+    secure_tunnel->config->on_stream_reset(message_view, result, secure_tunnel->config->user_data);
+}
+
+static void s_aws_secure_tunnel_on_session_reset_received(struct aws_secure_tunnel *secure_tunnel) {
     s_reset_secure_tunnel(secure_tunnel);
-
-    secure_tunnel->options->on_session_reset(secure_tunnel->options->user_data);
+    secure_tunnel->config->on_session_reset(secure_tunnel->config->user_data);
 }
 
-static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct aws_iot_st_msg *st_msg) {
-    fprintf(stdout, "\ns_process_iot_st_msg() called\n");
-    /* TODO: Check stream_id, send reset? */
-
-    switch (st_msg->type) {
+static void s_aws_secure_tunnel_connected_on_message_received(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_message_view *message_view) {
+    switch (message_view->type) {
         case AWS_SECURE_TUNNEL_MT_DATA:
-            s_handle_data(secure_tunnel, st_msg);
-            // secure_tunnel->options->on_data_receive(&st_msg->payload, secure_tunnel->options->user_data);
+            secure_tunnel->config->on_message_received(message_view, secure_tunnel);
             break;
         case AWS_SECURE_TUNNEL_MT_STREAM_START:
-            s_handle_stream_start(secure_tunnel, st_msg);
+            s_aws_secure_tunnel_on_stream_start_received(secure_tunnel, message_view);
             break;
         case AWS_SECURE_TUNNEL_MT_STREAM_RESET:
-            s_handle_stream_reset(secure_tunnel, st_msg);
+            s_aws_secure_tunnel_on_stream_reset_received(secure_tunnel, message_view);
             break;
         case AWS_SECURE_TUNNEL_MT_SESSION_RESET:
-            s_handle_session_reset(secure_tunnel);
+            s_aws_secure_tunnel_on_session_reset_received(secure_tunnel);
             break;
             /* Steve todo implement processing of new message types */
         case AWS_SECURE_TUNNEL_MT_SERVICE_IDS:
@@ -257,11 +191,11 @@ static void s_process_iot_st_msg(struct aws_secure_tunnel *secure_tunnel, struct
         case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
         case AWS_SECURE_TUNNEL_MT_UNKNOWN:
         default:
-            if (!st_msg->ignorable) {
+            if (!message_view->ignorable) {
                 AWS_LOGF_WARN(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                    "Encountered an unknown but un-ignorable message. type=%d",
-                    st_msg->type);
+                    "Encountered an unknown but un-ignorable message. type=%s",
+                    aws_secure_tunnel_operation_type_to_c_string(message_view->type));
             }
             break;
     }
@@ -272,9 +206,11 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
     struct aws_byte_cursor cursor = aws_byte_cursor_from_buf(received_data);
 
     uint16_t data_length = 0;
-    struct aws_byte_cursor tmp_cursor =
-        cursor; /* If there are at least two bytes for the data_length, but not enough      */
-                /* data for a complete secure tunnel frame, we don't want to move `cursor`. */
+    /*
+     * If there are at least two bytes for the data_length, but not enough data for a complete secure tunnel frame, we
+     * don't want to move `cursor`.
+     */
+    struct aws_byte_cursor tmp_cursor = cursor;
     while (aws_byte_cursor_read_be16(&tmp_cursor, &data_length) && tmp_cursor.len >= data_length) {
         cursor = tmp_cursor;
 
@@ -282,13 +218,10 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         aws_byte_cursor_advance(&cursor, data_length);
         tmp_cursor = cursor;
 
-        struct aws_iot_st_msg st_msg;
-        aws_iot_st_msg_deserialize_from_cursor(&st_msg, &st_frame, secure_tunnel->allocator);
-        s_process_iot_st_msg(secure_tunnel, &st_msg);
-
-        if (st_msg.type == AWS_SECURE_TUNNEL_MT_DATA) {
-            aws_byte_buf_clean_up(&st_msg.payload);
-        }
+        struct aws_secure_tunnel_message_view message_view;
+        AWS_ZERO_STRUCT(message_view);
+        aws_secure_tunnel_deserialize_message_from_cursor(
+            secure_tunnel, &message_view, &st_frame, &s_aws_secure_tunnel_connected_on_message_received);
     }
 
     if (cursor.ptr != received_data->buffer) {
@@ -495,8 +428,8 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     }
 
     /* Callback for user to indicate websocket has shutdown */
-    if (secure_tunnel->options->on_connection_shutdown != NULL) {
-        secure_tunnel->options->on_connection_shutdown(secure_tunnel->options->user_data);
+    if (secure_tunnel->config->on_connection_shutdown != NULL) {
+        secure_tunnel->config->on_connection_shutdown(secure_tunnel->config->user_data);
     }
 }
 
@@ -686,7 +619,7 @@ static int s_websocket_connect(struct aws_secure_tunnel *secure_tunnel) {
         path,
         sizeof(path),
         "/tunnel?local-proxy-mode=%s",
-        s_get_proxy_mode_string(secure_tunnel->options->local_proxy_mode));
+        s_get_proxy_mode_string(secure_tunnel->config->local_proxy_mode));
 
     struct aws_http_message *handshake = aws_http_message_new_websocket_handshake_request(
         secure_tunnel->allocator,
@@ -702,7 +635,7 @@ static int s_websocket_connect(struct aws_secure_tunnel *secure_tunnel) {
         },
         {
             .name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("access-token"),
-            .value = secure_tunnel->options->access_token,
+            .value = secure_tunnel->config->access_token,
         },
     };
 
@@ -747,9 +680,9 @@ static struct aws_http_message *s_new_handshake_request(const struct aws_secure_
         path,
         sizeof(path),
         "/tunnel?local-proxy-mode=%s",
-        s_get_proxy_mode_string(secure_tunnel->options->local_proxy_mode));
+        s_get_proxy_mode_string(secure_tunnel->config->local_proxy_mode));
     struct aws_http_message *handshake_request = aws_http_message_new_websocket_handshake_request(
-        secure_tunnel->allocator, aws_byte_cursor_from_c_str(path), secure_tunnel->options->endpoint_host);
+        secure_tunnel->allocator, aws_byte_cursor_from_c_str(path), secure_tunnel->config->endpoint_host);
 
     // Steve TODO implement client token connection here
 
@@ -760,7 +693,7 @@ static struct aws_http_message *s_new_handshake_request(const struct aws_secure_
         },
         {
             .name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("access-token"),
-            .value = secure_tunnel->options->access_token,
+            .value = secure_tunnel->config->access_token,
         },
     };
     for (size_t i = 0; i < AWS_ARRAY_SIZE(extra_headers); ++i) {
@@ -777,15 +710,15 @@ void init_websocket_client_connection_options(
 
     AWS_ZERO_STRUCT(*websocket_options);
     websocket_options->allocator = secure_tunnel->allocator;
-    websocket_options->bootstrap = secure_tunnel->options->bootstrap;
-    websocket_options->socket_options = secure_tunnel->options->socket_options;
+    websocket_options->bootstrap = secure_tunnel->config->bootstrap;
+    websocket_options->socket_options = secure_tunnel->config->socket_options;
     websocket_options->tls_options = &secure_tunnel->tls_con_opt;
-    websocket_options->host = secure_tunnel->options->endpoint_host;
+    websocket_options->host = secure_tunnel->config->endpoint_host;
     websocket_options->port = 443;
     websocket_options->handshake_request = s_new_handshake_request(secure_tunnel);
     websocket_options->initial_window_size = MAX_WEBSOCKET_PAYLOAD; /* TODO: followup */
     websocket_options->user_data = secure_tunnel;
-    websocket_options->proxy_options = secure_tunnel->options->http_proxy_options;
+    websocket_options->proxy_options = secure_tunnel->config->http_proxy_options;
     websocket_options->on_connection_setup = s_on_websocket_setup;
     websocket_options->on_connection_shutdown = s_on_websocket_shutdown;
     websocket_options->on_incoming_frame_begin = s_on_websocket_incoming_frame_begin;
@@ -1199,7 +1132,7 @@ error:
 }
 
 static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel->options->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Start can only be sent from src mode");
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
     }
@@ -1213,7 +1146,7 @@ static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure
 static int s_secure_tunneling_send_stream_start_v2(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *service_id_data) {
-    if (secure_tunnel->options->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Start can only be sent from src mode");
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
     }
@@ -1245,7 +1178,7 @@ static void s_secure_tunneling_on_send_data_complete_callback(
     (void)websocket;
     struct data_tunnel_pair *pair = user_data;
     struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)pair->secure_tunnel;
-    secure_tunnel->options->on_send_data_complete(error_code, pair->secure_tunnel->options->user_data);
+    secure_tunnel->config->on_send_data_complete(error_code, pair->secure_tunnel->config->user_data);
     aws_byte_buf_clean_up(&pair->buf);
     aws_mem_release(secure_tunnel->allocator, pair);
 }
@@ -1854,7 +1787,7 @@ static void s_secure_tunnel_submit_operation_task_fn(struct aws_task *task, void
      */
     struct aws_secure_tunnel *secure_tunnel = submit_operation_task->secure_tunnel;
     struct aws_secure_tunnel_operation *operation = submit_operation_task->operation;
-    if (!secure_tunnel->isConnected) {
+    if (secure_tunnel->current_state != AWS_STS_CONNECTED) {
         completion_error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_DISCONNECTION;
         goto error;
     }
@@ -1913,9 +1846,9 @@ static void s_secure_tunnel_final_destroy(struct aws_secure_tunnel *secure_tunne
 
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete = NULL;
     void *termination_complete_user_data = NULL;
-    if (secure_tunnel->options != NULL) {
+    if (secure_tunnel->config != NULL) {
         on_termination_complete = secure_tunnel->options->on_termination_complete;
-        termination_complete_user_data = secure_tunnel->options->user_data;
+        termination_complete_user_data = secure_tunnel->config->user_data;
     }
 
     aws_secure_tunnel_operational_state_clean_up(secure_tunnel);
@@ -1959,10 +1892,9 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
         goto error;
     }
     secure_tunnel->config->secure_tunnel = secure_tunnel;
-    // secure_tunnel->options = &secure_tunnel->config->options;
 
     /* all secure tunnel activity will take place on this event loop */
-    secure_tunnel->loop = aws_event_loop_group_get_next_loop(secure_tunnel->options->bootstrap->event_loop_group);
+    secure_tunnel->loop = aws_event_loop_group_get_next_loop(secure_tunnel->config->bootstrap->event_loop_group);
     if (secure_tunnel->loop == NULL) {
         goto error;
     }

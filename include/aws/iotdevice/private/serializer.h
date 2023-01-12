@@ -6,6 +6,8 @@
 #define AWS_IOTDEVICE_SERIALIZER_H
 
 #include <aws/iotdevice/iotdevice.h>
+#include <aws/iotdevice/private/secure_tunneling_impl.h>
+#include <aws/iotdevice/secure_tunneling.h>
 
 #include <aws/common/byte_buf.h>
 
@@ -88,6 +90,7 @@ enum aws_secure_tunnel_message_type {
 
 /**
  * A single IoT Secure Tunnel Message
+ * STEVE TODO remove this. replaced with aws_secure_tunnel_message_view
  */
 struct aws_iot_st_msg {
     enum aws_secure_tunnel_message_type type;
@@ -98,6 +101,10 @@ struct aws_iot_st_msg {
     uint32_t connection_id;
 };
 
+typedef void(aws_secure_tunnel_on_message_received_fn)(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_message_view *message_view);
+
 AWS_EXTERN_C_BEGIN
 
 AWS_IOTDEVICE_API
@@ -107,10 +114,11 @@ int aws_iot_st_msg_serialize_from_struct(
     struct aws_iot_st_msg message);
 
 AWS_IOTDEVICE_API
-int aws_iot_st_msg_deserialize_from_cursor(
-    struct aws_iot_st_msg *message,
+int aws_secure_tunnel_deserialize_message_from_cursor(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_message_view *message,
     struct aws_byte_cursor *cursor,
-    struct aws_allocator *allocator);
+    aws_secure_tunnel_on_message_received_fn *on_message_received);
 
 AWS_IOTDEVICE_API
 const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type);

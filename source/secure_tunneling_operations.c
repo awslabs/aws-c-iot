@@ -177,6 +177,8 @@ int aws_secure_tunnel_message_storage_init(
 
     struct aws_secure_tunnel_message_view *storage_view = &message_storage->storage_view;
 
+    storage_view->type = message_options->type;
+    storage_view->ignorable = message_options->ignorable;
     storage_view->stream_id = message_options->stream_id;
 
     storage_view->service_id = message_options->service_id;
@@ -493,7 +495,6 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
     aws_http_proxy_config_destroy(storage->http_proxy_config);
     aws_string_destroy(storage->endpoint_host);
     aws_string_destroy(storage->access_token);
-    aws_string_destroy(storage->root_ca);
     aws_string_destroy(storage->service_id_1);
     aws_string_destroy(storage->service_id_2);
     aws_string_destroy(storage->service_id_3);
@@ -545,9 +546,6 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
         aws_http_proxy_options_init_from_config(&storage->http_proxy_options, storage->http_proxy_config);
     }
 
-    if (options->root_ca != NULL) {
-        storage->root_ca = aws_string_new_from_c_str(allocator, &options->root_ca);
-    }
     if (options->service_id_1 != NULL) {
         storage->service_id_1 = aws_string_new_from_c_str(allocator, options->service_id_1);
     }
@@ -559,6 +557,20 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     if (options->service_id_3 != NULL) {
         storage->service_id_3 = aws_string_new_from_c_str(allocator, options->service_id_3);
     }
+
+    storage->on_message_received = options->on_message_received;
+    storage->user_data = options->user_data;
+
+    /* STEVE TODO these can probably be deprecated/removed as client only supports destination mode */
+    storage->local_proxy_mode = options->local_proxy_mode;
+    storage->on_connection_complete = options->on_connection_complete;
+    storage->on_connection_shutdown = options->on_connection_shutdown;
+    storage->on_send_data_complete = options->on_send_data_complete;
+    storage->on_data_receive = options->on_data_receive;
+    storage->on_stream_start = options->on_stream_start;
+    storage->on_stream_reset = options->on_stream_reset;
+    storage->on_session_reset = options->on_session_reset;
+    storage->on_termination_complete = options->on_termination_complete;
 
     return storage;
 
