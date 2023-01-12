@@ -124,43 +124,6 @@ typedef void(aws_secure_tunnel_transform_websocket_handshake_fn)(
     aws_secure_tunnel_transform_websocket_handshake_complete_fn *complete_fn,
     void *complete_ctx);
 
-/*
- * Secure tunnel configuration
- */
-struct aws_secure_tunnel_options_storage {
-
-    // struct aws_secure_tunnel_options options;
-    struct aws_allocator *allocator;
-    struct aws_secure_tunnel *secure_tunnel;
-
-    /* backup */
-
-    struct aws_client_bootstrap *bootstrap;
-    struct aws_socket_options socket_options;
-    struct aws_http_proxy_options http_proxy_options;
-    struct aws_http_proxy_config *http_proxy_config;
-    struct aws_byte_cursor access_token;
-
-    aws_secure_tunnel_transform_websocket_handshake_fn *websocket_handshake_transform;
-    void *websocket_handshake_transform_user_data;
-    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
-
-    struct aws_string *endpoint_host;
-    struct aws_string *root_ca;
-
-    /* Store contents of all aws_byte_cursors within single buffer */
-    struct aws_byte_buf cursor_storage;
-
-    /* Stream related info */
-    int32_t stream_id;
-    struct aws_string *service_id_1;
-    int32_t service_id_1_stream_id;
-    struct aws_string *service_id_2;
-    int32_t service_id_2_stream_id;
-    struct aws_string *service_id_3;
-    int32_t service_id_3_stream_id;
-};
-
 struct data_tunnel_pair {
     struct aws_byte_buf buf;
     struct aws_byte_cursor cur;

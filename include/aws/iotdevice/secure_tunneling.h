@@ -23,22 +23,13 @@ struct aws_http_proxy_options;
  */
 
 /**
- * Read-only snapshot of Data Message
+ * Read-only snapshot of secure tunnel Message
  */
 
-struct aws_secure_tunnel_message_data_view {
+struct aws_secure_tunnel_message_view {
     int32_t stream_id;
     struct aws_byte_cursor service_id;
     struct aws_byte_cursor payload;
-};
-
-/**
- * Read-only snapshot of Stream Message
- * Used with Stream Start and Stream Reset message types
- */
-struct aws_secure_tunnel_message_stream_view {
-    int32_t stream_id;
-    const struct aws_byte_cursor *service_id;
 };
 
 /* Callbacks */
@@ -46,11 +37,8 @@ typedef void(aws_secure_tunneling_on_connection_complete_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_data_receive_fn)(const struct aws_byte_buf *data, void *user_data);
-typedef void(aws_secure_tunneling_on_data_receive_v3_fn)(
-    const struct aws_byte_cursor service_id,
-    int connection_id,
-    const struct aws_byte_buf *data,
-    void *user_data);
+typedef void(
+    aws_secure_tunneling_on_data_receive_new_fn)(const struct aws_secure_tunnel_message_view *message, void *user_data);
 typedef void(aws_secure_tunneling_on_stream_start_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_stream_reset_fn)(void *user_data);
 typedef void(aws_secure_tunneling_on_session_reset_fn)(void *user_data);
@@ -64,6 +52,7 @@ struct aws_secure_tunnel_options {
 
     struct aws_byte_cursor access_token;
     struct aws_byte_cursor endpoint_host;
+    /* Steve TODO we only support destination mode so this can be removed outside of testing */
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
     const char *root_ca;
     const char *service_id_1;
@@ -74,7 +63,7 @@ struct aws_secure_tunnel_options {
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_data_receive_fn *on_data_receive;
-    aws_secure_tunneling_on_data_receive_v3_fn *on_data_receive_v3;
+    aws_secure_tunneling_on_data_receive_new_fn *on_data_receive_new;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
@@ -94,7 +83,7 @@ typedef void(aws_secure_tunnel_disconnect_completion_fn)(int error_code, void *c
 struct aws_secure_tunnel_disconnect_completion_options {
     aws_secure_tunnel_disconnect_completion_fn *completion_callback;
     void *completion_user_data;
-}
+};
 
 /* deprecated: "_config" is renamed "_options" for consistency with similar code in the aws-c libraries */
 #define aws_secure_tunneling_connection_config aws_secure_tunnel_options
@@ -106,69 +95,89 @@ struct aws_secure_tunnel_options_storage;
 
 AWS_EXTERN_C_BEGIN
 
+/**
+ * Creates a new secure tunnel
+ *
+ * @param options secure tunnel configuration
+ * @return a new secure tunnel or NULL
+ */
 AWS_IOTDEVICE_API
 struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_options *options);
 
+/**
+ * Acquires a reference to a secure tunnel
+ *
+ * @param secure_tunnel secure tunnel to acquire a reference to. May be NULL
+ * @return what was passed in as the secure tunnel (a client or NULL)
+ */
 AWS_IOTDEVICE_API
 struct aws_secure_tunnel *aws_secure_tunnel_acquire(struct aws_secure_tunnel *secure_tunnel);
 
-AWS_IOTDEVICE_API
-int aws_secure_tunnel_get_connection_error_code(struct aws_secure_tunnel *secure_tunnel);
-
+/**
+ * Release a reference to a secure tunnel. When the secure tunnel ref count drops to zero, the secure tunnel
+ * will automatically trigger a stop and once the stop completes, the secure tunnel will delete itself.
+ *
+ * @param secure_tunnel secure tunnel to release a reference to. May be NULL
+ * @return NULL
+ */
 AWS_IOTDEVICE_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 
+/* TODO STEVE NEW replace aws_secure_tunnel_connect and put it in a state where it wants to be connected */
+/**
+ * Asynchronous notify to the secure tunnel that you want it to attempt to connect.
+ * The secure tunnel will attempt to stay connected.
+ *
+ * @param secure_tunnel secure tunnel to start
+ * @return success/failure in the synchronous logic that kicks off the start process
+ */
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_start(struct aws_secure_tunnel *secure_tunnel);
+
+/* TODO STEVE NEW replace aws_secure_tunnel_close and put it in a state where it wants to be disconnected */
+/**
+ * Asynchronous notify to the secure tunnel that you want it to transition to the stopped state. When the
+ * secure tunnel reaches the stopped state, all session state is erased.
+ *
+ * @param secure_tunnel secure tunnel to stop
+ * @return success/failure in the synchronous logic that kicks off the start process
+ */
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_stop(struct aws_secure_tunnel *secure_tunnel);
+
+/* TODO STEVE depricate in favor of aws_secure_tunnel_start */
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_connect(struct aws_secure_tunnel *secure_tunnel);
 
+/* TODO STEVE depricate in favor of aws_secure_tunnel_stop */
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_close(struct aws_secure_tunnel *secure_tunnel);
 
+/* TODO STEVE depricate/replace with new API below */
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
 
+/**
+ * Queues a message operation in a secure tunnel
+ *
+ * @param secure_tunnel secure tunnel to queue a message for
+ * @param message_options configuration options for the message operation
+ * @return success/failure in the synchronous logic that kicks off the message operation
+ */
 AWS_IOTDEVICE_API
-int aws_secure_tunnel_send_data_v2(
+int aws_secure_tunnel_send_message_new(
     struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_secure_tunnel_message_data_view *data_options);
+    const struct aws_secure_tunnel_message_view *message_options);
 
+/* TODO STEVE depricate/remove. Destination device does not send a stream start. Keep only for internal testing */
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
 
+/* TODO STEVE see above. Remove or leave solely for testing purposes */
 AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_start_v2(
+int aws_secure_tunnel_stream_start_new(
     struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_byte_cursor *service_id_data);
-
-AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel);
-
-/**
- * Raises exception and returns AWS_OP_ERR if options are missing required parameters.
- */
-AWS_IOTDEVICE_API
-int aws_secure_tunnel_options_validate(const struct aws_secure_tunnel_options *options);
-
-/**
- * Create persistent storage for aws_secure_tunnel_options.
- * Makes a deep copy of (or acquires reference to) any data referenced by options,
- */
-AWS_IOTDEVICE_API
-struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
-    const struct aws_secure_tunnel_options *options);
-
-/**
- * Destroy options storage, and release any references held.
- */
-AWS_IOTDEVICE_API
-void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_storage *storage);
-
-/**
- * Return pointer to options struct stored within.
- */
-AWS_IOTDEVICE_API
-const struct aws_secure_tunnel_options *aws_secure_tunnel_options_storage_get(
-    const struct aws_secure_tunnel_options_storage *storage);
+    const struct aws_secure_tunnel_message_view *message_options);
 
 /* Making this exposed public to verify testing in the sdk layer */
 AWS_IOTDEVICE_API

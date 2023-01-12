@@ -11,7 +11,6 @@
 #include <aws/common/ref_count.h>
 #include <aws/iotdevice/private/serializer.h>
 #include <aws/iotdevice/secure_tunneling.h>
-#include <aws/iotdevice/secure_tunneling_message_storage.h>
 
 /*********************************************************************************************************************
  * Operations
@@ -26,6 +25,17 @@ enum aws_secure_tunnel_operation_type {
     AWS_STOT_DATA,
     AWS_STOT_STREAM_RESET,
     AWS_STOT_STREAM_START
+};
+
+struct aws_secure_tunnel_message_storage {
+    struct aws_allocator *allocator;
+    struct aws_secure_tunnel_message_view storage_view;
+
+    int32_t stream_id;
+    struct aws_byte_cursor service_id;
+    struct aws_byte_cursor payload;
+
+    struct aws_byte_buf storage;
 };
 
 /* Basic vtable for all secure tunnel operations.  Implementations are per-message type */
@@ -62,29 +72,64 @@ struct aws_secure_tunnel_operation {
     void *impl;
 };
 
-struct aws_secure_tunnel_operation_data {
+struct aws_secure_tunnel_operation_message {
     struct aws_secure_tunnel_operation base;
     struct aws_allocator *allocator;
 
-    struct aws_secure_tunnel_message_data_storage options_storage;
+    struct aws_secure_tunnel_message_storage options_storage;
 };
 
 struct aws_secure_tunnel_operation_disconnect {
     struct aws_secure_tunnel_operation base;
     struct aws_allocator *allocator;
 
-    struct aws_secure_tunnel_packet_disconnect_storage options_storage;
+    /* STEVE TODO disconnect shouldn't be necessary */
+    // struct aws_secure_tunnel_packet_disconnect_storage options_storage;
 
     struct aws_secure_tunnel_disconnect_completion_options external_completion_options;
     struct aws_secure_tunnel_disconnect_completion_options internal_completion_options;
-}
+};
+
+/*
+ * Secure tunnel configuration
+ */
+struct aws_secure_tunnel_options_storage {
+
+    // struct aws_secure_tunnel_options options;
+    struct aws_allocator *allocator;
+    struct aws_secure_tunnel *secure_tunnel;
+
+    /* backup */
+
+    struct aws_client_bootstrap *bootstrap;
+    struct aws_socket_options socket_options;
+    struct aws_http_proxy_options http_proxy_options;
+    struct aws_http_proxy_config *http_proxy_config;
+    struct aws_string *access_token;
+
+    aws_secure_tunnel_transform_websocket_handshake_fn *websocket_handshake_transform;
+    void *websocket_handshake_transform_user_data;
+    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
+
+    struct aws_string *endpoint_host;
+    struct aws_string *root_ca;
+
+    /* Stream related info */
+    int32_t stream_id;
+    struct aws_string *service_id_1;
+    int32_t service_id_1_stream_id;
+    struct aws_string *service_id_2;
+    int32_t service_id_2_stream_id;
+    struct aws_string *service_id_3;
+    int32_t service_id_3_stream_id;
+};
 
 AWS_EXTERN_C_BEGIN
 
-    /* Operation Base */
+/* Operation Base */
 
-    AWS_IOTDEVICE_API struct aws_secure_tunnel_operation *
-    aws_secure_tunnel_operation_acquire(struct aws_secure_tunnel_operation *operation);
+AWS_IOTDEVICE_API struct aws_secure_tunnel_operation *aws_secure_tunnel_operation_acquire(
+    struct aws_secure_tunnel_operation *operation);
 
 AWS_IOTDEVICE_API struct aws_secure_tunnel_operation *aws_secure_tunnel_operation_release(
     struct aws_secure_tunnel_operation *operation);
@@ -104,18 +149,62 @@ AWS_IOTDEVICE_API int32_t
 AWS_IOTDEVICE_API int32_t *aws_secure_tunnel_operation_get_stream_id_address(
     const struct aws_secure_tunnel_operation *operation);
 
-/* Data */
+/* Message */
 
 AWS_IOTDEVICE_API
-void aws_secure_tunnel_message_data_view_log(
-    const struct aws_secure_tunnel_message_data_view *data_view,
+int aws_secure_tunnel_message_view_validate(const struct aws_secure_tunnel_message_view *message_view);
+
+AWS_IOTDEVICE_API
+void aws_secure_tunnel_message_view_log(
+    const struct aws_secure_tunnel_message_view *message_view,
     enum aws_log_level level);
 
 AWS_IOTDEVICE_API
-struct aws_secure_tunnel_operation_data *aws_secure_tunnel_operation_data_new(
+int aws_secure_tunnel_message_storage_init(
+    struct aws_secure_tunnel_message_storage *message_storage,
+    struct aws_allocator *allocator,
+    const struct aws_secure_tunnel_message_view *message_options);
+
+AWS_IOTDEVICE_API
+void aws_secure_tunnel_message_storage_clean_up(struct aws_secure_tunnel_message_storage *message_storage);
+
+AWS_IOTDEVICE_API
+struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_new(
     struct aws_allocator *allocator,
     const struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_secure_tunnel_message_data_view *data_options);
+    const struct aws_secure_tunnel_message_view *message_options);
+
+/* Secure Tunnel Storage Options */
+
+/**
+ * Raises exception and returns AWS_OP_ERR if options are missing required parameters.
+ */
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_options_validate(const struct aws_secure_tunnel_options *options);
+
+AWS_IOTDEVICE_API
+void aws_secure_tunnel_options_storage_log(
+    const struct aws_secure_tunnel_options_storage *options_storage,
+    enum aws_log_level level);
+
+/**
+ * Destroy options storage, and release any references held.
+ */
+AWS_IOTDEVICE_API
+void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_storage *storage);
+
+/**
+ * Create persistent storage for aws_secure_tunnel_options.
+ * Makes a deep copy of (or acquires reference to) any data referenced by options,
+ */
+AWS_IOTDEVICE_API
+struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
+    const struct aws_secure_tunnel_options *options);
+
+AWS_IOTDEVICE_API
+void aws_secure_tunnel_options_storage_log(
+    const struct aws_secure_tunnel_options_storage *options_storage,
+    enum aws_log_level level);
 
 AWS_IOTDEVICE_API
 const char *aws_secure_tunnel_operation_type_to_c_string(enum aws_secure_tunnel_operation_type operation_type);
