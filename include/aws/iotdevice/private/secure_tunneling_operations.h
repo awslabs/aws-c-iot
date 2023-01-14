@@ -81,15 +81,9 @@ struct aws_secure_tunnel_operation_message {
     struct aws_secure_tunnel_message_storage options_storage;
 };
 
-struct aws_secure_tunnel_operation_disconnect {
+struct aws_secure_tunnel_operation_pingreq {
     struct aws_secure_tunnel_operation base;
     struct aws_allocator *allocator;
-
-    /* STEVE TODO disconnect shouldn't be necessary */
-    // struct aws_secure_tunnel_packet_disconnect_storage options_storage;
-
-    struct aws_secure_tunnel_disconnect_completion_options external_completion_options;
-    struct aws_secure_tunnel_disconnect_completion_options internal_completion_options;
 };
 
 /*
@@ -190,6 +184,11 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
     struct aws_allocator *allocator,
     const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
+
+/* Ping */
+
+AWS_IOTDEVICE_API
+struct aws_secure_tunnel_operation_pingreq *aws_secure_tunnel_operation_pingreq_new(struct aws_allocator *allocator);
 
 /* Secure Tunnel Storage Options */
 

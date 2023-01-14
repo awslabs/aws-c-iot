@@ -158,6 +158,7 @@ struct aws_secure_tunnel_vtable {
     int (*client_bootstrap_new_socket_channel_fn)(struct aws_socket_channel_bootstrap_options *options);
 
     int (*connect)(struct aws_secure_tunnel *secure_tunnel);
+    int (*close)(struct aws_secure_tunnel *secure_tunnel);
     int (*send_data)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
     int (*send_data_v2)(
         struct aws_secure_tunnel *secure_tunnel,
@@ -165,7 +166,22 @@ struct aws_secure_tunnel_vtable {
     int (*send_stream_start)(struct aws_secure_tunnel *secure_tunnel);
     int (*send_stream_start_v2)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *service_id_data);
     int (*send_stream_reset)(struct aws_secure_tunnel *secure_tunnel);
-    int (*close)(struct aws_secure_tunnel *secure_tunnel);
+
+    /* aws_channel_acquire_message_from_pool */
+    struct aws_io_message *(*aws_channel_acquire_message_from_pool_fn)(
+        struct aws_channel *channel,
+        enum aws_io_message_type message_type,
+        size_t size_hint,
+        void *user_data);
+
+    /* aws_channel_slot_send_message */
+    int (*aws_channel_slot_send_message_fn)(
+        struct aws_channel_slot *slot,
+        struct aws_io_message *message,
+        enum aws_channel_direction dir,
+        void *user_data);
+
+    void *vtable_user_data;
 };
 
 struct aws_websocket_client_connection_options;
@@ -181,14 +197,57 @@ struct aws_websocket_vtable {
 struct aws_secure_tunnel {
     /* Static settings */
     struct aws_allocator *allocator;
+    struct aws_ref_count ref_count;
+
+    struct aws_secure_tunnel_vtable *vtable;
+
+    /*
+     * Secure tunnel configuration
+     */
     struct aws_secure_tunnel_options_storage *config;
+
     struct aws_tls_ctx *tls_ctx;
     struct aws_tls_connection_options tls_con_opt;
 
-    struct aws_secure_tunnel_vtable vtable;
-    struct aws_websocket_vtable websocket_vtable;
+    /*
+     * The recurrent task that runs all secure tunnel logic outside of external event callbacks.  Bound to the secure
+     * tunnel's event loop.
+     */
+    struct aws_task service_task;
 
-    struct aws_ref_count ref_count;
+    /*
+     * Tracks when the secure tunnel's service task is next schedule to run.  Is zero if the task is not scheduled to
+     * run or we are in the middle of a service (so technically not scheduled too).
+     */
+    uint64_t next_service_task_run_time;
+
+    /*
+     * True if the secure tunnel's service task is running.  Used to skip service task reevaluation due to state changes
+     * while running the service task.  Reevaluation will occur at the very end of the service.
+     */
+    bool in_service;
+
+    /*
+     * Event loop all the secure tunnel's tasks will be pinned to, ensuring serialization and
+     * concurrency safety.
+     */
+    struct aws_event_loop *loop;
+
+    /* Channel handler information */ /* STEVE TODO is this necessary for a websocket? */
+    struct aws_channel_handler handler;
+    struct aws_channel_slot *slot;
+
+    /*
+     * What state is the secure tunnel working towards?
+     */
+    enum aws_secure_tunnel_state desired_state;
+
+    /*
+     * What is the secure tunnel's current state?
+     */
+    enum aws_secure_tunnel_state current_state;
+
+    struct aws_websocket_vtable websocket_vtable;
 
     /* Used to check connection state */
     bool isConnected;
@@ -207,27 +266,7 @@ struct aws_secure_tunnel {
      */
     struct aws_http_message *handshake_request;
 
-    /*
-     * Event loop all the secure tunnel's tasks will be pinned to, ensuring serialization and
-     * concurrency safety.
-     */
-    struct aws_event_loop *loop;
-
-    /* Channel handler information */
-    struct aws_channel_handler handler;
-    struct aws_channel_slot *slot;
-
     /* Dynamic data */
-
-    /*
-     * What state is the secure tunnel working towards?
-     */
-    enum aws_secure_tunnel_state desired_state;
-
-    /*
-     * What is the secure tunnel's current state?
-     */
-    enum aws_secure_tunnel_state current_state;
 
     struct aws_websocket *websocket;
 
@@ -236,18 +275,6 @@ struct aws_secure_tunnel {
 
     /* Error code of last connection attempt */
     int connection_error_code;
-
-    /*
-     * The recurrent task that runs all secure tunnel's logic outside of external event callbacks.  Bound to the secure
-     * tunnel's event loop.
-     */
-    struct aws_task service_task;
-
-    /*
-     * Tracks when the secure tunnel's service task is next schedule to run.  Is zero if the task is not scheduled to
-     * run or we are in the middle of a service (so technically not scheduled too).
-     */
-    uint64_t next_service_task_run_time;
 
     /*
      * When should the secure tunnel next attempt to reconnect?  Only used by PENDING_RECONNECT state.
@@ -265,12 +292,6 @@ struct aws_secure_tunnel {
      * SECURE_TUNNEL_CONNECT state.
      */
     uint64_t next_secure_tunnel_websocket_connect_timeout_time;
-
-    /*
-     * True if the secure tunnel's service task is running.  Used to skip service task reevaluation due to state changes
-     * while running the service task.  Reevaluation will occur at the very end of the service.
-     */
-    bool in_service;
 
     struct aws_linked_list queued_operations;
     struct aws_linked_list write_completion_operations;

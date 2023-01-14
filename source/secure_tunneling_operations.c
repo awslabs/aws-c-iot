@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/common/logging.h>
 #include <aws/common/ref_count.h>
 #include <aws/common/string.h>
 #include <aws/iotdevice/private/secure_tunneling_impl.h>
@@ -11,6 +12,7 @@
 #include <inttypes.h>
 
 #define MAX_PAYLOAD_SIZE 64512
+#define INVALID_STREAM_ID 0
 /*********************************************************************************************************************
  * Operation base
  ********************************************************************************************************************/
@@ -230,6 +232,7 @@ static void s_aws_secure_tunnel_operation_message_set_stream_id(
                 (void *)message_storage,
                 aws_string_c_str(service_id));
             /* STEVE TODO should we throw something or just log the error here? */
+            stream_id = INVALID_STREAM_ID;
         }
         aws_string_destroy(service_id);
     } else {
@@ -271,7 +274,7 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
     AWS_PRECONDITION(allocator != NULL);
     AWS_PRECONDITION(message_options != NULL);
 
-    if (aws_secure_tunnel_message_message_view_validate(message_options)) {
+    if (aws_secure_tunnel_message_view_validate(message_options)) {
         return NULL;
     }
 
@@ -286,7 +289,7 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
     aws_ref_count_init(&message_op->base.ref_count, message_op, s_destroy_operation_message);
     message_op->base.impl = message_op;
 
-    if (aws_secure_tunnel_message_message_storage_init(&message_op->options_storage, allocator, message_options)) {
+    if (aws_secure_tunnel_message_storage_init(&message_op->options_storage, allocator, message_options)) {
         goto error;
     }
 
@@ -299,6 +302,35 @@ error:
     aws_secure_tunnel_operation_release(&message_op->base);
 
     return NULL;
+}
+
+/*********************************************************************************************************************
+ * Pingreq
+ ********************************************************************************************************************/
+
+static void s_destroy_operation_pingreq(void *object) {
+    if (object == NULL) {
+        return;
+    }
+
+    struct aws_secure_tunnel_operation_pingreq *pingreq_op = object;
+    aws_mem_release(pingreq_op->allocator, pingreq_op);
+}
+
+struct aws_secure_tunnel_operation_pingreq *aws_secure_tunnel_operation_pingreq_new(struct aws_allocator *allocator) {
+    struct aws_secure_tunnel_operation_pingreq *pingreq_op =
+        aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_operation_pingreq));
+    if (pingreq_op == NULL) {
+        return NULL;
+    }
+
+    pingreq_op->allocator = allocator;
+    pingreq_op->base.vtable = &s_empty_operation_vtable;
+    pingreq_op->base.operation_type = AWS_STOT_PING;
+    aws_ref_count_init(&pingreq_op->base.ref_count, pingreq_op, s_destroy_operation_pingreq);
+    pingreq_op->base.impl = pingreq_op;
+
+    return pingreq_op;
 }
 
 /*********************************************************************************************************************

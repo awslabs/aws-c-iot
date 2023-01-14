@@ -11,13 +11,65 @@
 
 #define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
 
-/* STEVE TODO remove or move to private. We only support Destination Mode */
-enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
-
 struct aws_secure_tunnel;
 struct aws_websocket;
 struct aws_websocket_incoming_frame;
 struct aws_http_proxy_options;
+
+/* STEVE TODO remove or move to private. We only support Destination Mode */
+enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
+
+/**
+ * Type of IoT Secure Tunnel message.
+ * Enum values match IoT Secure Tunneling Local Proxy V3 Websocket Protocol Guide values.
+ *
+ * https://github.com/aws-samples/aws-iot-securetunneling-localproxy/blob/main/V3WebSocketProtocolGuide.md
+ */
+enum aws_secure_tunnel_message_type {
+    AWS_SECURE_TUNNEL_MT_UNKNOWN = 0,
+
+    /**
+     * Data messages carry a payload with a sequence of bytes to write to the the active data stream
+     */
+    AWS_SECURE_TUNNEL_MT_DATA = 1,
+
+    /**
+     * StreamStart is the first message sent to start and establish a new and active data stream. This should only be
+     * sent from a Source to a Destination.
+     */
+    AWS_SECURE_TUNNEL_MT_STREAM_START = 2,
+
+    /**
+     * StreamReset messages convey that the data stream has ended, either in error, or closed intentionally for the
+     * tunnel peer. It is also sent to the source tunnel peer if an attempt to establish a new data stream fails on the
+     * destination side.
+     */
+    AWS_SECURE_TUNNEL_MT_STREAM_RESET = 3,
+
+    /**
+     * SessionReset messages can only originate from Secure Tunneling service if an internal data transmission error is
+     * detected. This will result in all active streams being closed.
+     */
+    AWS_SECURE_TUNNEL_MT_SESSION_RESET = 4,
+
+    /**
+     * ServiceIDs messages can only originate from the Secure Tunneling service and carry a list of unique service IDs
+     * used when opening a tunnel with services.
+     */
+    AWS_SECURE_TUNNEL_MT_SERVICE_IDS = 5,
+
+    /**
+     * ConnectionStart is the message sent to start and establish a new and active connection when the stream has been
+     * established and there's one active connection in the stream.
+     */
+    AWS_SECURE_TUNNEL_MT_CONNECTION_START = 6,
+
+    /**
+     * ConnectionReset messages convey that the connection has ended, either in error, or closed intentionally for the
+     * tunnel peer.
+     */
+    AWS_SECURE_TUNNEL_MT_CONNECTION_RESET = 7
+};
 
 /**
  * Read-only snapshot of a Secure Tunnel Message
@@ -135,11 +187,6 @@ struct aws_secure_tunnel_disconnect_completion_options {
 /* deprecated: "_config" is renamed "_options" for consistency with similar code in the aws-c libraries */
 #define aws_secure_tunneling_connection_config aws_secure_tunnel_options
 
-/**
- * Persistent storage for aws_secure_tunnel_options.
- */
-struct aws_secure_tunnel_options_storage;
-
 AWS_EXTERN_C_BEGIN
 
 /**
@@ -200,7 +247,7 @@ int aws_secure_tunnel_stop(struct aws_secure_tunnel *secure_tunnel);
  * @return success/failure in the synchronous logic that kicks off the message operation
  */
 AWS_IOTDEVICE_API
-int aws_secure_tunnel_send_message_new(
+int aws_secure_tunnel_send_message(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 
