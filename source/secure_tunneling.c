@@ -1140,14 +1140,14 @@ bool secure_tunneling_send_data_call(struct aws_websocket *websocket, struct aws
 static void s_init_websocket_send_frame_options(
     struct aws_websocket_send_frame_options *frame_options,
     struct data_tunnel_pair *pair) {
+
+    AWS_ZERO_STRUCT(*frame_options);
     frame_options->payload_length = pair->buf.len + PAYLOAD_BYTE_LENGTH_PREFIX;
     frame_options->user_data = pair;
     frame_options->stream_outgoing_payload = secure_tunneling_send_data_call;
     frame_options->on_complete = s_secure_tunneling_on_send_data_complete_callback;
     frame_options->opcode = AWS_WEBSOCKET_OPCODE_BINARY;
     frame_options->fin = true;
-    frame_options->high_priority = false;
-    AWS_ZERO_STRUCT(frame_options->rsv);
 }
 
 static int s_init_data_tunnel_pair(

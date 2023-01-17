@@ -1292,7 +1292,7 @@ void aws_iotdevice_defender_config_register_number_list_metric(
     const struct aws_byte_cursor *metric_name,
     aws_iotdevice_defender_get_number_list_fn *supplier,
     void *userdata) {
-    AWS_PRECONDITION(task_config != NULL)
+    AWS_PRECONDITION(task_config != NULL);
     AWS_PRECONDITION(metric_name != NULL);
     AWS_PRECONDITION(supplier != NULL);
 
