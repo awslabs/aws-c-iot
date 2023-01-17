@@ -35,7 +35,7 @@ struct aws_secure_tunnel_operation *aws_secure_tunnel_operation_release(struct a
     return NULL;
 }
 
-void *aws_secure_tunnel_operation_complete(
+void aws_secure_tunnel_operation_complete(
     struct aws_secure_tunnel_operation *operation,
     int error_code,
     const void *associated_view) {

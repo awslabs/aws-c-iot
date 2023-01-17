@@ -105,7 +105,6 @@ struct aws_secure_tunnel_options_storage {
 
     aws_secure_tunnel_transform_websocket_handshake_fn *websocket_handshake_transform;
     void *websocket_handshake_transform_user_data;
-    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
 
     struct aws_string *endpoint_host;
 
@@ -145,7 +144,7 @@ AWS_IOTDEVICE_API struct aws_secure_tunnel_operation *aws_secure_tunnel_operatio
 AWS_IOTDEVICE_API struct aws_secure_tunnel_operation *aws_secure_tunnel_operation_release(
     struct aws_secure_tunnel_operation *operation);
 
-AWS_IOTDEVICE_API void *aws_secure_tunnel_operation_complete(
+AWS_IOTDEVICE_API void aws_secure_tunnel_operation_complete(
     struct aws_secure_tunnel_operation *operation,
     int error_code,
     const void *associated_view);

@@ -11,6 +11,7 @@
 #include <aws/common/mutex.h>
 #include <aws/common/task_scheduler.h>
 #include <aws/http/proxy.h>
+#include <aws/http/websocket.h>
 #include <aws/io/socket.h>
 #include <aws/io/tls_channel_handler.h>
 
@@ -162,7 +163,7 @@ struct aws_secure_tunnel_vtable {
     int (*send_data)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
     int (*send_data_v2)(
         struct aws_secure_tunnel *secure_tunnel,
-        const struct aws_secure_tunnel_message_data_view *data_options);
+        const struct aws_secure_tunnel_message_view *message_options);
     int (*send_stream_start)(struct aws_secure_tunnel *secure_tunnel);
     int (*send_stream_start_v2)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *service_id_data);
     int (*send_stream_reset)(struct aws_secure_tunnel *secure_tunnel);
