@@ -6,6 +6,7 @@
 #include <aws/common/logging.h>
 #include <aws/common/ref_count.h>
 #include <aws/common/string.h>
+#include <aws/io/channel_bootstrap.h>
 #include <aws/iotdevice/private/secure_tunneling_impl.h>
 #include <aws/iotdevice/private/secure_tunneling_operations.h>
 #include <aws/iotdevice/secure_tunneling.h>
@@ -155,7 +156,7 @@ void aws_secure_tunnel_message_view_log(
         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
         "id=%p: aws_secure_tunnel_message_view payload set containing %zu bytes",
         (void *)message_view,
-        (int)message_view->payload.len);
+        message_view->payload.len);
 }
 
 static size_t s_aws_secure_tunnel_message_compute_storage_size(

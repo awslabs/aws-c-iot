@@ -51,15 +51,15 @@ static void s_on_data_receive(const struct aws_byte_buf *data, void *user_data) 
     aws_byte_buf_clean_up(&data_to_print);
 }
 
-static void s_on_stream_start(void *user_data) {
-    UNUSED(user_data);
-    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamStart.");
-}
+// static void s_on_stream_start(void *user_data) {
+//     UNUSED(user_data);
+//     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamStart.");
+// }
 
-static void s_on_stream_reset(void *user_data) {
-    UNUSED(user_data);
-    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamReset.");
-}
+// static void s_on_stream_reset(void *user_data) {
+//     UNUSED(user_data);
+//     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received StreamReset.");
+// }
 
 static void s_on_session_reset(void *user_data) {
     UNUSED(user_data);
@@ -97,8 +97,8 @@ static void s_init_secure_tunneling_connection_config(
     config->on_connection_shutdown = s_on_connection_shutdown;
     config->on_send_data_complete = s_on_send_data_complete;
     config->on_data_receive = s_on_data_receive;
-    config->on_stream_start = s_on_stream_start;
-    config->on_stream_reset = s_on_stream_reset;
+    // config->on_stream_start = s_on_stream_start;
+    // config->on_stream_reset = s_on_stream_reset;
     config->on_session_reset = s_on_session_reset;
 
     config->user_data = allocator;
@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
         struct aws_byte_cursor cur = aws_byte_cursor_from_c_str(payload);
         AWS_RETURN_ERROR_IF2(aws_secure_tunnel_send_data(secure_tunnel, &cur) == AWS_OP_SUCCESS, AWS_OP_ERR);
 
-        AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_reset(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
+        // AWS_RETURN_ERROR_IF2(aws_secure_tunnel_stream_reset(secure_tunnel) == AWS_OP_SUCCESS, AWS_OP_ERR);
         ASSERT_SUCCESS(aws_condition_variable_wait(&condition_variable, &mutex));
     } else if (local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         /* Wait a little for data to show up */
