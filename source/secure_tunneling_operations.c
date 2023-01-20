@@ -6,6 +6,7 @@
 #include <aws/common/logging.h>
 #include <aws/common/ref_count.h>
 #include <aws/common/string.h>
+#include <aws/common/uuid.h>
 #include <aws/io/channel_bootstrap.h>
 #include <aws/iotdevice/private/secure_tunneling_impl.h>
 #include <aws/iotdevice/private/secure_tunneling_operations.h>
@@ -447,30 +448,6 @@ void aws_secure_tunnel_options_storage_log(
         }
     }
 
-    if (options_storage->websocket_handshake_transform != NULL) {
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_options_storage enabling websockets",
-            (void *)options_storage);
-
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_options_storage websocket handshake transform user data set to (%p)",
-            (void *)options_storage,
-            options_storage->websocket_handshake_transform_user_data);
-    } else {
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_options_storage disabling websockets",
-            (void *)options_storage);
-    }
-
     bool is_service_id_used = false;
 
     if (options_storage->service_id_1 != NULL) {
@@ -528,6 +505,7 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
     aws_http_proxy_config_destroy(storage->http_proxy_config);
     aws_string_destroy(storage->endpoint_host);
     aws_string_destroy(storage->access_token);
+    aws_string_destroy(storage->client_token);
     aws_string_destroy(storage->service_id_1);
     aws_string_destroy(storage->service_id_2);
     aws_string_destroy(storage->service_id_3);
@@ -561,6 +539,31 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->access_token = aws_string_new_from_cursor(allocator, &options->access_token);
     if (storage->access_token == NULL) {
         goto error;
+    }
+
+    if (options->client_token.len > 0) {
+        storage->client_token = aws_string_new_from_cursor(allocator, &options->client_token);
+        if (storage->client_token == NULL) {
+            goto error;
+        }
+    } else {
+        struct aws_uuid uuid;
+        if (aws_uuid_init(&uuid)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "Failed to initiate an uuid struct: %s",
+                aws_error_str(aws_last_error()));
+            goto error;
+        }
+        char uuid_str[AWS_UUID_STR_LEN] = {0};
+        struct aws_byte_buf uuid_buf = aws_byte_buf_from_array(uuid_str, sizeof(uuid_str));
+        uuid_buf.len = 0;
+        if (aws_uuid_to_str(&uuid, &uuid_buf)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failed to stringify uuid: %s", aws_error_str(aws_last_error()));
+            goto error;
+        }
+        storage->client_token = aws_string_new_from_buf(allocator, &uuid_buf);
     }
 
     /* STEVE TODO can be removed except for testing */

@@ -42,7 +42,7 @@ static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE,
         "Secure Tunnel stream cannot be started while in Destination Mode."),
-        AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_BAD_SERVICE_ID,
         "Secure Tunnel stream start request with bad service id."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
@@ -68,7 +68,7 @@ static struct aws_error_info s_errors[] = {
         "Error while processing secure tunnel operational state."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_PROCESSING_FAILURE,
-        ""),
+        "Error while processing secure tunnel operational state."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_UNEXPECTED_HANGUP,
         "The connection was closed unexpectedly."),
@@ -104,8 +104,7 @@ static struct aws_log_subject_info_list s_logging_subjects_list = {
 static bool s_iotdevice_library_initialized = false;
 
 void aws_iotdevice_library_init(struct aws_allocator *allocator) {
-    AWS_PRECONDITION(aws_allocator_is_valid(allocator));
-    (void)(allocator); // ignore unused warning
+    (void)(allocator);
 
     if (!s_iotdevice_library_initialized) {
         aws_register_error_info(&s_error_list);

@@ -150,6 +150,12 @@ struct aws_secure_tunnel_options {
      */
     struct aws_byte_cursor access_token;
 
+    /**
+     * (Optional) Client Token used to re-establish a Secure Tunnel connection after the one-time use access token has
+     * been used. If one is not provided, it will automatically be generated and re-used on subsequent reconnects.
+     */
+    struct aws_byte_cursor client_token;
+
     const char *root_ca;
     const char *service_id_1;
     const char *service_id_2;

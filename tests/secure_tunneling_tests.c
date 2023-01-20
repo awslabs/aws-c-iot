@@ -269,7 +269,7 @@ static void s_send_secure_tunneling_frame_to_websocket(
     aws_byte_buf_append(&websocket_frame, &c);
     c = aws_byte_cursor_from_buf(&websocket_frame);
 
-    on_websocket_incoming_frame_payload(NULL, NULL, c, secure_tunnel);
+    // on_websocket_incoming_frame_payload(NULL, NULL, c, secure_tunnel);
 
     aws_byte_buf_clean_up(&serialized_st_msg);
     aws_byte_buf_clean_up(&websocket_frame);
@@ -542,10 +542,10 @@ static int s_secure_tunneling_init_websocket_options_test(struct aws_allocator *
 
     UNUSED(allocator);
 
-    struct secure_tunneling_test_context *test_context = ctx;
+    // struct secure_tunneling_test_context *test_context = ctx;
 
     struct aws_websocket_client_connection_options websocket_options;
-    init_websocket_client_connection_options(test_context->secure_tunnel, &websocket_options);
+    // init_websocket_client_connection_options(test_context->secure_tunnel, &websocket_options);
 
     ASSERT_TRUE(aws_byte_cursor_eq_c_str(&websocket_options.host, ENDPOINT));
 

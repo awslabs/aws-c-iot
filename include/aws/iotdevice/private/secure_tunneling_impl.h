@@ -41,24 +41,13 @@ enum aws_secure_tunnel_state {
      * This state is not interruptible by any means other than channel setup completion.
      *
      * Next States:
-     *    SECURE_TUNNEL_CONNECT - if the channel completes setup with no error and desired state is still CONNECTED
-     *    CHANNEL_SHUTDOWN - if the channel completes setup with no error, but desired state is not CONNECTED
+     *    CONNECTED - if WebSocket handshake is successful and desired state is still CONNECTED
+     *    CHANNEL_SHUTDOWN - On unsuccessful WebSocket Handshake or if the channel completes setup with no error, but
+     *      desired state is not CONNECTED
      *    PENDING_RECONNECT - if the channel fails to complete setup and desired state is still CONNECTED
      *    STOPPED - if the channel fails to complete setup and desired state is not CONNECTED
      */
     AWS_STS_CONNECTING,
-
-    /*
-     * The secure tunnel is attempting to connect through the AWS Secure Tunnel Service via a WebSocket handshake.
-     *
-     * Next States:
-     *    CONNECTED - if WebSocket handshake is successful and desired state is still CONNECTED
-     *    CHANNEL_SHUTDOWN - On send/encode errors, read/decode errors, unsuccessful WebSocket Handshake,
-     *       desired state is no longer CONNECTED
-     *    PENDING_RECONNECT - unexpected channel shutdown completion and desired state still CONNECTED
-     *    STOPPED - unexpected channel shutdown completion and desired state no longer CONNECTED
-     */
-    AWS_STS_SECURE_TUNNEL_CONNECT,
 
     /*
      * The secure tunnel is ready to perform user-requested operations.

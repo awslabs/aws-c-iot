@@ -102,9 +102,7 @@ struct aws_secure_tunnel_options_storage {
     struct aws_http_proxy_options http_proxy_options;
     struct aws_http_proxy_config *http_proxy_config;
     struct aws_string *access_token;
-
-    aws_secure_tunnel_transform_websocket_handshake_fn *websocket_handshake_transform;
-    void *websocket_handshake_transform_user_data;
+    struct aws_string *client_token;
 
     struct aws_string *endpoint_host;
 
