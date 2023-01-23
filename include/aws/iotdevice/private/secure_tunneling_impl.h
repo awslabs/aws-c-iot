@@ -53,8 +53,6 @@ enum aws_secure_tunnel_state {
      * The secure tunnel is ready to perform user-requested operations.
      *
      * Next States:
-     *    CHANNEL_SHUTDOWN - On send/encode errors, read/decode errors, WebSocket disconnect, desired state
-     *       no longer CONNECTED, PINGRESP timeout
      *    PENDING_RECONNECT - unexpected channel shutdown completion and desired state still CONNECTED
      *    STOPPED - unexpected channel shutdown completion and desired state no longer CONNECTED
      */
@@ -65,7 +63,6 @@ enum aws_secure_tunnel_state {
      * transmitting a STREAM RESET message to all open streams.
      *
      * Next States:
-     *    CHANNEL_SHUTDOWN - on successful (or unsuccessful) send of STREAM RESET messages
      *    PENDING_RECONNECT - unexpected channel shutdown completion and desired state still CONNECTED
      *    STOPPED - unexpected channel shutdown completion and desired state no longer CONNECTED
      */
@@ -147,8 +144,6 @@ struct aws_secure_tunnel_vtable {
     /* aws_client_bootstrap_new_socket_channel */
     int (*client_bootstrap_new_socket_channel_fn)(struct aws_socket_channel_bootstrap_options *options);
 
-    int (*connect)(struct aws_secure_tunnel *secure_tunnel);
-    int (*close)(struct aws_secure_tunnel *secure_tunnel);
     int (*send_data)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
     int (*send_data_v2)(
         struct aws_secure_tunnel *secure_tunnel,
@@ -276,6 +271,11 @@ struct aws_secure_tunnel {
      * the CONNECTED state.
      */
     uint64_t next_reconnect_delay_reset_time_ns;
+
+    /*
+     * How many consecutive reconnect failures have we experienced?
+     */
+    uint64_t reconnect_count;
 
     /*
      * When should we shut down the channel due to failure to receive a websocket handshake?  Only relevant during the

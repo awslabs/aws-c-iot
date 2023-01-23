@@ -48,7 +48,7 @@ struct aws_secure_tunnel_operation_vtable {
         const void *completion_view);
 
     /* Set the stream id of outgoing st_msg */
-    void (*aws_secure_tunnel_operation_set_stream_id_fn)(
+    int (*aws_secure_tunnel_operation_set_stream_id_fn)(
         struct aws_secure_tunnel_operation *operation,
         struct aws_secure_tunnel *secure_tunnel);
 

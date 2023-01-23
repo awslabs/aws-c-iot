@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
 
     /* Create a secure tunnel object and connect */
     struct aws_secure_tunnel *secure_tunnel = aws_secure_tunnel_new(&config);
-    aws_secure_tunnel_connect(secure_tunnel);
+    aws_secure_tunnel_start(secure_tunnel);
 
     /* wait here until the connection is done */
     aws_mutex_lock(&mutex);
@@ -183,7 +183,7 @@ int main(int argc, char **argv) {
     aws_thread_current_sleep((uint64_t)60 * 60 * 1000000000);
 
     /* clean up */
-    aws_secure_tunnel_close(secure_tunnel);
+    aws_secure_tunnel_stop(secure_tunnel);
     aws_secure_tunnel_release(secure_tunnel);
 
     aws_client_bootstrap_release(bootstrap);

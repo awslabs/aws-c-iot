@@ -2,6 +2,8 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0.
  */
+#include <aws/common/string.h>
+#include <aws/iotdevice/private/secure_tunneling_operations.h>
 #include <aws/iotdevice/private/serializer.h>
 
 /*****************************************************************************************************************
@@ -313,13 +315,17 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_secure_tunnel_message_view *message,
     struct aws_byte_cursor *cursor,
     aws_secure_tunnel_on_message_received_fn *on_message_received) {
+    printf("\n\naws_secure_tunnel_deserialize_message_from_cursor()\n\n");
     AWS_RETURN_ERROR_IF2(cursor->len < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     uint8_t wire_type;
     uint8_t field_number;
     struct aws_byte_buf payload_buf;
     struct aws_byte_buf service_id_buf;
+    struct aws_byte_buf available_service_id_buf;
+
     AWS_ZERO_STRUCT(payload_buf);
     AWS_ZERO_STRUCT(service_id_buf);
+    int service_ids_set = 0;
 
     while ((aws_byte_cursor_is_valid(cursor)) && (cursor->len > 0)) {
         // wire_type is only the first 3 bits, Zeroing out the first 5
@@ -357,29 +363,65 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
             case AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMINTED: {
                 uint32_t length = 0;
                 if (s_iot_st_decode_varint_uint32_t(cursor, &length)) {
-                    return AWS_OP_ERR;
+                    goto error;
                 }
 
                 switch (field_number) {
                     case AWS_SECURE_TUNNEL_FN_PAYLOAD:
-                        if (aws_byte_buf_init(&payload_buf, secure_tunnel->allocator, length)) {
-                            return AWS_OP_ERR;
-                        }
-                        if (s_aws_st_decode_lengthdelim(cursor, &payload_buf, length)) {
-                            goto cleanup;
+                        if (aws_byte_buf_init(&payload_buf, secure_tunnel->allocator, length) ||
+                            s_aws_st_decode_lengthdelim(cursor, &payload_buf, length)) {
+                            goto error;
                         }
                         aws_byte_cursor_advance(cursor, length);
                         message->payload = aws_byte_cursor_from_buf(&payload_buf);
                         break;
+
                     case AWS_SECURE_TUNNEL_FN_SERVICE_ID:
-                        if (aws_byte_buf_init(&service_id_buf, secure_tunnel->allocator, length)) {
-                            return AWS_OP_ERR;
-                        }
-                        if (s_aws_st_decode_lengthdelim(cursor, &service_id_buf, length)) {
-                            goto cleanup;
+                        if (aws_byte_buf_init(&service_id_buf, secure_tunnel->allocator, length) ||
+                            s_aws_st_decode_lengthdelim(cursor, &service_id_buf, length)) {
+                            goto error;
                         }
                         aws_byte_cursor_advance(cursor, length);
                         message->service_id = aws_byte_cursor_from_buf(&service_id_buf);
+                        break;
+
+                    case AWS_SECURE_TUNNEL_FN_AVAILABLE_SERVICE_IDS:
+                        AWS_ZERO_STRUCT(available_service_id_buf);
+                        if (aws_byte_buf_init(&available_service_id_buf, secure_tunnel->allocator, length) ||
+                            s_aws_st_decode_lengthdelim(cursor, &available_service_id_buf, length)) {
+                            goto error;
+                        }
+                        aws_byte_cursor_advance(cursor, length);
+                        switch (service_ids_set) {
+                            case 0:
+                                if (secure_tunnel->config->service_id_1) {
+                                    aws_string_destroy(secure_tunnel->config->service_id_1);
+                                }
+                                secure_tunnel->config->service_id_1 =
+                                    aws_string_new_from_buf(secure_tunnel->allocator, &available_service_id_buf);
+                                break;
+                            case 1:
+                                if (secure_tunnel->config->service_id_2) {
+                                    aws_string_destroy(secure_tunnel->config->service_id_2);
+                                }
+                                secure_tunnel->config->service_id_2 =
+                                    aws_string_new_from_buf(secure_tunnel->allocator, &available_service_id_buf);
+                                break;
+                            case 2:
+                                if (secure_tunnel->config->service_id_3) {
+                                    aws_string_destroy(secure_tunnel->config->service_id_3);
+                                }
+                                secure_tunnel->config->service_id_3 =
+                                    aws_string_new_from_buf(secure_tunnel->allocator, &available_service_id_buf);
+                                break;
+                            default:
+                                aws_byte_buf_clean_up(&available_service_id_buf);
+                                goto error;
+                                break;
+                        }
+
+                        aws_byte_buf_clean_up(&available_service_id_buf);
+                        service_ids_set++;
                         break;
                 }
             } break;
@@ -389,14 +431,17 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
             case AWS_SECURE_TUNNEL_PBWT_START_GROUP:
             case AWS_SECURE_TUNNEL_PBWT_END_GROUP:
             case AWS_SECURE_TUNNEL_PBWT_32_BIT:
-                return AWS_OP_ERR;
+                goto error;
                 break;
         }
     }
 
     on_message_received(secure_tunnel, message);
+    aws_byte_buf_clean_up(&payload_buf);
+    aws_byte_buf_clean_up(&service_id_buf);
+    return AWS_OP_SUCCESS;
 
-cleanup:
+error:
     aws_byte_buf_clean_up(&payload_buf);
     aws_byte_buf_clean_up(&service_id_buf);
     return AWS_OP_ERR;

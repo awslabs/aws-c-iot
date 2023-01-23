@@ -681,7 +681,7 @@ static int s_secure_tunneling_handle_send_data_public(struct aws_allocator *allo
     // test_context->secure_tunnel->options->local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE;
 
     /* Open the tunnel. */
-    int rc = aws_secure_tunnel_connect(test_context->secure_tunnel);
+    int rc = aws_secure_tunnel_start(test_context->secure_tunnel);
     ASSERT_INT_EQUALS(AWS_OP_SUCCESS, rc);
 
     size_t buf_sizes[] = {10, 100, 1000, AWS_IOT_ST_SPLIT_MESSAGE_SIZE + 1, 2 * AWS_IOT_ST_SPLIT_MESSAGE_SIZE + 1};
@@ -717,7 +717,7 @@ static int s_secure_tunneling_handle_send_data_public(struct aws_allocator *allo
     }
 
     /* Close the tunnel. */
-    aws_secure_tunnel_close(test_context->secure_tunnel);
+    aws_secure_tunnel_stop(test_context->secure_tunnel);
 
     return AWS_OP_SUCCESS;
 }

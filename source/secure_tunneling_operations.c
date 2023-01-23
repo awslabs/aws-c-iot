@@ -202,12 +202,13 @@ void aws_secure_tunnel_message_storage_clean_up(struct aws_secure_tunnel_message
     aws_byte_buf_clean_up(&message_storage->storage);
 }
 
-static void s_aws_secure_tunnel_operation_message_set_stream_id(
+/* Sets the stream id on outbound messages*/
+static int s_aws_secure_tunnel_operation_message_set_stream_id(
     struct aws_secure_tunnel_operation *operation,
     struct aws_secure_tunnel *secure_tunnel) {
 
     struct aws_secure_tunnel_operation_message *message_op = operation->impl;
-    int32_t stream_id = 0;
+    int32_t stream_id = INVALID_STREAM_ID;
 
     struct aws_secure_tunnel_message_storage *message_storage = &message_op->options_storage;
 
@@ -241,7 +242,12 @@ static void s_aws_secure_tunnel_operation_message_set_stream_id(
         stream_id = secure_tunnel->config->stream_id;
     }
 
+    if (stream_id == INVALID_STREAM_ID) {
+        return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM);
+    }
+
     message_op->options_storage.storage_view.stream_id = stream_id;
+    return AWS_OP_SUCCESS;
 }
 
 static int32_t *s_aws_secure_tunnel_operation_message_get_stream_id_address_fn(
@@ -541,6 +547,12 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
         goto error;
     }
 
+    /*
+     * Client token is provided to the secure tunnel service alongside the access token.
+     * The access token is one-time use unless coupled with a client token. The pair can be used together
+     * for reconnects. If the user provides one, we will use that. If one is not provided, we will generate
+     * one for use with this access token to handle reconnecting on disconnections.
+     */
     if (options->client_token.len > 0) {
         storage->client_token = aws_string_new_from_cursor(allocator, &options->client_token);
         if (storage->client_token == NULL) {
@@ -580,18 +592,6 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
         }
 
         aws_http_proxy_options_init_from_config(&storage->http_proxy_options, storage->http_proxy_config);
-    }
-
-    if (options->service_id_1 != NULL) {
-        storage->service_id_1 = aws_string_new_from_c_str(allocator, options->service_id_1);
-    }
-
-    if (options->service_id_2 != NULL) {
-        storage->service_id_2 = aws_string_new_from_c_str(allocator, options->service_id_2);
-    }
-
-    if (options->service_id_3 != NULL) {
-        storage->service_id_3 = aws_string_new_from_c_str(allocator, options->service_id_3);
     }
 
     storage->on_message_received = options->on_message_received;

@@ -157,9 +157,6 @@ struct aws_secure_tunnel_options {
     struct aws_byte_cursor client_token;
 
     const char *root_ca;
-    const char *service_id_1;
-    const char *service_id_2;
-    const char *service_id_3;
 
     aws_secure_tunnel_message_received_fn *on_message_received;
 
@@ -260,14 +257,6 @@ int aws_secure_tunnel_send_message(
 //***********************************************************************************************************************
 /* STEVE TODO REMOVE OR HIDE ALL BELOW */
 //***********************************************************************************************************************
-
-/* TODO STEVE depricate in favor of aws_secure_tunnel_start */
-AWS_IOTDEVICE_API
-int aws_secure_tunnel_connect(struct aws_secure_tunnel *secure_tunnel);
-
-/* TODO STEVE depricate in favor of aws_secure_tunnel_stop */
-AWS_IOTDEVICE_API
-int aws_secure_tunnel_close(struct aws_secure_tunnel *secure_tunnel);
 
 /* TODO STEVE depricate/replace new aws_secure_tunnel_send_message_new */
 AWS_IOTDEVICE_API
