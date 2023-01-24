@@ -164,6 +164,7 @@ struct aws_secure_tunnel_options {
 
     /* Steve TODO we only support destination mode so this can be removed outside of testing */
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
+
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;

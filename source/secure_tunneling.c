@@ -669,15 +669,14 @@ static void s_change_current_state_to_connecting(struct aws_secure_tunnel *secur
     }
 }
 
-// Steve TODO implement these state changes
-
 static void s_change_current_state_to_connected(struct aws_secure_tunnel *secure_tunnel) {
     AWS_FATAL_ASSERT(secure_tunnel->current_state == AWS_STS_CONNECTING);
 
     secure_tunnel->current_state = AWS_STS_CONNECTED;
+    secure_tunnel->reconnect_count = 0;
 
     /*
-     * Any rejoin logic can be implemented here. Secure Tunnel does not handle any rejoin state.
+     * TODO Any rejoin logic can be implemented here. Secure Tunnel does not handle any rejoin state.
      * We may opt to send disconnects to existing non-zero stream IDs to notify that the server has reconnected.
      */
 
@@ -732,6 +731,7 @@ static void s_change_current_state_to_pending_reconnect(struct aws_secure_tunnel
 
     s_update_reconnect_delay_for_pending_reconnect(secure_tunnel);
 }
+
 static void s_change_current_state_to_terminated(struct aws_secure_tunnel *secure_tunnel) {
     secure_tunnel->current_state = AWS_STS_TERMINATED;
 
@@ -867,6 +867,7 @@ static int s_aws_secure_tunnel_change_desired_state(
 
     struct aws_secure_tunnel_change_desired_state_task *task =
         s_aws_secure_tunnel_change_desired_state_task_new(secure_tunnel->allocator, secure_tunnel, desired_state);
+
     if (task == NULL) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -1103,7 +1104,6 @@ static void s_complete_operation(
     struct aws_secure_tunnel_operation *operation,
     int error_code,
     const void *view) {
-    // Steve TODO Stat tracking can be added here in the future.
     (void)secure_tunnel;
 
     aws_secure_tunnel_operation_complete(operation, error_code, view);
@@ -1158,9 +1158,8 @@ static uint64_t s_aws_secure_tunnel_compute_operational_state_service_time(
     struct aws_secure_tunnel *secure_tunnel,
     uint64_t now) {
 
-    /* If an io message is in transit down the channel, then wait for it to complete */
+    /* If a message is in transit down the websocket, then wait for it to complete */
     if (secure_tunnel->pending_write_completion) {
-        printf("\n secure_tunnel->pending_write_completion = true \n");
         return 0;
     }
 
@@ -1414,16 +1413,6 @@ static int s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aw
     return AWS_OP_SUCCESS;
 }
 
-// static void s_check_ping_timeout(struct aws_secure_tunnel *secure_tunnel, uint64_t now) {
-//     // Steve TODO check the ping operation for timeout
-//     // This is called during the CONNECTED state to check whether we need to initiate a disconnect due
-//     // to a pingreq timeout.
-//     // mqtt5_client uses s_check_timeouts() to check all unacked_operations.
-//     // Currently the ping operation goes out but we don't check for its completion.
-//     (void)secure_tunnel;
-//     (void)now;
-// }
-
 /*********************************************************************************************************************
  * Service Timing
  ********************************************************************************************************************/
@@ -1469,7 +1458,7 @@ static uint64_t s_compute_next_service_time_secure_tunnel_connecting(
 static uint64_t s_compute_next_service_time_secure_tunnel_connected(
     struct aws_secure_tunnel *secure_tunnel,
     uint64_t now) {
-    /* ping and ping timeout */
+    /* TODO check against ping timeout once pong is implemented by secure tunnel service */
     uint64_t next_service_time = secure_tunnel->next_ping_time;
 
     if (secure_tunnel->desired_state != AWS_STS_CONNECTED) {
@@ -1604,15 +1593,6 @@ static bool s_service_state_stopped(struct aws_secure_tunnel *secure_tunnel) {
 static void s_service_state_connecting(struct aws_secure_tunnel *secure_tunnel, uint64_t now) {
     (void)secure_tunnel;
 
-    if (now >= secure_tunnel->next_secure_tunnel_websocket_connect_timeout_time) {
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: shutting down websocket due to connect timeout",
-            (void *)secure_tunnel);
-        s_secure_tunnel_shutdown_websocket(secure_tunnel);
-        return;
-    }
-
     if (aws_secure_tunnel_service_operational_state(secure_tunnel)) {
         int error_code = aws_last_error();
         AWS_LOGF_ERROR(
@@ -1650,9 +1630,6 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
             return;
         }
     }
-
-    /* STEVE TODO Reconnect logic and timer checks can go here */
-    secure_tunnel->reconnect_count = 0;
 
     if (aws_secure_tunnel_service_operational_state(secure_tunnel)) {
         int error_code = aws_last_error();
@@ -1768,8 +1745,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
         goto error;
     }
     secure_tunnel->config->secure_tunnel = secure_tunnel;
-    // secure_tunnel->config->websocket_handshake_transform
-    // secure_tunnel->config->websocket_handshake_transform_user_data = secure_tunnel;
 
     /* all secure tunnel activity will take place on this event loop */
     secure_tunnel->loop = aws_event_loop_group_get_next_loop(secure_tunnel->config->bootstrap->event_loop_group);

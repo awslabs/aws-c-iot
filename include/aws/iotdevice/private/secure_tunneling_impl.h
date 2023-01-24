@@ -251,12 +251,6 @@ struct aws_secure_tunnel {
      */
     uint64_t reconnect_count;
 
-    /*
-     * When should we shut down the channel due to failure to receive a websocket handshake?  Only relevant during the
-     * SECURE_TUNNEL_CONNECT state.
-     */
-    uint64_t next_secure_tunnel_websocket_connect_timeout_time;
-
     struct aws_linked_list queued_operations;
     struct aws_secure_tunnel_operation *current_operation;
 
