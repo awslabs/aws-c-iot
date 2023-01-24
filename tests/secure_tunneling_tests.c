@@ -159,10 +159,10 @@ static struct aws_secure_tunnel *s_secure_tunnel_new_mock(const struct aws_secur
     if (!secure_tunnel) {
         return secure_tunnel;
     }
-    secure_tunnel->websocket_vtable.client_connect = s_mock_aws_websocket_client_connect;
-    secure_tunnel->websocket_vtable.send_frame = s_mock_aws_websocket_send_frame;
-    secure_tunnel->websocket_vtable.close = s_mock_aws_websocket_close;
-    secure_tunnel->websocket_vtable.release = s_mock_aws_websocket_release;
+    // secure_tunnel->websocket_vtable.client_connect = s_mock_aws_websocket_client_connect;
+    // secure_tunnel->websocket_vtable.send_frame = s_mock_aws_websocket_send_frame;
+    // secure_tunnel->websocket_vtable.close = s_mock_aws_websocket_close;
+    // secure_tunnel->websocket_vtable.release = s_mock_aws_websocket_release;
 
     /*
      * Initialize a dummy websocket when the tunnel is created.

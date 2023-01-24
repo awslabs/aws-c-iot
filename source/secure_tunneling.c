@@ -26,18 +26,20 @@
 #define MIN_RECONNECT_DELAY_MS 1000
 #define MAX_RECONNECT_DELAY_MS 120000
 #define PING_TASK_INTERVAL ((uint64_t)20 * 1000000000)
-#define DEFAULT_PING_TIMEOUT_MS 30000
 #define WEBSOCKET_HEADER_NAME_ACCESS_TOKEN "access-token"
 #define WEBSOCKET_HEADER_NAME_CLIENT_TOKEN "client-token"
 #define WEBSOCKET_HEADER_NAME_PROTOCOL "Sec-WebSocket-Protocol"
 #define WEBSOCKET_HEADER_PROTOCOL_VALUE "aws.iot.securetunneling-2.0"
 
 static void s_change_current_state(struct aws_secure_tunnel *secure_tunnel, enum aws_secure_tunnel_state next_state);
-void aws_secure_tunnel_on_disconnection_update_operational_state(struct aws_secure_tunnel *secure_tunnel);
 void aws_secure_tunnel_operational_state_clean_up(struct aws_secure_tunnel *secure_tunnel);
 static int s_aws_secure_tunnel_change_desired_state(
     struct aws_secure_tunnel *secure_tunnel,
     enum aws_secure_tunnel_state desired_state);
+static void s_complete_operation_list(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_linked_list *operation_list,
+    int error_code);
 
 static int s_secure_tunneling_send(
     struct aws_secure_tunnel *secure_tunnel,
@@ -61,8 +63,8 @@ const char *aws_secure_tunnel_state_to_c_string(enum aws_secure_tunnel_state sta
         case AWS_STS_CLEAN_DISCONNECT:
             return "CLEAN_DISCONNECT";
 
-        case AWS_STS_CHANNEL_SHUTDOWN:
-            return "CHANNEL_SHUTDOWN";
+        case AWS_STS_WEBSOCKET_SHUTDOWN:
+            return "WEBSOCKET_SHUTDOWN";
 
         case AWS_STS_PENDING_RECONNECT:
             return "PENDING_RECONNECT";
@@ -115,7 +117,6 @@ static void s_secure_tunnel_final_destroy(struct aws_secure_tunnel *secure_tunne
 
 static void s_on_secure_tunnel_zero_ref_count(void *user_data) {
     struct aws_secure_tunnel *secure_tunnel = user_data;
-
     s_aws_secure_tunnel_change_desired_state(secure_tunnel, AWS_STS_TERMINATED);
 }
 
@@ -236,6 +237,7 @@ static void s_aws_secure_tunnel_connected_on_message_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
     printf("\n\ns_aws_secure_tunnel_connected_on_message_received() called \n\n");
+    printf("\nMessage Type: %s", aws_secure_tunnel_message_type_to_c_string(message_view->type));
     switch (message_view->type) {
         case AWS_SECURE_TUNNEL_MT_DATA:
             secure_tunnel->config->on_message_received(message_view, secure_tunnel);
@@ -270,7 +272,6 @@ static void s_aws_secure_tunnel_connected_on_message_received(
 static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
     struct aws_byte_buf *received_data = &secure_tunnel->received_data;
     struct aws_byte_cursor cursor = aws_byte_cursor_from_buf(received_data);
-    printf("\n\n PROCESSING RECEIVED WEBSOCKET DATA \n\n");
     uint16_t data_length = 0;
     /*
      * If there are at least two bytes for the data_length, but not enough data for a complete secure tunnel frame, we
@@ -291,8 +292,6 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
     }
 
     if (cursor.ptr != received_data->buffer) {
-        /* TODO: Consider better data structure that doesn't require moving bytes */
-
         /* Move unprocessed data to the beginning */
         received_data->len = 0;
         aws_byte_buf_append(received_data, &cursor);
@@ -312,7 +311,6 @@ static bool s_on_websocket_incoming_frame_begin(
     (void)websocket;
     (void)frame;
     (void)user_data;
-    printf("\n\nwebsocket frame begin\n\n");
     return true;
 }
 
@@ -343,42 +341,57 @@ static bool s_on_websocket_incoming_frame_complete(
     (void)frame;
     (void)error_code;
     (void)user_data;
-    printf("\n\nwebsocket frame end\n\n");
 
     /* TODO: Check error_code */
 
     return true;
 }
 
-static void s_secure_tunnel_shutdown(
-    struct aws_client_bootstrap *bootstrap,
-    int error_code,
-    struct aws_channel *channel,
-    void *user_data) {
-
+static void s_secure_tunnel_shutdown(struct aws_client_bootstrap *bootstrap, int error_code, void *user_data) {
     (void)bootstrap;
-    (void)channel;
-
     struct aws_secure_tunnel *secure_tunnel = user_data;
 
     if (error_code == AWS_ERROR_SUCCESS) {
         error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_UNEXPECTED_HANGUP;
     }
 
-    AWS_LOGF_INFO(
-        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        "id=%p: channel tore down with error code %d(%s)",
-        (void *)secure_tunnel,
-        error_code,
-        aws_error_debug_str(error_code));
-
-    if (secure_tunnel->slot) {
-        aws_channel_slot_remove(secure_tunnel->slot);
-        AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: slot removed successfully", (void *)secure_tunnel);
-        secure_tunnel->slot = NULL;
+    /* fail current and all pending operations */
+    if (secure_tunnel->current_operation != NULL) {
+        aws_linked_list_push_front(&secure_tunnel->queued_operations, &secure_tunnel->current_operation->node);
+        secure_tunnel->current_operation = NULL;
     }
 
-    aws_secure_tunnel_on_disconnection_update_operational_state(secure_tunnel);
+    if (aws_linked_list_empty(&secure_tunnel->queued_operations)) {
+        s_complete_operation_list(
+            secure_tunnel,
+            &secure_tunnel->queued_operations,
+            AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY);
+    }
+}
+
+/* Normal call to shutdown the websocket */
+static void s_secure_tunnel_shutdown_websocket(struct aws_secure_tunnel *secure_tunnel) {
+    if (secure_tunnel->current_state != AWS_STS_CONNECTED && secure_tunnel->current_state != AWS_STS_CLEAN_DISCONNECT) {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: secure tunnel websocket shutdown invoked from unexpected state %d(%s)",
+            (void *)secure_tunnel,
+            (int)secure_tunnel->current_state,
+            aws_secure_tunnel_state_to_c_string(secure_tunnel->current_state));
+        return;
+    }
+
+    s_change_current_state(secure_tunnel, AWS_STS_WEBSOCKET_SHUTDOWN);
+}
+
+/* Called by websocket when it's destroyed or manually on failed websocket creation */
+static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
+    struct aws_secure_tunnel *secure_tunnel = user_data;
+    s_secure_tunnel_shutdown(secure_tunnel->config->bootstrap, error_code, secure_tunnel);
+
+    if (websocket) {
+        aws_websocket_release(websocket);
+    }
 
     if (secure_tunnel->desired_state == AWS_STS_CONNECTED) {
         s_change_current_state(secure_tunnel, AWS_STS_PENDING_RECONNECT);
@@ -387,19 +400,12 @@ static void s_secure_tunnel_shutdown(
     }
 }
 
-static void s_secure_tunnel_setup(
-    struct aws_client_bootstrap *bootstrap,
-    int error_code,
-    struct aws_channel *channel,
-    void *user_data) {
-
-    /* Setup callback contract is: if error_code is non-zero then channel is NULL. */
-    AWS_FATAL_ASSERT((error_code != 0) == (channel == NULL));
+static void s_secure_tunnel_setup(struct aws_client_bootstrap *bootstrap, int error_code, void *user_data) {
+    (void)bootstrap;
     struct aws_secure_tunnel *secure_tunnel = user_data;
 
     if (error_code != AWS_OP_SUCCESS) {
-        /* secure tunnel already handles this case, so just call that. */
-        s_secure_tunnel_shutdown(bootstrap, error_code, channel, user_data);
+        s_on_websocket_shutdown(secure_tunnel->websocket, error_code, secure_tunnel);
         return;
     }
 
@@ -411,52 +417,14 @@ static void s_secure_tunnel_setup(
         goto error;
     }
 
-    /* allocs or crashes */
-    secure_tunnel->slot = aws_channel_slot_new(channel);
-
-    if (aws_channel_slot_insert_end(channel, secure_tunnel->slot)) {
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Failed to insert slot into channel %p, error %d (%s).",
-            (void *)secure_tunnel,
-            (void *)channel,
-            aws_last_error(),
-            aws_error_name(aws_last_error()));
-        goto error;
-    }
-
-    if (aws_channel_slot_set_handler(secure_tunnel->slot, &secure_tunnel->handler)) {
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Failed to set secure tunnel handler into slot on channel %p, error %d (%s).",
-            (void *)secure_tunnel,
-            (void *)channel,
-            aws_last_error(),
-            aws_error_name(aws_last_error()));
-
-        goto error;
-    }
-
     s_change_current_state(secure_tunnel, AWS_STS_CONNECTED);
 
     return;
 error:
-    s_change_current_state(secure_tunnel, AWS_STS_CHANNEL_SHUTDOWN);
-    (*secure_tunnel->vtable->channel_shutdown_fn)(channel, aws_last_error());
+    s_on_websocket_shutdown(secure_tunnel->websocket, error_code, secure_tunnel);
 }
 
-static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_code, void *user_data) {
-    struct aws_secure_tunnel *secure_tunnel = user_data;
-
-    struct aws_channel *channel = secure_tunnel->slot ? secure_tunnel->slot->channel : NULL;
-
-    s_secure_tunnel_shutdown(secure_tunnel->config->bootstrap, error_code, channel, secure_tunnel);
-
-    if (websocket) {
-        aws_websocket_release(websocket);
-    }
-}
-
+/* Called on successful or failed websocket setup attempt */
 static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_data *setup, void *user_data) {
     struct aws_secure_tunnel *secure_tunnel = user_data;
     secure_tunnel->handshake_request = aws_http_message_release(secure_tunnel->handshake_request);
@@ -464,30 +432,11 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
     /* Setup callback contract is: if error_code is non-zero then websocket is NULL. */
     AWS_FATAL_ASSERT((setup->error_code != 0) == (setup->websocket == NULL));
 
-    struct aws_channel *channel = NULL;
+    secure_tunnel->websocket = setup->websocket;
 
-    if (setup->websocket) {
-        secure_tunnel->websocket = setup->websocket;
-        channel = aws_websocket_get_channel(setup->websocket);
-        AWS_ASSERT(channel);
+    /* Failed/Successful websocket creation and associated errors logged by "websocket-setup" */
 
-        /* Websocket must be "converted" before the MQTT handler can be installed next to it. */
-        // STEVE TODO temp removing the conversion
-        // if (aws_websocket_convert_to_midchannel_handler(setup->websocket)) {
-        //     AWS_LOGF_ERROR(
-        //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        //         "id=%p: Failed converting websocket, error %d (%s)",
-        //         (void *)secure_tunnel,
-        //         aws_last_error(),
-        //         aws_error_name(aws_last_error()));
-
-        //     (*secure_tunnel->vtable->channel_shutdown_fn)(channel, aws_last_error());
-        //     return;
-        // }
-    }
-
-    /* Call into the channel-setup callback, the rest of the logic is the same. */
-    s_secure_tunnel_setup(secure_tunnel->config->bootstrap, setup->error_code, channel, secure_tunnel);
+    s_secure_tunnel_setup(secure_tunnel->config->bootstrap, setup->error_code, secure_tunnel);
 }
 
 struct aws_secure_tunnel_websocket_transform_complete_task {
@@ -520,15 +469,15 @@ void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, en
             .tls_options = &secure_tunnel->tls_con_opt,
             .host = aws_byte_cursor_from_string(secure_tunnel->config->endpoint_host),
             .port = 443,
+            .proxy_options = &secure_tunnel->config->http_proxy_options,
             .handshake_request = secure_tunnel->handshake_request,
-            .initial_window_size = MAX_WEBSOCKET_PAYLOAD, /* Prevent websocket data from arriving before the
-                                                             secure_tunnel handler is installed by setting this to 0 */
+            .initial_window_size = MAX_WEBSOCKET_PAYLOAD,
+            .manual_window_management = false,
             .user_data = secure_tunnel,
-            .on_connection_setup = s_on_websocket_setup,
-            .on_connection_shutdown = s_on_websocket_shutdown,
             .requested_event_loop = secure_tunnel->loop,
 
-            /* STEVE TODO These are the old functions that may need replacing */
+            .on_connection_setup = s_on_websocket_setup,
+            .on_connection_shutdown = s_on_websocket_shutdown,
             .on_incoming_frame_begin = s_on_websocket_incoming_frame_begin,
             .on_incoming_frame_payload = s_on_websocket_incoming_frame_payload,
             .on_incoming_frame_complete = s_on_websocket_incoming_frame_complete,
@@ -538,7 +487,7 @@ void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, en
             websocket_options.proxy_options = &secure_tunnel->config->http_proxy_options;
         }
 
-        if (secure_tunnel->vtable->websocket_connect_fn(&websocket_options)) {
+        if (aws_websocket_client_connect(&websocket_options)) {
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: Failed to initiate websocket connection.",
@@ -560,10 +509,8 @@ error:;
     s_on_websocket_setup(&websocket_setup, secure_tunnel);
 
 done:
-
     aws_http_message_release(websocket_transform_complete_task->handshake);
     aws_secure_tunnel_release(websocket_transform_complete_task->secure_tunnel);
-
     aws_mem_release(websocket_transform_complete_task->allocator, websocket_transform_complete_task);
 }
 
@@ -586,6 +533,7 @@ static int s_handshake_add_header(
         AWS_BYTE_CURSOR_PRI(header.value));
     return AWS_OP_SUCCESS;
 }
+
 static struct aws_http_message *s_new_handshake_request(const struct aws_secure_tunnel *secure_tunnel) {
     char path[50];
     snprintf(
@@ -680,49 +628,13 @@ static void s_reset_ping(struct aws_secure_tunnel *secure_tunnel) {
 }
 
 /*********************************************************************************************************************
- *  CHANNEL
- ********************************************************************************************************************/
-
-static void s_aws_secure_tunnel_shutdown_channel(struct aws_secure_tunnel *secure_tunnel, int error_code) {
-    if (error_code == AWS_ERROR_SUCCESS) {
-        error_code = AWS_ERROR_UNKNOWN;
-    }
-    if (secure_tunnel->current_state != AWS_STS_CONNECTED && secure_tunnel->current_state != AWS_STS_CLEAN_DISCONNECT) {
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: secure tunnel channel shutdown invoked from unexpected state %d(%s)",
-            (void *)secure_tunnel,
-            (int)secure_tunnel->current_state,
-            aws_secure_tunnel_state_to_c_string(secure_tunnel->current_state));
-        return;
-    }
-
-    if (secure_tunnel->slot == NULL || secure_tunnel->slot->channel == NULL) {
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: secure tunnel channel shutdown invoked without a channel",
-            (void *)secure_tunnel);
-        return;
-    }
-
-    s_change_current_state(secure_tunnel, AWS_STS_CHANNEL_SHUTDOWN);
-    (*secure_tunnel->vtable->channel_shutdown_fn)(secure_tunnel->slot->channel, error_code);
-}
-
-/*********************************************************************************************************************
  * State Related
  ********************************************************************************************************************/
-
-static void s_complete_operation_list(
-    struct aws_secure_tunnel *secure_tunnel,
-    struct aws_linked_list *operation_list,
-    int error_code);
 
 static void s_aws_secure_tunnel_operational_state_reset(
     struct aws_secure_tunnel *secure_tunnel,
     int completion_error_code) {
     s_complete_operation_list(secure_tunnel, &secure_tunnel->queued_operations, completion_error_code);
-    s_complete_operation_list(secure_tunnel, &secure_tunnel->write_completion_operations, completion_error_code);
 }
 
 static void s_change_current_state_to_stopped(struct aws_secure_tunnel *secure_tunnel) {
@@ -764,9 +676,11 @@ static void s_change_current_state_to_connected(struct aws_secure_tunnel *secure
 
     secure_tunnel->current_state = AWS_STS_CONNECTED;
 
-    aws_secure_tunnel_on_disconnection_update_operational_state(secure_tunnel);
+    /*
+     * Any rejoin logic can be implemented here. Secure Tunnel does not handle any rejoin state.
+     * We may opt to send disconnects to existing non-zero stream IDs to notify that the server has reconnected.
+     */
 
-    secure_tunnel->next_ping_timeout_time = 0;
     s_reset_ping(secure_tunnel);
 }
 
@@ -776,19 +690,26 @@ static void s_change_current_state_to_clean_disconnect(struct aws_secure_tunnel 
     secure_tunnel->current_state = AWS_STS_CLEAN_DISCONNECT;
 }
 
-static void s_change_current_state_to_channel_shutdown(struct aws_secure_tunnel *secure_tunnel) {
+static void s_change_current_state_to_websocket_shutdown(struct aws_secure_tunnel *secure_tunnel) {
     enum aws_secure_tunnel_state current_state = secure_tunnel->current_state;
     AWS_FATAL_ASSERT(
         current_state == AWS_STS_CONNECTING || current_state == AWS_STS_CONNECTED ||
         current_state == AWS_STS_CLEAN_DISCONNECT);
-    secure_tunnel->current_state = AWS_STS_CHANNEL_SHUTDOWN;
+
+    if (secure_tunnel->websocket) {
+        aws_websocket_close(secure_tunnel->websocket, false);
+    } else {
+        s_on_websocket_shutdown(secure_tunnel->websocket, AWS_ERROR_UNKNOWN, secure_tunnel);
+    }
+
+    secure_tunnel->current_state = AWS_STS_WEBSOCKET_SHUTDOWN;
 }
 
 static void s_update_reconnect_delay_for_pending_reconnect(struct aws_secure_tunnel *secure_tunnel) {
 
     uint64_t delay_ms = MIN_RECONNECT_DELAY_MS;
     for (int i = 0; i < (int)secure_tunnel->reconnect_count; ++i) {
-        delay_ms = delay_ms * delay_ms;
+        delay_ms = delay_ms * 2;
     }
 
     delay_ms = aws_min_u64(delay_ms, MAX_RECONNECT_DELAY_MS);
@@ -843,8 +764,8 @@ static void s_change_current_state(struct aws_secure_tunnel *secure_tunnel, enum
         case AWS_STS_CLEAN_DISCONNECT:
             s_change_current_state_to_clean_disconnect(secure_tunnel);
             break;
-        case AWS_STS_CHANNEL_SHUTDOWN:
-            s_change_current_state_to_channel_shutdown(secure_tunnel);
+        case AWS_STS_WEBSOCKET_SHUTDOWN:
+            s_change_current_state_to_websocket_shutdown(secure_tunnel);
             break;
         case AWS_STS_PENDING_RECONNECT:
             s_change_current_state_to_pending_reconnect(secure_tunnel);
@@ -1157,38 +1078,12 @@ static int s_secure_tunneling_send(
         AWS_OP_SUCCESS) {
         return AWS_OP_ERR;
     }
-    return secure_tunnel->websocket_vtable.send_frame(secure_tunnel->websocket, &frame_options);
-}
-
-struct aws_io_message *s_aws_channel_acquire_message_from_pool_default(
-    struct aws_channel *channel,
-    enum aws_io_message_type message_type,
-    size_t size_hint,
-    void *user_data) {
-    (void)user_data;
-
-    return aws_channel_acquire_message_from_pool(channel, message_type, size_hint);
-}
-
-static int s_aws_channel_slot_send_message_default(
-    struct aws_channel_slot *slot,
-    struct aws_io_message *message,
-    enum aws_channel_direction dir,
-    void *user_data) {
-    (void)user_data;
-
-    return aws_channel_slot_send_message(slot, message, dir);
+    return aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
 }
 
 static struct aws_secure_tunnel_vtable s_default_secure_tunnel_vtable = {
     .get_current_time_fn = s_aws_high_res_clock_get_ticks_proxy,
-    .channel_shutdown_fn = aws_channel_shutdown,
-    .websocket_connect_fn = aws_websocket_client_connect,
-    .client_bootstrap_new_socket_channel_fn = aws_client_bootstrap_new_socket_channel,
     .http_proxy_new_socket_channel_fn = aws_http_proxy_new_socket_channel,
-
-    .aws_channel_acquire_message_from_pool_fn = s_aws_channel_acquire_message_from_pool_default,
-    .aws_channel_slot_send_message_fn = s_aws_channel_slot_send_message_default,
 
     .vtable_user_data = NULL,
 
@@ -1197,95 +1092,6 @@ static struct aws_secure_tunnel_vtable s_default_secure_tunnel_vtable = {
     .send_stream_start = s_secure_tunneling_send_stream_start,
     .send_stream_start_v2 = s_secure_tunneling_send_stream_start_v2,
     .send_stream_reset = s_secure_tunneling_send_stream_reset,
-};
-
-static int s_process_read_message(
-    struct aws_channel_handler *handler,
-    struct aws_channel_slot *slot,
-    struct aws_io_message *message) {
-
-    struct aws_secure_tunnel *secure_tunnel = handler->impl;
-
-    if (message->message_type != AWS_IO_MESSAGE_APPLICATION_DATA) {
-        AWS_LOGF_ERROR(AWS_LS_MQTT5_CLIENT, "id=%p: unexpected io message data", (void *)secure_tunnel);
-        return AWS_OP_ERR;
-    }
-
-    AWS_LOGF_TRACE(
-        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        "id=%p: processing read message of size %zu",
-        (void *)secure_tunnel,
-        message->message_data.len);
-
-    struct aws_byte_cursor message_cursor = aws_byte_cursor_from_buf(&message->message_data);
-
-    (void)message_cursor;
-    printf("\n\nSTEVE TODO DEGUB s_process_read_message() called here\n\n");
-
-    // int result = aws_mqtt5_decoder_on_data_received(&client->decoder, message_cursor);
-    // if (result != AWS_OP_SUCCESS) {
-    //     int error_code = aws_last_error();
-    //     AWS_LOGF_ERROR(
-    //         AWS_LS_MQTT5_CLIENT,
-    //         "id=%p: decode failure with error %d(%s)",
-    //         (void *)client,
-    //         error_code,
-    //         aws_error_debug_str(error_code));
-
-    //     if (error_code == AWS_ERROR_MQTT5_DECODE_PROTOCOL_ERROR && s_should_client_disconnect_cleanly(client)) {
-    //         s_aws_mqtt5_client_shutdown_channel_clean(client, error_code, AWS_MQTT5_DRC_PROTOCOL_ERROR);
-    //     } else {
-    //         s_aws_mqtt5_client_shutdown_channel(client, error_code);
-    //     }
-
-    //     goto done;
-    // }
-
-    aws_channel_slot_increment_read_window(slot, message->message_data.len);
-
-    // done:
-
-    aws_mem_release(message->allocator, message);
-
-    return AWS_OP_SUCCESS;
-}
-
-static size_t s_initial_window_size(struct aws_channel_handler *handler) {
-    (void)handler;
-
-    return SIZE_MAX;
-}
-
-static size_t s_message_overhead(struct aws_channel_handler *handler) {
-    (void)handler;
-
-    return 0;
-}
-
-static void s_destroy(struct aws_channel_handler *handler) {
-    (void)handler;
-}
-
-static int s_shutdown(
-    struct aws_channel_handler *handler,
-    struct aws_channel_slot *slot,
-    enum aws_channel_direction dir,
-    int error_code,
-    bool free_scarce_resources_immediately) {
-
-    (void)handler;
-
-    return aws_channel_slot_on_handler_shutdown_complete(slot, dir, error_code, free_scarce_resources_immediately);
-}
-
-static struct aws_channel_handler_vtable s_secure_tunnel_channel_handler_vtable = {
-    .process_read_message = &s_process_read_message,
-    .process_write_message = NULL,
-    .increment_read_window = NULL,
-    .shutdown = &s_shutdown,
-    .initial_window_size = &s_initial_window_size,
-    .message_overhead = &s_message_overhead,
-    .destroy = &s_destroy,
 };
 
 /*********************************************************************************************************************
@@ -1323,75 +1129,6 @@ static void s_complete_operation_list(
     aws_linked_list_init(operation_list);
 }
 
-static void s_aws_secure_tunnel_on_socket_write_completion_connected(
-    struct aws_secure_tunnel *secure_tunnel,
-    int error_code) {
-    if (error_code != AWS_ERROR_SUCCESS) {
-        s_aws_secure_tunnel_shutdown_channel(secure_tunnel, error_code);
-        return;
-    }
-
-    s_reevaluate_service_task(secure_tunnel);
-}
-
-static void s_aws_secure_tunnel_on_socket_write_completion(
-    struct aws_channel *channel,
-    struct aws_io_message *message,
-    int error_code,
-    void *user_data) {
-
-    (void)channel;
-    (void)message;
-
-    struct aws_secure_tunnel *secure_tunnel = user_data;
-    secure_tunnel->pending_write_completion = false;
-
-    if (error_code != AWS_ERROR_SUCCESS) {
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: socket write completion invoked with error %d(%s)",
-            (void *)secure_tunnel,
-            error_code,
-            aws_error_debug_str(error_code));
-    }
-
-    switch (secure_tunnel->current_state) {
-        case AWS_STS_CONNECTED:
-            s_aws_secure_tunnel_on_socket_write_completion_connected(secure_tunnel, error_code);
-            break;
-
-        case AWS_STS_CLEAN_DISCONNECT:
-            /* the CONNECTED callback works just fine for CLEAN_DISCONNECT */
-            s_aws_secure_tunnel_on_socket_write_completion_connected(secure_tunnel, error_code);
-            break;
-
-        default:
-            break;
-    }
-
-    s_complete_operation_list(secure_tunnel, &secure_tunnel->write_completion_operations, error_code);
-}
-
-void aws_secure_tunnel_on_disconnection_update_operational_state(struct aws_secure_tunnel *secure_tunnel) {
-    /* move current operation to the head of the queue */
-    if (secure_tunnel->current_operation != NULL) {
-        aws_linked_list_push_front(&secure_tunnel->queued_operations, &secure_tunnel->current_operation->node);
-        secure_tunnel->current_operation = NULL;
-    }
-
-    /* fail everything in pending write completion */
-    s_complete_operation_list(
-        secure_tunnel,
-        &secure_tunnel->write_completion_operations,
-        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY);
-
-    /* fail everything in the pending operations list */
-    s_complete_operation_list(
-        secure_tunnel,
-        &secure_tunnel->queued_operations,
-        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY);
-}
-
 /*
  * Check whether secure tunnel currently has work left to do based on its current state
  */
@@ -1423,6 +1160,7 @@ static uint64_t s_aws_secure_tunnel_compute_operational_state_service_time(
 
     /* If an io message is in transit down the channel, then wait for it to complete */
     if (secure_tunnel->pending_write_completion) {
+        printf("\n secure_tunnel->pending_write_completion = true \n");
         return 0;
     }
 
@@ -1463,7 +1201,6 @@ static bool s_aws_secure_tunnel_should_service_operational_state(
 }
 
 int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure_tunnel) {
-    struct aws_channel_slot *slot = secure_tunnel->slot;
     const struct aws_secure_tunnel_vtable *vtable = secure_tunnel->vtable;
     uint64_t now = (*vtable->get_current_time_fn)();
 
@@ -1471,16 +1208,6 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
     bool should_service = s_aws_secure_tunnel_should_service_operational_state(secure_tunnel, now);
     if (!should_service) {
         return AWS_OP_SUCCESS;
-    }
-
-    /* If we're going to write data, we need something to write to */
-    struct aws_io_message *io_message = (*vtable->aws_channel_acquire_message_from_pool_fn)(
-        slot->channel,
-        AWS_IO_MESSAGE_APPLICATION_DATA,
-        AWS_SECURE_TUNNEL_IO_MESSAGE_DEFAULT_LENGTH,
-        vtable->vtable_user_data);
-    if (io_message == NULL) {
-        return AWS_OP_ERR;
     }
 
     int operational_error_code = AWS_ERROR_SUCCESS;
@@ -1537,19 +1264,18 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
         }
 
         if (current_operation->operation_type == AWS_STOT_PING) {
-            uint64_t ping_timeout_nanos =
-                aws_timestamp_convert(DEFAULT_PING_TIMEOUT_MS, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL);
-            secure_tunnel->next_ping_timeout_time = aws_add_u64_saturating(now, ping_timeout_nanos);
-
+            /*
+             * Currently, pings are sent to keep the websocket alive but we do not receive responses from the secure
+             * tunnel service until a src is also connected. This is a known bug that is in their backlog. Once it is
+             * fixed, we should implement ping timeout checks to determine whether we are still connected to the secure
+             * tunnel through WebSocket.
+             */
             if (secure_tunnel->websocket != NULL) {
-                printf("\n\nsecure_tunnel->websocket != NULL\n\n");
                 struct aws_websocket_send_frame_options frame_options;
                 AWS_ZERO_STRUCT(frame_options);
                 frame_options.opcode = AWS_WEBSOCKET_OPCODE_PING;
                 frame_options.fin = true;
                 aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
-            } else {
-                printf("\n\nsecure_tunnel->websocket is NULL\n\n");
             }
 
             s_complete_operation(secure_tunnel, current_operation, AWS_OP_SUCCESS, NULL);
@@ -1561,27 +1287,26 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
     } while (should_service);
 
     if (operational_error_code != AWS_ERROR_SUCCESS) {
-        aws_mem_release(io_message->allocator, io_message);
         return aws_raise_error(operational_error_code);
     }
 
     /* It's possible for there to be no data if we serviced operations that failed validation */
-    if (io_message->message_data.len == 0) {
-        aws_mem_release(io_message->allocator, io_message);
-        return AWS_OP_SUCCESS;
-    }
+    // if (io_message->message_data.len == 0) {
+    //     aws_mem_release(io_message->allocator, io_message);
+    //     return AWS_OP_SUCCESS;
+    // }
 
     /* send io_message down channel in write direction, handle errors */
-    io_message->on_completion = s_aws_secure_tunnel_on_socket_write_completion;
-    io_message->user_data = secure_tunnel;
-    secure_tunnel->pending_write_completion = true;
+    // io_message->on_completion = s_aws_secure_tunnel_on_socket_write_completion;
+    // io_message->user_data = secure_tunnel;
+    // secure_tunnel->pending_write_completion = true;
 
-    if ((*vtable->aws_channel_slot_send_message_fn)(
-            slot, io_message, AWS_CHANNEL_DIR_WRITE, vtable->vtable_user_data)) {
-        secure_tunnel->pending_write_completion = false;
-        aws_mem_release(io_message->allocator, io_message);
-        return AWS_OP_ERR;
-    }
+    // if ((*vtable->aws_channel_slot_send_message_fn)(
+    //         slot, io_message, AWS_CHANNEL_DIR_WRITE, vtable->vtable_user_data)) {
+    //     secure_tunnel->pending_write_completion = false;
+    //     aws_mem_release(io_message->allocator, io_message);
+    //     return AWS_OP_ERR;
+    // }
 
     return AWS_OP_SUCCESS;
 }
@@ -1689,15 +1414,15 @@ static int s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aw
     return AWS_OP_SUCCESS;
 }
 
-static void s_check_ping_timeout(struct aws_secure_tunnel *secure_tunnel, uint64_t now) {
-    // Steve TODO check the ping operation for timeout
-    // This is called during the CONNECTED state to check whether we need to initiate a disconnect due
-    // to a pingreq timeout.
-    // mqtt5_client uses s_check_timeouts() to check all unacked_operations.
-    // Currently the ping operation goes out but we don't check for its completion.
-    (void)secure_tunnel;
-    (void)now;
-}
+// static void s_check_ping_timeout(struct aws_secure_tunnel *secure_tunnel, uint64_t now) {
+//     // Steve TODO check the ping operation for timeout
+//     // This is called during the CONNECTED state to check whether we need to initiate a disconnect due
+//     // to a pingreq timeout.
+//     // mqtt5_client uses s_check_timeouts() to check all unacked_operations.
+//     // Currently the ping operation goes out but we don't check for its completion.
+//     (void)secure_tunnel;
+//     (void)now;
+// }
 
 /*********************************************************************************************************************
  * Service Timing
@@ -1746,9 +1471,6 @@ static uint64_t s_compute_next_service_time_secure_tunnel_connected(
     uint64_t now) {
     /* ping and ping timeout */
     uint64_t next_service_time = secure_tunnel->next_ping_time;
-    if (secure_tunnel->next_ping_timeout_time != 0) {
-        next_service_time = aws_min_u64(next_service_time, secure_tunnel->next_ping_timeout_time);
-    }
 
     if (secure_tunnel->desired_state != AWS_STS_CONNECTED) {
         next_service_time = now;
@@ -1768,6 +1490,15 @@ static uint64_t s_compute_next_service_time_secure_tunnel_clean_disconnect(
     struct aws_secure_tunnel *secure_tunnel,
     uint64_t now) {
     return s_aws_secure_tunnel_compute_operational_state_service_time(secure_tunnel, now);
+}
+
+static uint64_t s_compute_next_service_time_secure_tunnel_websocket_shutdown(
+    struct aws_secure_tunnel *secure_tunnel,
+    uint64_t now) {
+    (void)secure_tunnel;
+    (void)now;
+
+    return 0;
 }
 
 static uint64_t s_compute_next_service_time_secure_tunnel_pending_reconnect(
@@ -1791,9 +1522,10 @@ static uint64_t s_compute_next_service_time_by_current_state(struct aws_secure_t
             return s_compute_next_service_time_secure_tunnel_connected(secure_tunnel, now);
         case AWS_STS_CLEAN_DISCONNECT:
             return s_compute_next_service_time_secure_tunnel_clean_disconnect(secure_tunnel, now);
+        case AWS_STS_WEBSOCKET_SHUTDOWN:
+            return s_compute_next_service_time_secure_tunnel_websocket_shutdown(secure_tunnel, now);
         case AWS_STS_PENDING_RECONNECT:
             return s_compute_next_service_time_secure_tunnel_pending_reconnect(secure_tunnel, now);
-        case AWS_STS_CHANNEL_SHUTDOWN:
         case AWS_STS_TERMINATED:
             return 0;
     }
@@ -1875,10 +1607,9 @@ static void s_service_state_connecting(struct aws_secure_tunnel *secure_tunnel, 
     if (now >= secure_tunnel->next_secure_tunnel_websocket_connect_timeout_time) {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: shutting down channel due to websocket timeout",
+            "id=%p: shutting down websocket due to connect timeout",
             (void *)secure_tunnel);
-
-        s_aws_secure_tunnel_shutdown_channel(secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_WEBSOCKET_TIMEOUT);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel);
         return;
     }
 
@@ -1890,8 +1621,7 @@ static void s_service_state_connecting(struct aws_secure_tunnel *secure_tunnel, 
             (void *)secure_tunnel,
             error_code,
             aws_error_debug_str(error_code));
-
-        s_aws_secure_tunnel_shutdown_channel(secure_tunnel, error_code);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel);
         return;
     }
 }
@@ -1903,17 +1633,7 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: channel shutdown due to user Stop request",
             (void *)secure_tunnel);
-        s_aws_secure_tunnel_shutdown_channel(secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP);
-        return;
-    }
-
-    if (now >= secure_tunnel->next_ping_timeout_time && secure_tunnel->next_ping_timeout_time != 0) {
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: channel shutdown due to PINGRESP timeout",
-            (void *)secure_tunnel);
-
-        s_aws_secure_tunnel_shutdown_channel(secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PING_RESPONSE_TIMEOUT);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel);
         return;
     }
 
@@ -1926,13 +1646,11 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
                 (void *)secure_tunnel,
                 error_code,
                 aws_error_debug_str(error_code));
-
-            s_aws_secure_tunnel_shutdown_channel(secure_tunnel, error_code);
+            s_secure_tunnel_shutdown_websocket(secure_tunnel);
             return;
         }
     }
 
-    s_check_ping_timeout(secure_tunnel, now);
     /* STEVE TODO Reconnect logic and timer checks can go here */
     secure_tunnel->reconnect_count = 0;
 
@@ -1944,8 +1662,7 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
             (void *)secure_tunnel,
             error_code,
             aws_error_debug_str(error_code));
-
-        s_aws_secure_tunnel_shutdown_channel(secure_tunnel, error_code);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel);
         return;
     }
 }
@@ -1960,14 +1677,9 @@ static void s_service_state_clean_disconnect(struct aws_secure_tunnel *secure_tu
             (void *)secure_tunnel,
             error_code,
             aws_error_debug_str(error_code));
-
-        s_aws_secure_tunnel_shutdown_channel(secure_tunnel, error_code);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel);
         return;
     }
-}
-
-static void s_service_state_channel_shutdown(struct aws_secure_tunnel *secure_tunnel) {
-    (void)secure_tunnel;
 }
 
 static void s_service_state_pending_reconnect(struct aws_secure_tunnel *secure_tunnel, uint64_t now) {
@@ -2006,9 +1718,6 @@ static void s_secure_tunnel_service_task_fn(struct aws_task *task, void *arg, en
             break;
         case AWS_STS_CLEAN_DISCONNECT:
             s_service_state_clean_disconnect(secure_tunnel, now);
-            break;
-        case AWS_STS_CHANNEL_SHUTDOWN:
-            s_service_state_channel_shutdown(secure_tunnel);
             break;
         case AWS_STS_PENDING_RECONNECT:
             s_service_state_pending_reconnect(secure_tunnel, now);
@@ -2051,7 +1760,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
     aws_ref_count_init(&secure_tunnel->ref_count, secure_tunnel, s_on_secure_tunnel_zero_ref_count);
 
     aws_linked_list_init(&secure_tunnel->queued_operations);
-    aws_linked_list_init(&secure_tunnel->write_completion_operations);
     secure_tunnel->current_operation = NULL;
 
     /* store options */
@@ -2071,11 +1779,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
 
     secure_tunnel->desired_state = AWS_STS_STOPPED;
     secure_tunnel->current_state = AWS_STS_STOPPED;
-
-    // STEVE TODO Channel Handler may be uneccessary for a websocket secure tunnel
-    secure_tunnel->handler.alloc = secure_tunnel->allocator;
-    secure_tunnel->handler.vtable = &s_secure_tunnel_channel_handler_vtable;
-    secure_tunnel->handler.impl = secure_tunnel;
 
     /* tls setup */
     struct aws_tls_ctx_options tls_ctx_opt;
@@ -2101,13 +1804,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
     }
 
     aws_tls_ctx_options_clean_up(&tls_ctx_opt);
-
-    /* websocket vtable */
-
-    // secure_tunnel->websocket_vtable.client_connect = aws_websocket_client_connect;
-    secure_tunnel->websocket_vtable.send_frame = aws_websocket_send_frame;
-    secure_tunnel->websocket_vtable.close = aws_websocket_close;
-    // secure_tunnel->websocket_vtable.release = aws_websocket_release;
 
     /* Connection reset */
     secure_tunnel->config->stream_id = INVALID_STREAM_ID;

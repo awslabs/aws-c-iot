@@ -315,7 +315,6 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_secure_tunnel_message_view *message,
     struct aws_byte_cursor *cursor,
     aws_secure_tunnel_on_message_received_fn *on_message_received) {
-    printf("\n\naws_secure_tunnel_deserialize_message_from_cursor()\n\n");
     AWS_RETURN_ERROR_IF2(cursor->len < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     uint8_t wire_type;
     uint8_t field_number;
@@ -343,7 +342,6 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
                 if (s_iot_st_decode_varint_uint32_t(cursor, &res)) {
                     return AWS_OP_ERR;
                 }
-
                 switch (field_number) {
                     case AWS_SECURE_TUNNEL_FN_TYPE:
                         message->type = res;
@@ -391,6 +389,7 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
                             s_aws_st_decode_lengthdelim(cursor, &available_service_id_buf, length)) {
                             goto error;
                         }
+
                         aws_byte_cursor_advance(cursor, length);
                         switch (service_ids_set) {
                             case 0:
@@ -439,6 +438,15 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     on_message_received(secure_tunnel, message);
     aws_byte_buf_clean_up(&payload_buf);
     aws_byte_buf_clean_up(&service_id_buf);
+    /* If any service ids were set, clear the ones that haven't been set by this message. */
+    if (service_ids_set) {
+        switch (service_ids_set) {
+            case 1:
+                aws_string_destroy(secure_tunnel->config->service_id_2);
+            case 2:
+                aws_string_destroy(secure_tunnel->config->service_id_3);
+        }
+    }
     return AWS_OP_SUCCESS;
 
 error:
