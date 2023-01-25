@@ -119,7 +119,6 @@ int main(int argc, char **argv) {
 
     struct aws_allocator *allocator = aws_mem_tracer_new(aws_default_allocator(), NULL, AWS_MEMTRACE_BYTES, 0);
 
-    aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
     struct aws_logger_standard_options logger_options = {
@@ -191,7 +190,6 @@ int main(int argc, char **argv) {
     aws_event_loop_group_release(elg);
     aws_logger_clean_up(&logger);
     aws_iotdevice_library_clean_up();
-    aws_http_library_clean_up();
 
     ASSERT_UINT_EQUALS(0, aws_mem_tracer_count(allocator));
     allocator = aws_mem_tracer_destroy(allocator);
