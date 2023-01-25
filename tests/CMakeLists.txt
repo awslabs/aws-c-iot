@@ -3,9 +3,10 @@ include(AwsTestHarness)
 enable_testing()
 
 file(GLOB TEST_HDRS "mqtt_mock_structs.h")
-set(TEST_SRC metrics_tests.c secure_tunneling_tests.c)
+set(TEST_SRC iotdevice_tests.c metrics_tests.c secure_tunneling_tests.c)
 file(GLOB TESTS ${TEST_HDRS} ${TEST_SRC})
 
+add_test_case(library_init)
 add_test_case(devicedefender_task_unsupported_report_format)
 
 # Network metrics are only implemented for Linux so far

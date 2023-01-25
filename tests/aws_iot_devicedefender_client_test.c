@@ -227,7 +227,6 @@ int main(int argc, char **argv) {
     args.mutex = &mutex;
     args.condition_variable = &condition_variable;
 
-    aws_mqtt_library_init(args.allocator);
     aws_iotdevice_library_init(args.allocator);
 
     struct aws_logger_standard_options logger_options = {
@@ -352,7 +351,6 @@ int main(int argc, char **argv) {
     aws_logger_clean_up(&logger);
 
     aws_iotdevice_library_clean_up();
-    aws_mqtt_library_clean_up();
 
     ASSERT_UINT_EQUALS(0, aws_mem_tracer_count(allocator));
     allocator = aws_mem_tracer_destroy(allocator);
