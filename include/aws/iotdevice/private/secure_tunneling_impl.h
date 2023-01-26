@@ -131,11 +131,6 @@ struct aws_secure_tunnel_vtable {
     /* aws_high_res_clock_get_ticks */
     uint64_t (*get_current_time_fn)(void);
 
-    /* aws_http_proxy_new_socket_channel */
-    int (*http_proxy_new_socket_channel_fn)(
-        struct aws_socket_channel_bootstrap_options *channel_options,
-        const struct aws_http_proxy_options *proxy_options);
-
     int (*send_data)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
     int (*send_data_v2)(
         struct aws_secure_tunnel *secure_tunnel,
@@ -143,8 +138,6 @@ struct aws_secure_tunnel_vtable {
     int (*send_stream_start)(struct aws_secure_tunnel *secure_tunnel);
     int (*send_stream_start_v2)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *service_id_data);
     int (*send_stream_reset)(struct aws_secure_tunnel *secure_tunnel);
-
-    void *vtable_user_data;
 };
 
 // struct aws_websocket_client_connection_options;

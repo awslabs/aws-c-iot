@@ -62,6 +62,12 @@ int aws_iot_st_msg_serialize_from_struct(
     struct aws_iot_st_msg message);
 
 AWS_IOTDEVICE_API
+int aws_iot_st_msg_serialize_from_view(
+    struct aws_byte_buf *buffer,
+    struct aws_allocator *allocator,
+    const struct aws_secure_tunnel_message_view *message_view);
+
+AWS_IOTDEVICE_API
 int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message,

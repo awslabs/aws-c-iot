@@ -85,11 +85,6 @@ static struct aws_secure_tunnel_operation_vtable s_empty_operation_vtable = {
 };
 
 /*********************************************************************************************************************
- * Connect
- ********************************************************************************************************************/
-/* STEVE TODO Connect Operation Implementation */
-
-/*********************************************************************************************************************
  * Message
  ********************************************************************************************************************/
 
@@ -210,11 +205,11 @@ static int s_aws_secure_tunnel_operation_message_set_stream_id(
     struct aws_secure_tunnel_operation_message *message_op = operation->impl;
     int32_t stream_id = INVALID_STREAM_ID;
 
-    struct aws_secure_tunnel_message_storage *message_storage = &message_op->options_storage;
+    struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
-    if (message_storage->service_id.len > 0) {
+    if (message_view->service_id.len > 0) {
         struct aws_string *service_id = NULL;
-        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, &message_storage->service_id);
+        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, &message_view->service_id);
 
         if (secure_tunnel->config->service_id_1 != NULL &&
             aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
@@ -229,12 +224,11 @@ static int s_aws_secure_tunnel_operation_message_set_stream_id(
             stream_id = secure_tunnel->config->service_id_3_stream_id;
         } else {
             /* service_id doesn't match any existing service id*/
-            AWS_LOGF_ERROR(
+            AWS_LOGF_DEBUG(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: aws_message_storage - invalid service_id:%s",
-                (void *)message_storage,
+                "id=%p: invalid service_id:%s attempted to be used with an outbound message",
+                (void *)message_view,
                 aws_string_c_str(service_id));
-            /* STEVE TODO should we throw something or just log the error here? */
             stream_id = INVALID_STREAM_ID;
         }
         aws_string_destroy(service_id);
@@ -294,6 +288,7 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
 
     message_op->allocator = allocator;
     message_op->base.vtable = &s_message_operation_vtable;
+    message_op->base.operation_type = AWS_STOT_DATA;
     aws_ref_count_init(&message_op->base.ref_count, message_op, s_destroy_operation_message);
     message_op->base.impl = message_op;
 
@@ -326,6 +321,8 @@ static void s_destroy_operation_pingreq(void *object) {
 }
 
 struct aws_secure_tunnel_operation_pingreq *aws_secure_tunnel_operation_pingreq_new(struct aws_allocator *allocator) {
+    AWS_PRECONDITION(allocator != NULL);
+
     struct aws_secure_tunnel_operation_pingreq *pingreq_op =
         aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_operation_pingreq));
     if (pingreq_op == NULL) {

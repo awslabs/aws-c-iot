@@ -31,7 +31,6 @@ struct aws_secure_tunnel_message_storage {
     struct aws_allocator *allocator;
     struct aws_secure_tunnel_message_view storage_view;
 
-    enum aws_secure_tunnel_message_type type;
     bool ignorable;
     int32_t stream_id;
     struct aws_byte_cursor service_id;

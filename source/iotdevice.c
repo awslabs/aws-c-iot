@@ -15,6 +15,9 @@
 /* clang-format off */
 static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_INVALID_RESERVED_BITS,
+        "Bits marked as reserved in the IoT Device spec were incorrectly set."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_REPORT_INTERVAL,
         "Invalid defender task reporting interval. Must be greater than 5 minutes."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
@@ -55,19 +58,19 @@ static struct aws_error_info s_errors[] = {
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_SECURE_TUNNEL_TERMINATED,
         "Secure Tunnel terminated by user request."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
-        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_DISCONNECTION,
-        "Secure Tunnel operation failed due to disconnected state."),
-    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_WEBSOCKET_TIMEOUT,
         "Remote endpoint did not respond to connect request before timeout exceeded."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PING_RESPONSE_TIMEOUT,
         "Remote endpoint did not respond to a PINGREQ before timeout exceeded."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
-        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY,
-        "Error while processing secure tunnel operational state."),
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_DISCONNECTION,
+        "Secure Tunnel operation failed due to disconnected state."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_PROCESSING_FAILURE,
+        "Error while processing secure tunnel operational state."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY,
         "Error while processing secure tunnel operational state."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_UNEXPECTED_HANGUP,

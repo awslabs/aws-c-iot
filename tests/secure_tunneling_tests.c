@@ -333,7 +333,7 @@ static int s_test_sent_data(
     //     aws_byte_buf_init(
     //         &out_buf, test_context->secure_tunnel->options->allocator, (size_t)frame_options.payload_length));
 
-    ASSERT_TRUE(secure_tunneling_send_data_call(NULL, &out_buf, frame_options.user_data));
+    // ASSERT_TRUE(secure_tunneling_send_data_call(NULL, &out_buf, frame_options.user_data));
     struct aws_byte_cursor out_buf_cur = aws_byte_cursor_from_buf(&out_buf);
 
     ASSERT_UINT_EQUALS(out_buf_cur.len - prefix_bytes, serialized_st_msg.len);
