@@ -37,14 +37,14 @@ enum aws_secure_tunnel_state {
     AWS_STS_STOPPED,
 
     /*
-     * The secure tunnel is attempting to connect to a remote endpoint, and is waiting for channel setup to complete.
-     * This state is not interruptible by any means other than channel setup completion.
+     * The secure tunnel is attempting to connect to a remote endpoint and establish a WebSocket upgrade. This state is
+     * not interruptible by any means other than WebSocket setup completion.
      *
      * Next States:
      *    CONNECTED - if WebSocket handshake is successful and desired state is still CONNECTED
-     *    WEBSOCKET_SHUTDOWN - if the websocket completes setup with no error but desired state is not CONNECTED
-     *    PENDING_RECONNECT - if the websocket fails to complete setup and desired state is still CONNECTED
-     *    STOPPED - if the websocket fails to complete setup and desired state is not CONNECTED
+     *    WEBSOCKET_SHUTDOWN - if the WebSocket completes setup with no error but desired state is not CONNECTED
+     *    PENDING_RECONNECT - if the WebSocket fails to complete setup and desired state is still CONNECTED
+     *    STOPPED - if the WebSocket fails to complete setup and desired state is not CONNECTED
      */
     AWS_STS_CONNECTING,
 
@@ -53,28 +53,28 @@ enum aws_secure_tunnel_state {
      *
      * Next States:
      *    WEBSOCKET_SHUTDOWN - desired state is no longer CONNECTED
-     *    PENDING_RECONNECT - unexpected websocket shutdown completion and desired state still CONNECTED
-     *    STOPPED - unexpected websocket shutdown completion and desired state no longer CONNECTED
+     *    PENDING_RECONNECT - unexpected WebSocket shutdown completion and desired state still CONNECTED
+     *    STOPPED - unexpected WebSocket shutdown completion and desired state no longer CONNECTED
      */
     AWS_STS_CONNECTED,
 
     /*
-     * The secure tunnel is attempt to shut down a websocket connection cleanly by finishing the current operation and
-     * then transmitting a STREAM RESET message to all open streams.
+     * The secure tunnel is attempting to shut down a WebSocket connection cleanly by finishing the current operation
+     * and then transmitting a STREAM RESET message to all open streams.
      *
      * Next States:
      *    WEBSOCKET_SHUTDOWN - on sucessful (or unsuccessful) disconnection
-     *    PENDING_RECONNECT - unexpected websocket shutdown completion and desired state still CONNECTED
-     *    STOPPED - unexpected websocket shutdown completion and desired state no longer CONNECTED
+     *    PENDING_RECONNECT - unexpected WebSocket shutdown completion and desired state still CONNECTED
+     *    STOPPED - unexpected WebSocket shutdown completion and desired state no longer CONNECTED
      */
     AWS_STS_CLEAN_DISCONNECT,
 
     /*
-     * The secure tunnel is waiting for the websocket to completely shut down.  This state is not interruptible.
+     * The secure tunnel is waiting for the WebSocket to completely shut down.  This state is not interruptible.
      *
      * Next States:
-     *    PENDING_RECONNECT - the websocket has shut down and desired state is still CONNECTED
-     *    STOPPED - the websocket has shut down and desired state is not CONNECTED
+     *    PENDING_RECONNECT - the WebSocket has shut down and desired state is still CONNECTED
+     *    STOPPED - the WebSocket has shut down and desired state is not CONNECTED
      */
     AWS_STS_WEBSOCKET_SHUTDOWN,
 
@@ -119,36 +119,18 @@ struct data_tunnel_pair {
     bool length_prefix_written;
 };
 
-/* Secure Tunnel stream information */
-struct aws_secure_tunnel_stream {
-    struct aws_string *service_id;
-    int32_t stream_id;
-    /* for use with V3 */
-    uint32_t connection_id;
-};
-
 struct aws_secure_tunnel_vtable {
     /* aws_high_res_clock_get_ticks */
     uint64_t (*get_current_time_fn)(void);
 
-    int (*send_data)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
-    int (*send_data_v2)(
-        struct aws_secure_tunnel *secure_tunnel,
-        const struct aws_secure_tunnel_message_view *message_options);
-    int (*send_stream_start)(struct aws_secure_tunnel *secure_tunnel);
-    int (*send_stream_start_v2)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *service_id_data);
-    int (*send_stream_reset)(struct aws_secure_tunnel *secure_tunnel);
+    // int (*send_data)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
+    // int (*send_data_v2)(
+    //     struct aws_secure_tunnel *secure_tunnel,
+    //     const struct aws_secure_tunnel_message_view *message_options);
+    // int (*send_stream_start)(struct aws_secure_tunnel *secure_tunnel);
+    // int (*send_stream_start_v2)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor
+    // *service_id_data); int (*send_stream_reset)(struct aws_secure_tunnel *secure_tunnel);
 };
-
-// struct aws_websocket_client_connection_options;
-struct aws_websocket_send_frame_options;
-
-// struct aws_websocket_vtable {
-//     int (*client_connect)(const struct aws_websocket_client_connection_options *options);
-//     int (*send_frame)(struct aws_websocket *websocket, const struct aws_websocket_send_frame_options *options);
-//     void (*close)(struct aws_websocket *websocket, bool free_scarce_resources_immediately);
-//     void (*release)(struct aws_websocket *websocket);
-// };
 
 struct aws_secure_tunnel {
     /* Static settings */
@@ -199,20 +181,6 @@ struct aws_secure_tunnel {
      */
     enum aws_secure_tunnel_state current_state;
 
-    // struct aws_websocket_vtable websocket_vtable;
-
-    /* Used to check connection state */
-    bool isConnected;
-
-    /*
-     * Temporary state-related data.
-     *
-     * clean_disconnect_error_code - the CLEAN_DISCONNECT state takes time to complete and we want to be able
-     * to pass an error code from a prior event to the channel shutdown.  This holds the "override" error code
-     * that we'd like to shutdown the channel with while CLEAN_DISCONNECT is processed.
-     */
-    int clean_disconnect_error_code;
-
     /*
      * handshake_request exists between the transform completion timepoint and the websocket setup callback.
      */
@@ -225,19 +193,10 @@ struct aws_secure_tunnel {
     /* Stores what has been received but not processed */
     struct aws_byte_buf received_data;
 
-    /* Error code of last connection attempt */
-    int connection_error_code;
-
     /*
      * When should the secure tunnel next attempt to reconnect?  Only used by PENDING_RECONNECT state.
      */
     uint64_t next_reconnect_time_ns;
-
-    /*
-     * When should the secure tunnel reset current_reconnect_delay_interval_ms to the minimum value?  Only relevant to
-     * the CONNECTED state.
-     */
-    uint64_t next_reconnect_delay_reset_time_ns;
 
     /*
      * How many consecutive reconnect failures have we experienced?
@@ -248,7 +207,7 @@ struct aws_secure_tunnel {
     struct aws_secure_tunnel_operation *current_operation;
 
     /*
-     * Is there an io message in transit (to the socket) that has not invoked its write completion callback yet?
+     * Is there a WebSocket message in transit (to the socket) that has not invoked its write completion callback yet?
      * The secure tunnel implementation only allows one in-transit message at a time, and so if this is true, we don't
      * send additional ones/
      */
@@ -256,14 +215,10 @@ struct aws_secure_tunnel {
 
     /*
      * When should the next PINGREQ be sent?
+     * The secure tunneling endpoint ELB drops idle connect after 1 minute. we need to send a ping periodically to keep
+     * the connection alive.
      */
     uint64_t next_ping_time;
-
-    /* Steve todo remove this and use next_ping_time above with tasks */
-    /* The secure tunneling endpoint ELB drops idle connect after 1 minute. We need to send a ping periodically to keep
-     * the connection */
-
-    // struct ping_task_context *ping_task_context;
 };
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_IMPL_H */

@@ -14,7 +14,6 @@
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/event_loop.h>
 #include <aws/io/socket.h>
-#include <aws/iotdevice/private/iotdevice_internals.h>
 #include <aws/iotdevice/private/serializer.h>
 #include <inttypes.h>
 #include <math.h>
@@ -648,7 +647,6 @@ static void s_change_current_state_to_connecting(struct aws_secure_tunnel *secur
         secure_tunnel->current_state == AWS_STS_STOPPED || secure_tunnel->current_state == AWS_STS_PENDING_RECONNECT);
 
     secure_tunnel->current_state = AWS_STS_CONNECTING;
-    secure_tunnel->clean_disconnect_error_code = AWS_ERROR_SUCCESS;
 
     int result = s_websocket_connect(secure_tunnel);
 
@@ -1419,9 +1417,6 @@ static uint64_t s_compute_next_service_time_secure_tunnel_connected(
 
     next_service_time = s_min_non_0_64(operation_processing_time, next_service_time);
 
-    /* reset reconnect delay interval */
-    next_service_time = s_min_non_0_64(secure_tunnel->next_reconnect_delay_reset_time_ns, next_service_time);
-
     return next_service_time;
 }
 
@@ -1806,15 +1801,15 @@ error:
     return AWS_OP_ERR;
 }
 
-int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
-    return secure_tunnel->vtable->send_data(secure_tunnel, data);
-}
+// int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
+//     return secure_tunnel->vtable->send_data(secure_tunnel, data);
+// }
 
-int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel) {
-    return secure_tunnel->vtable->send_stream_start(secure_tunnel);
-}
+// int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel) {
+//     return secure_tunnel->vtable->send_stream_start(secure_tunnel);
+// }
 
-/* Steve Todo a V2/V3 version is required to reset on a failed stream start attempt */
-int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
-    return secure_tunnel->vtable->send_stream_reset(secure_tunnel);
-}
+// /* Steve Todo a V2/V3 version is required to reset on a failed stream start attempt */
+// int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
+//     return secure_tunnel->vtable->send_stream_reset(secure_tunnel);
+// }
