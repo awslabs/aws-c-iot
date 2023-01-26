@@ -20,7 +20,6 @@ struct aws_secure_tunnel_operation;
 
 enum aws_secure_tunnel_operation_type {
     AWS_STOT_NONE,
-    AWS_STOT_CONNECT,
     AWS_STOT_PING,
     AWS_STOT_DATA,
     AWS_STOT_STREAM_RESET,

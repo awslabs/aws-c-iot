@@ -36,30 +36,11 @@ enum aws_secure_tunnel_protocol_buffer_wire_type {
     AWS_SECURE_TUNNEL_PBWT_32_BIT = 5,            /* fixed32, sfixed32, float */
 };
 
-/**
- * A single IoT Secure Tunnel Message
- * STEVE TODO remove this. replaced with aws_secure_tunnel_message_view
- */
-struct aws_iot_st_msg {
-    enum aws_secure_tunnel_message_type type;
-    int32_t stream_id;
-    int ignorable;
-    struct aws_byte_buf payload;
-    struct aws_byte_buf service_id;
-    uint32_t connection_id;
-};
-
 typedef void(aws_secure_tunnel_on_message_received_fn)(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view);
 
 AWS_EXTERN_C_BEGIN
-
-AWS_IOTDEVICE_API
-int aws_iot_st_msg_serialize_from_struct(
-    struct aws_byte_buf *buffer,
-    struct aws_allocator *allocator,
-    struct aws_iot_st_msg message);
 
 AWS_IOTDEVICE_API
 int aws_iot_st_msg_serialize_from_view(

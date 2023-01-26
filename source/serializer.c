@@ -79,7 +79,7 @@ static int s_iot_st_encode_varint(
 static int s_iot_st_encode_lengthdelim(
     const uint8_t field_number,
     const uint8_t wire_type,
-    struct aws_byte_cursor *payload,
+    const struct aws_byte_cursor *payload,
     struct aws_byte_buf *buffer) {
     const uint8_t field_and_wire_type = (field_number << AWS_IOT_ST_FIELD_NUMBER_SHIFT) + wire_type;
     aws_byte_buf_append_byte_dynamic_secure(buffer, field_and_wire_type);
@@ -100,18 +100,14 @@ static int s_iot_st_encode_type(int32_t data, struct aws_byte_buf *buffer) {
     return s_iot_st_encode_varint(AWS_SECURE_TUNNEL_FN_TYPE, AWS_SECURE_TUNNEL_PBWT_VARINT, data, buffer);
 }
 
-static int s_iot_st_encode_payload(struct aws_byte_cursor *payload, struct aws_byte_buf *buffer) {
+static int s_iot_st_encode_payload(const struct aws_byte_cursor *payload, struct aws_byte_buf *buffer) {
     return s_iot_st_encode_lengthdelim(
         AWS_SECURE_TUNNEL_FN_PAYLOAD, AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMINTED, payload, buffer);
 }
 
-static int s_iot_st_encode_service_id(struct aws_byte_cursor *service_id, struct aws_byte_buf *buffer) {
+static int s_iot_st_encode_service_id(const struct aws_byte_cursor *service_id, struct aws_byte_buf *buffer) {
     return s_iot_st_encode_lengthdelim(
         AWS_SECURE_TUNNEL_FN_SERVICE_ID, AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMINTED, service_id, buffer);
-}
-
-static int s_iot_st_encode_connection_id(uint32_t data, struct aws_byte_buf *buffer) {
-    return s_iot_st_encode_varint(AWS_SECURE_TUNNEL_FN_CONNECTION_ID, AWS_SECURE_TUNNEL_PBWT_VARINT, data, buffer);
 }
 
 static int s_iot_st_get_varint_size(size_t value, size_t *encode_size) {
@@ -132,87 +128,6 @@ static int s_iot_st_get_varint_size(size_t value, size_t *encode_size) {
     return AWS_OP_SUCCESS;
 }
 
-// static int s_iot_st_compute_message_length(const struct aws_iot_st_msg *message, size_t *message_length) {
-//     fprintf(stdout, "\ns_iot_st_compute_message_length()\ntype: %d\n", message->type);
-//     size_t local_length = 0;
-
-//     /*
-//      * 1 byte type key
-//      * 1 byte type varint
-//      */
-//     local_length += 2;
-
-//     if (message->stream_id != 0) {
-//         /*
-//          * 1 byte steram_id key
-//          * 1-4 byte stream_id varint
-//          */
-//         size_t stream_id_length = 0;
-
-//         if (s_iot_st_get_varint_size((uint32_t)message->stream_id, &stream_id_length)) {
-//             return AWS_OP_ERR;
-//         }
-
-//         local_length += (1 + stream_id_length);
-//         fprintf(stdout, "adding stream_id:%d total:%zu\n", message->stream_id, local_length);
-//     }
-
-//     if (message->ignorable != 0) {
-//         /*
-//          * 1 byte ignorable key
-//          * 1 byte ignorable varint
-//          */
-//         local_length += 2;
-//         fprintf(stdout, "adding ignorable total:%zu\n", local_length);
-//     }
-
-//     if (message->payload.len != 0) {
-//         /*
-//          * 1 byte key
-//          * 1-4 byte payload length varint
-//          * n bytes payload.len
-//          */
-//         size_t payload_length = 0;
-//         if (s_iot_st_get_varint_size((uint32_t)message->payload.len, &payload_length)) {
-//             return AWS_OP_ERR;
-//         }
-//         local_length += (1 + message->payload.len + payload_length);
-//         fprintf(stdout, "adding message total:%zu\n", local_length);
-//     }
-
-//     if (message->service_id.len != 0) {
-//         /*
-//          * 1 byte key
-//          * 1-4 byte payload length varint
-//          * n bytes service_id.len
-//          */
-//         size_t service_id_length = 0;
-//         if (s_iot_st_get_varint_size((uint32_t)message->service_id.len, &service_id_length)) {
-//             return AWS_OP_ERR;
-//         }
-//         local_length += (1 + message->service_id.len + service_id_length);
-//         fprintf(stdout, "adding service_id total:%zu\n", local_length);
-//     }
-
-//     if (message->connection_id != 0) {
-//         /*
-//          * 1 byte connection_id key
-//          * 1-4 byte connection_id varint
-//          */
-//         size_t connection_id_length = 0;
-
-//         if (s_iot_st_get_varint_size((uint32_t)message->connection_id, &connection_id_length)) {
-//             return AWS_OP_ERR;
-//         }
-
-//         local_length += (1 + connection_id_length);
-//         fprintf(stdout, "adding connection_id total:%zu\n", local_length);
-//     }
-
-//     *message_length = local_length;
-//     return AWS_OP_SUCCESS;
-// }
-
 static int s_iot_st_compute_message_length(
     const struct aws_secure_tunnel_message_view *message,
     size_t *message_length) {
@@ -227,7 +142,7 @@ static int s_iot_st_compute_message_length(
 
     if (message->stream_id != 0) {
         /*
-         * 1 byte steram_id key
+         * 1 byte stream_id key
          * 1-4 byte stream_id varint
          */
         size_t stream_id_length = 0;
@@ -299,6 +214,9 @@ int aws_iot_st_msg_serialize_from_view(
             goto cleanup;
         }
         fprintf(stdout, "message type encoded. buf length: %zu\n", buffer->len);
+    } else {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message missing type during encoding");
+        goto cleanup;
     }
 
     if (message_view->stream_id != 0) {
@@ -328,71 +246,6 @@ int aws_iot_st_msg_serialize_from_view(
         }
         fprintf(stdout, "service id encoded. buf length: %zu\n", buffer->len);
     }
-
-    AWS_RETURN_ERROR_IF2(buffer->capacity < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
-    return AWS_OP_SUCCESS;
-
-cleanup:
-    aws_byte_buf_clean_up(buffer);
-    return AWS_OP_ERR;
-}
-
-int aws_iot_st_msg_serialize_from_struct(
-    struct aws_byte_buf *buffer,
-    struct aws_allocator *allocator,
-    struct aws_iot_st_msg message) {
-
-    size_t message_total_length = 0;
-    if (s_iot_st_compute_message_length(&message, &message_total_length)) {
-        return AWS_OP_ERR;
-    }
-
-    if (aws_byte_buf_init(buffer, allocator, message_total_length) != AWS_OP_SUCCESS) {
-        return AWS_OP_ERR;
-    }
-
-    if (message.type != AWS_SECURE_TUNNEL_MT_UNKNOWN) {
-        if (s_iot_st_encode_type(message.type, buffer)) {
-            goto cleanup;
-        }
-    }
-
-    fprintf(stdout, "message type encoded. buf length: %zu\n", buffer->len);
-
-    if (message.stream_id != 0) {
-        if (s_iot_st_encode_stream_id(message.stream_id, buffer)) {
-            goto cleanup;
-        }
-    }
-    fprintf(stdout, "stream id encoded. buf length: %zu\n", buffer->len);
-
-    if (message.ignorable != 0) {
-        if (s_iot_st_encode_ignorable(message.ignorable, buffer)) {
-            goto cleanup;
-        }
-    }
-    fprintf(stdout, "ignorable encoded. buf length: %zu\n", buffer->len);
-
-    if (message.payload.len != 0) {
-        if (s_iot_st_encode_payload(&message.payload, buffer)) {
-            goto cleanup;
-        }
-    }
-    fprintf(stdout, "payload encoded. buf length: %zu\n", buffer->len);
-
-    if (message.service_id.len != 0) {
-        if (s_iot_st_encode_service_id(&message.service_id, buffer)) {
-            goto cleanup;
-        }
-    }
-    fprintf(stdout, "service id encoded. buf length: %zu\n", buffer->len);
-
-    if (message.connection_id != 0) {
-        if (s_iot_st_encode_connection_id(message.connection_id, buffer)) {
-            goto cleanup;
-        }
-    }
-    fprintf(stdout, "connection id encoded. buf length: %zu\n", buffer->len);
 
     AWS_RETURN_ERROR_IF2(buffer->capacity < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     return AWS_OP_SUCCESS;

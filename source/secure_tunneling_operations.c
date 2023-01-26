@@ -616,8 +616,6 @@ const char *aws_secure_tunnel_operation_type_to_c_string(enum aws_secure_tunnel_
     switch (operation_type) {
         case AWS_STOT_NONE:
             return "NONE";
-        case AWS_STOT_CONNECT:
-            return "CONNECT";
         case AWS_STOT_PING:
             return "PING";
         case AWS_STOT_DATA:

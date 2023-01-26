@@ -18,11 +18,9 @@ AWS_EXTERN_C_BEGIN
 
 AWS_IOTDEVICE_API
 int secure_tunneling_init_send_frame(
-    struct aws_websocket_send_frame_options *frame_options,
     struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_byte_cursor *payload_data,
-    const struct aws_byte_cursor *service_id_data,
-    enum aws_secure_tunnel_message_type type);
+    struct aws_websocket_send_frame_options *frame_options,
+    const struct aws_secure_tunnel_message_view *message_view);
 
 AWS_IOTDEVICE_API
 void init_websocket_client_connection_options(
