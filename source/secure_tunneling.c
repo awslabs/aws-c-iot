@@ -19,7 +19,6 @@
 #include <math.h>
 
 #define MAX_WEBSOCKET_PAYLOAD 131076
-#define AWS_SECURE_TUNNEL_IO_MESSAGE_DEFAULT_LENGTH 4096
 #define INVALID_STREAM_ID 0
 #define PAYLOAD_BYTE_LENGTH_PREFIX 2
 #define MIN_RECONNECT_DELAY_MS 1000
@@ -118,7 +117,7 @@ static void s_on_secure_tunnel_zero_ref_count(void *user_data) {
 }
 
 /*****************************************************************************************************************
- *                                    RECEIVED MESSAGE HANDLING
+ *                                    RECEIVE MESSAGE HANDLING
  *****************************************************************************************************************/
 
 /*
@@ -131,13 +130,12 @@ static void s_reset_secure_tunnel(struct aws_secure_tunnel *secure_tunnel) {
     secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
     secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
     secure_tunnel->config->service_id_3_stream_id = INVALID_STREAM_ID;
-    // Steve TODO we may not want to drop data because we don't know which stream the data is for.
     secure_tunnel->received_data.len = 0; /* Drop any incomplete secure tunnel frame */
 }
 
 static int s_aws_secure_tunnel_set_stream_id(
     struct aws_secure_tunnel *secure_tunnel,
-    struct aws_byte_cursor *service_id,
+    const struct aws_byte_cursor *service_id,
     int32_t stream_id) {
     /* No service id means V1 protocol is being used */
     if (service_id->len == 0) {
@@ -191,19 +189,25 @@ static void s_aws_secure_tunnel_on_stream_start_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
     int result = s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_view->service_id, message_view->stream_id);
-    secure_tunnel->config->on_stream_start(message_view, result, secure_tunnel->config->user_data);
+    if (secure_tunnel->config->on_stream_start) {
+        secure_tunnel->config->on_stream_start(message_view, result, secure_tunnel->config->user_data);
+    }
 }
 
 static void s_aws_secure_tunnel_on_stream_reset_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
     int result = s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_view->service_id, INVALID_STREAM_ID);
-    secure_tunnel->config->on_stream_reset(message_view, result, secure_tunnel->config->user_data);
+    if (secure_tunnel->config->on_stream_reset) {
+        secure_tunnel->config->on_stream_reset(message_view, result, secure_tunnel->config->user_data);
+    }
 }
 
 static void s_aws_secure_tunnel_on_session_reset_received(struct aws_secure_tunnel *secure_tunnel) {
     s_reset_secure_tunnel(secure_tunnel);
-    secure_tunnel->config->on_session_reset(secure_tunnel->config->user_data);
+    if (secure_tunnel->config->on_session_reset) {
+        secure_tunnel->config->on_session_reset(secure_tunnel->config->user_data);
+    }
 }
 
 static void s_aws_secure_tunnel_on_service_ids_received(struct aws_secure_tunnel *secure_tunnel) {
@@ -233,11 +237,11 @@ static void s_aws_secure_tunnel_on_service_ids_received(struct aws_secure_tunnel
 static void s_aws_secure_tunnel_connected_on_message_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
-    printf("\n\ns_aws_secure_tunnel_connected_on_message_received() called \n\n");
-    printf("\nMessage Type: %s", aws_secure_tunnel_message_type_to_c_string(message_view->type));
     switch (message_view->type) {
         case AWS_SECURE_TUNNEL_MT_DATA:
-            secure_tunnel->config->on_message_received(message_view, secure_tunnel);
+            if (secure_tunnel->config->on_message_received) {
+                secure_tunnel->config->on_message_received(message_view, secure_tunnel->config->user_data);
+            }
             break;
         case AWS_SECURE_TUNNEL_MT_STREAM_START:
             s_aws_secure_tunnel_on_stream_start_received(secure_tunnel, message_view);
@@ -292,6 +296,121 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         received_data->len = 0;
         aws_byte_buf_append(received_data, &cursor);
     }
+}
+
+/*****************************************************************************************************************
+ *                                    SEND MESSAGE HANDLING
+ *****************************************************************************************************************/
+
+static void s_secure_tunneling_websocket_on_send_data_complete_callback(
+    struct aws_websocket *websocket,
+    int error_code,
+    void *user_data) {
+    (void)websocket;
+    struct data_tunnel_pair *pair = user_data;
+    struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)pair->secure_tunnel;
+    if (secure_tunnel->config->on_send_data_complete) {
+        secure_tunnel->config->on_send_data_complete(error_code, pair->secure_tunnel->config->user_data);
+    }
+    aws_byte_buf_clean_up(&pair->buf);
+    aws_mem_release(secure_tunnel->allocator, pair);
+    secure_tunnel->pending_write_completion = false;
+}
+
+bool secure_tunneling_websocket_stream_outgoing_payload(
+    struct aws_websocket *websocket,
+    struct aws_byte_buf *out_buf,
+    void *user_data) {
+    (void)websocket;
+    struct data_tunnel_pair *pair = user_data;
+    size_t space_available = out_buf->capacity - out_buf->len;
+
+    if ((pair->length_prefix_written == false) && (space_available >= PAYLOAD_BYTE_LENGTH_PREFIX)) {
+        if (aws_byte_buf_write_be16(out_buf, (int16_t)pair->buf.len) == false) {
+            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing buffer length prefix to out_buf");
+            return false;
+        }
+        pair->length_prefix_written = true;
+        space_available = out_buf->capacity - out_buf->len;
+    }
+
+    if (pair->length_prefix_written == true) {
+        size_t bytes_max = pair->cur.len;
+        size_t amount_to_send = bytes_max < space_available ? bytes_max : space_available;
+
+        struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&pair->cur, amount_to_send);
+        if (send_cursor.len) {
+            if (!aws_byte_buf_write_from_whole_cursor(out_buf, send_cursor)) {
+                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+static int s_init_data_tunnel_pair_from_message(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct data_tunnel_pair *pair,
+    const struct aws_secure_tunnel_message_view *message_view) {
+    pair->secure_tunnel = secure_tunnel;
+    pair->length_prefix_written = false;
+    if (aws_iot_st_msg_serialize_from_view(&pair->buf, secure_tunnel->allocator, message_view)) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
+        goto cleanup;
+    }
+    if (pair->buf.len > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message size greater than AWS_IOT_ST_MAX_MESSAGE_SIZE");
+        goto cleanup;
+    }
+    pair->cur = aws_byte_cursor_from_buf(&pair->buf);
+    return AWS_OP_SUCCESS;
+
+cleanup:
+    aws_byte_buf_clean_up(&pair->buf);
+    aws_mem_release(secure_tunnel->allocator, (void *)pair);
+    return AWS_OP_ERR;
+}
+
+static void s_init_websocket_frame_options(
+    struct data_tunnel_pair *pair,
+    struct aws_websocket_send_frame_options *frame_options) {
+    AWS_ZERO_STRUCT(*frame_options);
+    frame_options->payload_length = pair->buf.len + PAYLOAD_BYTE_LENGTH_PREFIX;
+    frame_options->user_data = pair;
+    frame_options->stream_outgoing_payload = secure_tunneling_websocket_stream_outgoing_payload;
+    frame_options->on_complete = s_secure_tunneling_websocket_on_send_data_complete_callback;
+    frame_options->opcode = AWS_WEBSOCKET_OPCODE_BINARY;
+    frame_options->fin = true;
+}
+
+int secure_tunneling_init_send_frame(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_websocket_send_frame_options *frame_options,
+    const struct aws_secure_tunnel_message_view *message_view) {
+
+    struct data_tunnel_pair *pair =
+        (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->allocator, sizeof(struct data_tunnel_pair));
+    if (s_init_data_tunnel_pair_from_message(secure_tunnel, pair, message_view)) {
+        return AWS_OP_ERR;
+    }
+
+    s_init_websocket_frame_options(pair, frame_options);
+    return AWS_OP_SUCCESS;
+}
+
+static int s_secure_tunneling_send(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_view) {
+    struct aws_websocket_send_frame_options frame_options;
+    if (secure_tunneling_init_send_frame(secure_tunnel, &frame_options, message_view)) {
+        return AWS_OP_ERR;
+    }
+
+    /* Prevent further operations that attempt to write to the WebSocket until current operation is completed */
+    secure_tunnel->pending_write_completion = true;
+    return aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
 }
 
 /*****************************************************************************************************************
@@ -366,7 +485,7 @@ static void s_secure_tunnel_shutdown(struct aws_client_bootstrap *bootstrap, int
 }
 
 /* Normal call to shutdown the websocket */
-static void s_secure_tunnel_shutdown_websocket(struct aws_secure_tunnel *secure_tunnel) {
+static void s_secure_tunnel_shutdown_websocket(struct aws_secure_tunnel *secure_tunnel, int error_code) {
     if (secure_tunnel->current_state != AWS_STS_CONNECTED && secure_tunnel->current_state != AWS_STS_CLEAN_DISCONNECT) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -375,6 +494,10 @@ static void s_secure_tunnel_shutdown_websocket(struct aws_secure_tunnel *secure_
             (int)secure_tunnel->current_state,
             aws_secure_tunnel_state_to_c_string(secure_tunnel->current_state));
         return;
+    }
+
+    if (secure_tunnel->config->on_connection_shutdown) {
+        secure_tunnel->config->on_connection_shutdown(error_code, secure_tunnel->config->user_data);
     }
 
     s_change_current_state(secure_tunnel, AWS_STS_WEBSOCKET_SHUTDOWN);
@@ -429,6 +552,10 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
     AWS_FATAL_ASSERT((setup->error_code != 0) == (setup->websocket == NULL));
 
     secure_tunnel->websocket = setup->websocket;
+
+    if (secure_tunnel->config->on_connection_complete) {
+        secure_tunnel->config->on_connection_complete(setup->error_code, secure_tunnel->config->user_data);
+    }
 
     /* Failed/Successful websocket creation and associated errors logged by "websocket-setup" */
 
@@ -936,118 +1063,6 @@ static uint64_t s_aws_high_res_clock_get_ticks_proxy(void) {
 //     return AWS_OP_SUCCESS;
 // }
 
-static void s_secure_tunneling_websocket_on_send_data_complete_callback(
-    struct aws_websocket *websocket,
-    int error_code,
-    void *user_data) {
-    (void)websocket;
-    struct data_tunnel_pair *pair = user_data;
-    struct aws_secure_tunnel *secure_tunnel = (struct aws_secure_tunnel *)pair->secure_tunnel;
-    if (secure_tunnel->config->on_send_data_complete) {
-        secure_tunnel->config->on_send_data_complete(error_code, pair->secure_tunnel->config->user_data);
-    }
-    aws_byte_buf_clean_up(&pair->buf);
-    aws_mem_release(secure_tunnel->allocator, pair);
-    secure_tunnel->pending_write_completion = false;
-}
-
-bool secure_tunneling_websocket_stream_outgoing_payload(
-    struct aws_websocket *websocket,
-    struct aws_byte_buf *out_buf,
-    void *user_data) {
-    (void)websocket;
-    struct data_tunnel_pair *pair = user_data;
-    size_t space_available = out_buf->capacity - out_buf->len;
-
-    if ((pair->length_prefix_written == false) && (space_available >= PAYLOAD_BYTE_LENGTH_PREFIX)) {
-        if (aws_byte_buf_write_be16(out_buf, (int16_t)pair->buf.len) == false) {
-            AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing buffer length prefix to out_buf");
-            return false;
-        }
-        pair->length_prefix_written = true;
-        space_available = out_buf->capacity - out_buf->len;
-    }
-
-    if (pair->length_prefix_written == true) {
-        size_t bytes_max = pair->cur.len;
-        size_t amount_to_send = bytes_max < space_available ? bytes_max : space_available;
-
-        struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&pair->cur, amount_to_send);
-        if (send_cursor.len) {
-            if (!aws_byte_buf_write_from_whole_cursor(out_buf, send_cursor)) {
-                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
-static int s_init_data_tunnel_pair_from_message(
-    struct aws_secure_tunnel *secure_tunnel,
-    struct data_tunnel_pair *pair,
-    const struct aws_secure_tunnel_message_view *message_view) {
-    pair->secure_tunnel = secure_tunnel;
-    pair->length_prefix_written = false;
-    if (aws_iot_st_msg_serialize_from_view(&pair->buf, secure_tunnel->allocator, message_view)) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
-        goto cleanup;
-    }
-    printf("\npair->buf.len %zu\n", pair->buf.len);
-    if (pair->buf.len > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message size greater than AWS_IOT_ST_MAX_MESSAGE_SIZE");
-        goto cleanup;
-    }
-    pair->cur = aws_byte_cursor_from_buf(&pair->buf);
-    return AWS_OP_SUCCESS;
-
-cleanup:
-    aws_byte_buf_clean_up(&pair->buf);
-    aws_mem_release(secure_tunnel->allocator, (void *)pair);
-    return AWS_OP_ERR;
-}
-
-static void s_init_websocket_frame_options(
-    struct data_tunnel_pair *pair,
-    struct aws_websocket_send_frame_options *frame_options) {
-    AWS_ZERO_STRUCT(*frame_options);
-    frame_options->payload_length = pair->buf.len + PAYLOAD_BYTE_LENGTH_PREFIX;
-    frame_options->user_data = pair;
-    frame_options->stream_outgoing_payload = secure_tunneling_websocket_stream_outgoing_payload;
-    frame_options->on_complete = s_secure_tunneling_websocket_on_send_data_complete_callback;
-    frame_options->opcode = AWS_WEBSOCKET_OPCODE_BINARY;
-    frame_options->fin = true;
-}
-
-int secure_tunneling_init_send_frame(
-    struct aws_secure_tunnel *secure_tunnel,
-    struct aws_websocket_send_frame_options *frame_options,
-    const struct aws_secure_tunnel_message_view *message_view) {
-
-    struct data_tunnel_pair *pair =
-        (struct data_tunnel_pair *)aws_mem_acquire(secure_tunnel->allocator, sizeof(struct data_tunnel_pair));
-    if (s_init_data_tunnel_pair_from_message(secure_tunnel, pair, message_view)) {
-        return AWS_OP_ERR;
-    }
-
-    s_init_websocket_frame_options(pair, frame_options);
-    return AWS_OP_SUCCESS;
-}
-
-static int s_secure_tunneling_send(
-    struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_secure_tunnel_message_view *message_view) {
-    struct aws_websocket_send_frame_options frame_options;
-    if (secure_tunneling_init_send_frame(secure_tunnel, &frame_options, message_view)) {
-        return AWS_OP_ERR;
-    }
-
-    /* Prevent further operations that attempt to write to the WebSocket until current operation is completed */
-    secure_tunnel->pending_write_completion = true;
-    return aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
-}
-
 static struct aws_secure_tunnel_vtable s_default_secure_tunnel_vtable = {
     .get_current_time_fn = s_aws_high_res_clock_get_ticks_proxy,
 };
@@ -1191,30 +1206,24 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
         if (current_operation == NULL) {
             break;
         }
+        int error_code = AWS_OP_SUCCESS;
 
         switch (current_operation->operation_type) {
-            case AWS_STOT_PING:
-                printf("\nOperation PING being executed\n");
+            case AWS_STOT_PING:;
                 /*
                  * Currently, pings are sent to keep the websocket alive but we do not receive responses from the secure
                  * tunnel service until a src is also connected. This is a known bug that is in their backlog. Once it
                  * is fixed, we should implement ping timeout checks to determine whether we are still connected to the
                  * secure tunnel through WebSocket.
                  */
-                if (secure_tunnel->websocket != NULL) {
-                    struct aws_websocket_send_frame_options frame_options;
-                    AWS_ZERO_STRUCT(frame_options);
-                    frame_options.opcode = AWS_WEBSOCKET_OPCODE_PING;
-                    frame_options.fin = true;
-                    aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
-                }
-                s_complete_operation(secure_tunnel, current_operation, AWS_OP_SUCCESS, NULL);
-                secure_tunnel->current_operation = NULL;
-                break;
-            case AWS_STOT_DATA:;
-                printf("\nOperation DATA being executed\n");
-                int error_code = AWS_OP_SUCCESS;
+                struct aws_websocket_send_frame_options frame_options;
+                AWS_ZERO_STRUCT(frame_options);
+                frame_options.opcode = AWS_WEBSOCKET_OPCODE_PING;
+                frame_options.fin = true;
+                aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
 
+                break;
+            case AWS_STOT_DATA:
                 /* If a data message attempts to be sent on an unopen stream, discard it. */
                 if ((*current_operation->vtable->aws_secure_tunnel_operation_set_stream_id_fn)(
                         current_operation, secure_tunnel)) {
@@ -1223,33 +1232,47 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
 
                     AWS_LOGF_DEBUG(
                         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                        "id=%p: failed to send message with error %d(%s)",
+                        "id=%p: failed to send DATA message with error %d(%s)",
                         (void *)secure_tunnel,
                         error_code,
                         aws_error_debug_str(error_code));
                 } else {
-
-                    struct aws_secure_tunnel_message_view const *message_view = current_operation->message_view;
-
-                    /* Send the Data through the WebSocket */
-                    if (s_secure_tunneling_send(secure_tunnel, message_view)) {
+                    /* Send the Data message through the WebSocket */
+                    if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
                         error_code = aws_last_error();
                     }
-
-                    aws_secure_tunnel_message_view_log(message_view, AWS_LL_DEBUG);
+                    aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
                 }
 
-                s_complete_operation(secure_tunnel, current_operation, error_code, NULL);
-                secure_tunnel->current_operation = NULL;
-
                 break;
+
             case AWS_STOT_STREAM_RESET:
                 break;
             case AWS_STOT_STREAM_START:
+                if ((*current_operation->vtable->aws_secure_tunnel_operation_set_next_stream_id_fn)(
+                        current_operation, secure_tunnel)) {
+                    error_code = aws_last_error();
+                    AWS_LOGF_DEBUG(
+                        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                        "id=%p: failed to send STREAM START message with error %d(%s)",
+                        (void *)secure_tunnel,
+                        error_code,
+                        aws_error_debug_str(error_code));
+                } else {
+                    /* Send the Stream Start message through the WebSocket */
+                    if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
+                        error_code = aws_last_error();
+                    }
+                    aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
+                }
                 break;
+
             case AWS_STOT_NONE:
                 break;
         }
+
+        s_complete_operation(secure_tunnel, current_operation, AWS_OP_SUCCESS, NULL);
+        secure_tunnel->current_operation = NULL;
 
         now = (*vtable->get_current_time_fn)();
         should_service = s_aws_secure_tunnel_should_service_operational_state(secure_tunnel, now);
@@ -1547,7 +1570,7 @@ static void s_service_state_connecting(struct aws_secure_tunnel *secure_tunnel, 
             (void *)secure_tunnel,
             error_code,
             aws_error_debug_str(error_code));
-        s_secure_tunnel_shutdown_websocket(secure_tunnel);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel, error_code);
         return;
     }
 }
@@ -1559,7 +1582,7 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: channel shutdown due to user Stop request",
             (void *)secure_tunnel);
-        s_secure_tunnel_shutdown_websocket(secure_tunnel);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP);
         return;
     }
 
@@ -1572,7 +1595,7 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
                 (void *)secure_tunnel,
                 error_code,
                 aws_error_debug_str(error_code));
-            s_secure_tunnel_shutdown_websocket(secure_tunnel);
+            s_secure_tunnel_shutdown_websocket(secure_tunnel, error_code);
             return;
         }
     }
@@ -1585,7 +1608,7 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
             (void *)secure_tunnel,
             error_code,
             aws_error_debug_str(error_code));
-        s_secure_tunnel_shutdown_websocket(secure_tunnel);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel, error_code);
         return;
     }
 }
@@ -1600,7 +1623,7 @@ static void s_service_state_clean_disconnect(struct aws_secure_tunnel *secure_tu
             (void *)secure_tunnel,
             error_code,
             aws_error_debug_str(error_code));
-        s_secure_tunnel_shutdown_websocket(secure_tunnel);
+        s_secure_tunnel_shutdown_websocket(secure_tunnel, error_code);
         return;
     }
 }
@@ -1734,7 +1757,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->websocket = NULL;
 
-    /* TODO: Release this buffer when there is no data to hold */
     aws_byte_buf_init(&secure_tunnel->received_data, options->allocator, MAX_WEBSOCKET_PAYLOAD);
 
     aws_secure_tunnel_options_storage_log(secure_tunnel->config, AWS_LL_DEBUG);
@@ -1773,12 +1795,11 @@ int aws_secure_tunnel_stop(struct aws_secure_tunnel *secure_tunnel) {
 int aws_secure_tunnel_send_message(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options) {
-    printf("\naws_secure_tunnel_send_message called\n");
     AWS_PRECONDITION(secure_tunnel != NULL);
     AWS_PRECONDITION(message_options != NULL);
 
-    struct aws_secure_tunnel_operation_message *message_op =
-        aws_secure_tunnel_operation_message_new(secure_tunnel->allocator, secure_tunnel, message_options);
+    struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
+        secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_DATA);
 
     if (message_op == NULL) {
         return AWS_OP_ERR;
@@ -1801,13 +1822,42 @@ error:
     return AWS_OP_ERR;
 }
 
-// int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data) {
-//     return secure_tunnel->vtable->send_data(secure_tunnel, data);
-// }
+int aws_secure_tunnel_stream_start(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options) {
+    AWS_PRECONDITION(secure_tunnel != NULL);
+    AWS_PRECONDITION(message_options != NULL);
 
-// int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel) {
-//     return secure_tunnel->vtable->send_stream_start(secure_tunnel);
-// }
+    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Stream Start can only be sent from source mode");
+        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
+    }
+
+    struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
+        secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_STREAM_START);
+
+    if (message_op == NULL) {
+        return AWS_OP_ERR;
+    }
+
+    AWS_LOGF_DEBUG(
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: Submitting MESSAGE operation (%p)",
+        (void *)secure_tunnel,
+        (void *)message_op);
+
+    if (s_submit_operation(secure_tunnel, &message_op->base)) {
+        goto error;
+    }
+
+    s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_options->service_id, message_options->stream_id);
+
+    return AWS_OP_SUCCESS;
+
+error:
+    aws_secure_tunnel_operation_release(&message_op->base);
+    return AWS_OP_ERR;
+}
 
 // /* Steve Todo a V2/V3 version is required to reset on a failed stream start attempt */
 // int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel) {

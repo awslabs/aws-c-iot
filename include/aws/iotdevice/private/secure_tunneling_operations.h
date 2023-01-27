@@ -50,9 +50,10 @@ struct aws_secure_tunnel_operation_vtable {
         struct aws_secure_tunnel_operation *operation,
         struct aws_secure_tunnel *secure_tunnel);
 
-    /* Get the stream id from an address */
-    int32_t *(*aws_secure_tunnel_operation_get_stream_id_address_fn)(
-        const struct aws_secure_tunnel_operation *operation);
+    /* Set the stream id of outgoing st_msg to +1 of the currently set stream id */
+    int (*aws_secure_tunnel_operation_set_next_stream_id_fn)(
+        struct aws_secure_tunnel_operation *operation,
+        struct aws_secure_tunnel *secure_tunnel);
 };
 
 /**
@@ -115,19 +116,17 @@ struct aws_secure_tunnel_options_storage {
 
     /* Callbacks */
     aws_secure_tunnel_message_received_fn *on_message_received;
-
-    void *user_data;
-
-    /* STEVE TODO we can depricate/remove these. Client only supports destination mode */
-    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
-    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
-    aws_secure_tunneling_on_data_receive_fn *on_data_receive;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
+
+    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
+
+    void *user_data;
+    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
 };
 
 AWS_EXTERN_C_BEGIN
@@ -169,7 +168,8 @@ AWS_IOTDEVICE_API
 int aws_secure_tunnel_message_storage_init(
     struct aws_secure_tunnel_message_storage *message_storage,
     struct aws_allocator *allocator,
-    const struct aws_secure_tunnel_message_view *message_options);
+    const struct aws_secure_tunnel_message_view *message_options,
+    enum aws_secure_tunnel_operation_type type);
 
 AWS_IOTDEVICE_API
 void aws_secure_tunnel_message_storage_clean_up(struct aws_secure_tunnel_message_storage *message_storage);
@@ -178,7 +178,8 @@ AWS_IOTDEVICE_API
 struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_new(
     struct aws_allocator *allocator,
     const struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_secure_tunnel_message_view *message_options);
+    const struct aws_secure_tunnel_message_view *message_options,
+    enum aws_secure_tunnel_operation_type type);
 
 /* Ping */
 
@@ -192,11 +193,6 @@ struct aws_secure_tunnel_operation_pingreq *aws_secure_tunnel_operation_pingreq_
  */
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_options_validate(const struct aws_secure_tunnel_options *options);
-
-AWS_IOTDEVICE_API
-void aws_secure_tunnel_options_storage_log(
-    const struct aws_secure_tunnel_options_storage *options_storage,
-    enum aws_log_level level);
 
 /**
  * Destroy options storage, and release any references held.
@@ -219,15 +215,6 @@ void aws_secure_tunnel_options_storage_log(
 
 AWS_IOTDEVICE_API
 const char *aws_secure_tunnel_operation_type_to_c_string(enum aws_secure_tunnel_operation_type operation_type);
-
-/* Stream */
-
-/* STEVE TODO add stream to API */
-// AWS_IOTDEVICE_API
-// struct aws_secure_tunnel_operation_data *aws_secure_tunnel_operation_stream_new(
-//     struct aws_allocator *allocator,
-//     const struct aws_secure_tunnel *secure_tunnel,
-//     const struct aws_secure_tunnel_message_stream_view *stream_options);
 
 AWS_EXTERN_C_END
 

@@ -25,31 +25,31 @@ static void s_on_send_data_complete(int error_code, void *user_data) {
     on_send_data_complete_error_code = error_code;
 }
 
-static void s_on_connection_complete(void *user_data) {
-    UNUSED(user_data);
-    aws_mutex_lock(&mutex);
-    aws_condition_variable_notify_one(&condition_variable);
-    aws_mutex_unlock(&mutex);
-}
+// static void s_on_connection_complete(void *user_data) {
+//     UNUSED(user_data);
+//     aws_mutex_lock(&mutex);
+//     aws_condition_variable_notify_one(&condition_variable);
+//     aws_mutex_unlock(&mutex);
+// }
 
-static void s_on_connection_shutdown(void *user_data) {
-    UNUSED(user_data);
-}
+// static void s_on_connection_shutdown(void *user_data) {
+//     UNUSED(user_data);
+// }
 
-static void s_on_data_receive(const struct aws_byte_buf *data, void *user_data) {
-    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received data:");
+// static void s_on_data_receive(const struct aws_byte_buf *data, void *user_data) {
+//     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Client received data:");
 
-    struct aws_allocator *allocator = (struct aws_allocator *)user_data;
+//     struct aws_allocator *allocator = (struct aws_allocator *)user_data;
 
-    struct aws_byte_cursor data_cursor = aws_byte_cursor_from_buf(data);
-    struct aws_byte_buf data_to_print;
-    aws_byte_buf_init(&data_to_print, allocator, data->len + 1); /* +1 for null terminator */
-    aws_byte_buf_append(&data_to_print, &data_cursor);
-    aws_byte_buf_append_null_terminator(&data_to_print);
-    AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "%s", (char *)data_to_print.buffer);
+//     struct aws_byte_cursor data_cursor = aws_byte_cursor_from_buf(data);
+//     struct aws_byte_buf data_to_print;
+//     aws_byte_buf_init(&data_to_print, allocator, data->len + 1); /* +1 for null terminator */
+//     aws_byte_buf_append(&data_to_print, &data_cursor);
+//     aws_byte_buf_append_null_terminator(&data_to_print);
+//     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "%s", (char *)data_to_print.buffer);
 
-    aws_byte_buf_clean_up(&data_to_print);
-}
+//     aws_byte_buf_clean_up(&data_to_print);
+// }
 
 // static void s_on_stream_start(void *user_data) {
 //     UNUSED(user_data);
@@ -93,10 +93,10 @@ static void s_init_secure_tunneling_connection_config(
     config->endpoint_host = aws_byte_cursor_from_c_str(endpoint);
     config->root_ca = root_ca;
 
-    config->on_connection_complete = s_on_connection_complete;
-    config->on_connection_shutdown = s_on_connection_shutdown;
+    // config->on_connection_complete = s_on_connection_complete;
+    // config->on_connection_shutdown = s_on_connection_shutdown;
     config->on_send_data_complete = s_on_send_data_complete;
-    config->on_data_receive = s_on_data_receive;
+    // config->on_data_receive = s_on_data_receive;
     // config->on_stream_start = s_on_stream_start;
     // config->on_stream_reset = s_on_stream_reset;
     config->on_session_reset = s_on_session_reset;

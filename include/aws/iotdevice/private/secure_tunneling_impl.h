@@ -94,24 +94,6 @@ enum aws_secure_tunnel_state {
     AWS_STS_TERMINATED
 };
 
-/**
- * Signature of the continuation function to be called after user-code transforms a websocket handshake request
- */
-typedef void(aws_secure_tunnel_transform_websocket_handshake_complete_fn)(
-    struct aws_http_message *request,
-    int error_code,
-    void *complete_ctx);
-
-/**
- * Signature of the websocket handshake request transformation function.  After transformation, the completion
- * function must be invoked to send the request.
- */
-typedef void(aws_secure_tunnel_transform_websocket_handshake_fn)(
-    struct aws_http_message *request,
-    void *user_data,
-    aws_secure_tunnel_transform_websocket_handshake_complete_fn *complete_fn,
-    void *complete_ctx);
-
 struct data_tunnel_pair {
     struct aws_byte_buf buf;
     struct aws_byte_cursor cur;
@@ -122,14 +104,6 @@ struct data_tunnel_pair {
 struct aws_secure_tunnel_vtable {
     /* aws_high_res_clock_get_ticks */
     uint64_t (*get_current_time_fn)(void);
-
-    // int (*send_data)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
-    // int (*send_data_v2)(
-    //     struct aws_secure_tunnel *secure_tunnel,
-    //     const struct aws_secure_tunnel_message_view *message_options);
-    // int (*send_stream_start)(struct aws_secure_tunnel *secure_tunnel);
-    // int (*send_stream_start_v2)(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor
-    // *service_id_data); int (*send_stream_reset)(struct aws_secure_tunnel *secure_tunnel);
 };
 
 struct aws_secure_tunnel {

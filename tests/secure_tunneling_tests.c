@@ -700,7 +700,7 @@ static int s_secure_tunneling_handle_send_data_public(struct aws_allocator *allo
         rc = s_byte_buf_init_rand(&buf, allocator, buf_sizes[i]);
         ASSERT_INT_EQUALS(AWS_OP_SUCCESS, rc);
 
-        struct aws_byte_cursor cur = aws_byte_cursor_from_buf(&buf);
+        // struct aws_byte_cursor cur = aws_byte_cursor_from_buf(&buf);
 
         /* Call public api to send data over secure tunnel. */
         s_mock_aws_websocket_send_frame_call_count = 0U;

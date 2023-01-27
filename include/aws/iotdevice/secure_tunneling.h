@@ -102,10 +102,9 @@ typedef void(
     aws_secure_tunnel_message_received_fn)(const struct aws_secure_tunnel_message_view *message, void *user_data);
 
 /* STEVE TODO Old callbacks can probably be removed */
-typedef void(aws_secure_tunneling_on_connection_complete_fn)(void *user_data);
-typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(void *user_data);
+typedef void(aws_secure_tunneling_on_connection_complete_fn)(int error_code, void *user_data);
+typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
-typedef void(aws_secure_tunneling_on_data_receive_fn)(const struct aws_byte_buf *data, void *user_data);
 typedef void(aws_secure_tunneling_on_stream_start_fn)(
     const struct aws_secure_tunnel_message_view *message,
     int error_code,
@@ -168,7 +167,6 @@ struct aws_secure_tunnel_options {
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
-    aws_secure_tunneling_on_data_receive_fn *on_data_receive;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
@@ -256,30 +254,12 @@ int aws_secure_tunnel_send_message(
     const struct aws_secure_tunnel_message_view *message_options);
 
 //***********************************************************************************************************************
-/* STEVE TODO REMOVE OR HIDE ALL BELOW */
+/* THESE API SHOULD ONLY BE USED FROM SOURCE MODE */
 //***********************************************************************************************************************
-
-/* TODO STEVE depricate/replace new aws_secure_tunnel_send_message_new */
 AWS_IOTDEVICE_API
-int aws_secure_tunnel_send_data(struct aws_secure_tunnel *secure_tunnel, const struct aws_byte_cursor *data);
-
-/* TODO STEVE depricate/remove. Destination device does not send a stream start. Keep only for internal testing */
-AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_start(struct aws_secure_tunnel *secure_tunnel);
-
-/* TODO STEVE see above. Remove or leave solely for testing purposes */
-AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_start_new(
+int aws_secure_tunnel_stream_start(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
-
-/* Making this exposed public to verify testing in the sdk layer */
-AWS_IOTDEVICE_API
-bool on_websocket_incoming_frame_payload(
-    struct aws_websocket *websocket,
-    const struct aws_websocket_incoming_frame *frame,
-    struct aws_byte_cursor data,
-    void *user_data);
 
 AWS_EXTERN_C_END
 

@@ -57,31 +57,10 @@ void aws_secure_tunnel_operation_set_stream_id(
     }
 }
 
-int32_t aws_secure_tunnel_operation_get_stream_id(const struct aws_secure_tunnel_operation *operation) {
-    AWS_FATAL_ASSERT(operation->vtable != NULL);
-    if (operation->vtable->aws_secure_tunnel_operation_get_stream_id_address_fn != NULL) {
-        int32_t *stream_id_ptr = (*operation->vtable->aws_secure_tunnel_operation_get_stream_id_address_fn)(operation);
-        if (stream_id_ptr != NULL) {
-            return *stream_id_ptr;
-        }
-    }
-
-    return 0;
-}
-
-int32_t *aws_secure_tunnel_operation_get_stream_id_address(const struct aws_secure_tunnel_operation *operation) {
-    AWS_FATAL_ASSERT(operation->vtable != NULL);
-    if (operation->vtable->aws_secure_tunnel_operation_get_stream_id_address_fn != NULL) {
-        return (*operation->vtable->aws_secure_tunnel_operation_get_stream_id_address_fn)(operation);
-    }
-
-    return NULL;
-}
-
 static struct aws_secure_tunnel_operation_vtable s_empty_operation_vtable = {
     .aws_secure_tunnel_operation_completion_fn = NULL,
     .aws_secure_tunnel_operation_set_stream_id_fn = NULL,
-    .aws_secure_tunnel_operation_get_stream_id_address_fn = NULL,
+    .aws_secure_tunnel_operation_set_next_stream_id_fn = NULL,
 };
 
 /*********************************************************************************************************************
@@ -94,10 +73,10 @@ int aws_secure_tunnel_message_view_validate(const struct aws_secure_tunnel_messa
         return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
     }
 
-    if (message_view->stream_id != 0) {
+    if (message_view->type == AWS_SECURE_TUNNEL_MT_DATA && message_view->stream_id != 0) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_message_view - stream id must be 0",
+            "id=%p: aws_secure_tunnel_message_view stream id for DATA MESSAGES must be 0",
             (void *)message_view);
         return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
     }
@@ -166,7 +145,8 @@ static size_t s_aws_secure_tunnel_message_compute_storage_size(
 int aws_secure_tunnel_message_storage_init(
     struct aws_secure_tunnel_message_storage *message_storage,
     struct aws_allocator *allocator,
-    const struct aws_secure_tunnel_message_view *message_options) {
+    const struct aws_secure_tunnel_message_view *message_options,
+    enum aws_secure_tunnel_operation_type type) {
 
     AWS_ZERO_STRUCT(*message_storage);
     size_t storage_capacity = s_aws_secure_tunnel_message_compute_storage_size(message_options);
@@ -179,6 +159,21 @@ int aws_secure_tunnel_message_storage_init(
     storage_view->type = message_options->type;
     storage_view->ignorable = message_options->ignorable;
     storage_view->stream_id = message_options->stream_id;
+
+    switch (type) {
+        case AWS_STOT_DATA:
+            storage_view->type = AWS_SECURE_TUNNEL_MT_DATA;
+            break;
+        case AWS_STOT_STREAM_START:
+            storage_view->type = AWS_SECURE_TUNNEL_MT_STREAM_START;
+            break;
+        case AWS_STOT_STREAM_RESET:
+            storage_view->type = AWS_SECURE_TUNNEL_MT_STREAM_RESET;
+            break;
+        default:
+            storage_view->type = AWS_SECURE_TUNNEL_MT_UNKNOWN;
+            break;
+    }
 
     storage_view->service_id = message_options->service_id;
     if (aws_byte_buf_append_and_update(&message_storage->storage, &storage_view->service_id)) {
@@ -244,16 +239,59 @@ static int s_aws_secure_tunnel_operation_message_set_stream_id(
     return AWS_OP_SUCCESS;
 }
 
-static int32_t *s_aws_secure_tunnel_operation_message_get_stream_id_address_fn(
-    const struct aws_secure_tunnel_operation *operation) {
+static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
+    struct aws_secure_tunnel_operation *operation,
+    struct aws_secure_tunnel *secure_tunnel) {
+
     struct aws_secure_tunnel_operation_message *message_op = operation->impl;
-    return &message_op->options_storage.storage_view.stream_id;
+    int32_t stream_id = INVALID_STREAM_ID;
+
+    struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
+
+    if (message_view->service_id.len > 0) {
+        struct aws_string *service_id = NULL;
+        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, &message_view->service_id);
+
+        if (secure_tunnel->config->service_id_1 != NULL &&
+            aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
+            stream_id = secure_tunnel->config->service_id_1_stream_id + 1;
+            secure_tunnel->config->service_id_1_stream_id = stream_id;
+        } else if (
+            secure_tunnel->config->service_id_2 != NULL &&
+            aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
+            stream_id = secure_tunnel->config->service_id_2_stream_id + 1;
+            secure_tunnel->config->service_id_2_stream_id = stream_id;
+        } else if (
+            secure_tunnel->config->service_id_3 != NULL &&
+            aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
+            stream_id = secure_tunnel->config->service_id_3_stream_id + 1;
+            secure_tunnel->config->service_id_3_stream_id = stream_id;
+        } else {
+            /* service_id doesn't match any existing service id*/
+            AWS_LOGF_DEBUG(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: invalid service_id:%s attempted to be used with an outbound message",
+                (void *)message_view,
+                aws_string_c_str(service_id));
+            stream_id = INVALID_STREAM_ID;
+        }
+        aws_string_destroy(service_id);
+    } else {
+        stream_id = secure_tunnel->config->stream_id + 1;
+        secure_tunnel->config->stream_id = stream_id;
+    }
+
+    if (stream_id == INVALID_STREAM_ID) {
+        return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM);
+    }
+
+    message_op->options_storage.storage_view.stream_id = stream_id;
+    return AWS_OP_SUCCESS;
 }
 
 static struct aws_secure_tunnel_operation_vtable s_message_operation_vtable = {
     .aws_secure_tunnel_operation_set_stream_id_fn = s_aws_secure_tunnel_operation_message_set_stream_id,
-    .aws_secure_tunnel_operation_get_stream_id_address_fn =
-        s_aws_secure_tunnel_operation_message_get_stream_id_address_fn,
+    .aws_secure_tunnel_operation_set_next_stream_id_fn = s_aws_secure_tunnel_operation_message_set_next_stream_id,
 };
 
 static void s_destroy_operation_message(void *object) {
@@ -271,7 +309,8 @@ static void s_destroy_operation_message(void *object) {
 struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_new(
     struct aws_allocator *allocator,
     const struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_secure_tunnel_message_view *message_options) {
+    const struct aws_secure_tunnel_message_view *message_options,
+    enum aws_secure_tunnel_operation_type type) {
     (void)secure_tunnel;
     AWS_PRECONDITION(allocator != NULL);
     AWS_PRECONDITION(message_options != NULL);
@@ -288,11 +327,11 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
 
     message_op->allocator = allocator;
     message_op->base.vtable = &s_message_operation_vtable;
-    message_op->base.operation_type = AWS_STOT_DATA;
+    message_op->base.operation_type = type;
     aws_ref_count_init(&message_op->base.ref_count, message_op, s_destroy_operation_message);
     message_op->base.impl = message_op;
 
-    if (aws_secure_tunnel_message_storage_init(&message_op->options_storage, allocator, message_options)) {
+    if (aws_secure_tunnel_message_storage_init(&message_op->options_storage, allocator, message_options, type)) {
         goto error;
     }
 
@@ -575,7 +614,6 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
         storage->client_token = aws_string_new_from_buf(allocator, &uuid_buf);
     }
 
-    /* STEVE TODO can be removed except for testing */
     storage->local_proxy_mode = options->local_proxy_mode;
 
     /* acquire reference to everything that's ref-counted */
@@ -594,12 +632,11 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->on_message_received = options->on_message_received;
     storage->user_data = options->user_data;
 
-    /* STEVE TODO these can probably be deprecated/removed as client only supports destination mode */
+    /* These can be deprecated/removed as secure tunnel from the iot sdk perspective only supports destination mode */
     storage->local_proxy_mode = options->local_proxy_mode;
     storage->on_connection_complete = options->on_connection_complete;
     storage->on_connection_shutdown = options->on_connection_shutdown;
     storage->on_send_data_complete = options->on_send_data_complete;
-    storage->on_data_receive = options->on_data_receive;
     storage->on_stream_start = options->on_stream_start;
     storage->on_stream_reset = options->on_stream_reset;
     storage->on_session_reset = options->on_session_reset;
