@@ -16,7 +16,7 @@
 static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_INVALID_RESERVED_BITS,
-        "Bits marked as reserved in the IoT Device spec were incorrectly set."),
+        "Bits marked as reserved were incorrectly set"),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_REPORT_INTERVAL,
         "Invalid defender task reporting interval. Must be greater than 5 minutes."),
@@ -107,23 +107,26 @@ static struct aws_log_subject_info_list s_logging_subjects_list = {
 static bool s_iotdevice_library_initialized = false;
 
 void aws_iotdevice_library_init(struct aws_allocator *allocator) {
-    (void)(allocator);
+    AWS_PRECONDITION(aws_allocator_is_valid(allocator));
 
     if (!s_iotdevice_library_initialized) {
+        s_iotdevice_library_initialized = true;
+
+        aws_mqtt_library_init(allocator);
         aws_register_error_info(&s_error_list);
         aws_register_log_subject_info_list(&s_logging_subjects_list);
-
-        s_iotdevice_library_initialized = true;
     }
 }
 
 void aws_iotdevice_library_clean_up(void) {
     if (s_iotdevice_library_initialized) {
+        s_iotdevice_library_initialized = false;
+
         aws_thread_join_all_managed();
 
         aws_unregister_error_info(&s_error_list);
         aws_unregister_log_subject_info_list(&s_logging_subjects_list);
 
-        s_iotdevice_library_initialized = false;
+        aws_mqtt_library_clean_up();
     }
 }

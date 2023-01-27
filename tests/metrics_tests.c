@@ -421,7 +421,7 @@ static int s_devicedefender_get_network_connections(struct aws_allocator *alloca
 }
 
 static int s_setup_mqtt_test_data_fn(struct aws_allocator *allocator, void *ctx) {
-    aws_mqtt_library_init(allocator);
+    aws_iotdevice_library_init(allocator);
 
     struct mqtt_connection_test_data *state_test_data = ctx;
     AWS_ZERO_STRUCT(*state_test_data);
@@ -472,7 +472,6 @@ static int s_clean_up_mqtt_test_data_fn(struct aws_allocator *allocator, int set
     }
 
     aws_iotdevice_library_clean_up();
-    aws_mqtt_library_clean_up();
     return AWS_OP_SUCCESS;
 }
 
@@ -502,7 +501,6 @@ static int s_publish_fn_copy_report(struct aws_byte_cursor payload, void *userda
 static int s_devicedefender_success_test(struct aws_allocator *allocator, void *ctx) {
     (void)allocator;
     struct mqtt_connection_test_data *state_test_data = ctx;
-    aws_iotdevice_library_init(state_test_data->allocator);
 
     struct aws_iotdevice_defender_task_config *task_config = NULL;
     struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestSuccessThing");
@@ -547,7 +545,6 @@ static int s_devicedefender_custom_metrics_success_test(struct aws_allocator *al
     (void)allocator;
     struct mqtt_connection_test_data *state_test_data = ctx;
 
-    aws_iotdevice_library_init(state_test_data->allocator);
     struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestCustomMetricSuccessThing");
     struct aws_iotdevice_defender_task_config *task_config = NULL;
     ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
@@ -625,7 +622,6 @@ static int s_devicedefender_stop_while_running(struct aws_allocator *allocator, 
     (void)allocator;
     struct mqtt_connection_test_data *state_test_data = ctx;
 
-    aws_iotdevice_library_init(state_test_data->allocator);
     struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestCustomMetricSuccessThing");
     struct aws_iotdevice_defender_task_config *task_config = NULL;
     ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));
@@ -687,7 +683,6 @@ static int s_devicedefender_publish_failure_callback_invoked(struct aws_allocato
     (void)allocator;
     struct mqtt_connection_test_data *state_test_data = ctx;
 
-    aws_iotdevice_library_init(state_test_data->allocator);
     struct aws_byte_cursor thing_name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL("TestCustomMetricSuccessThing");
     struct aws_iotdevice_defender_task_config *task_config = NULL;
     ASSERT_SUCCESS(aws_iotdevice_defender_config_create(&task_config, allocator, &thing_name, AWS_IDDRF_JSON));

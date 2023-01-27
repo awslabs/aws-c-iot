@@ -181,8 +181,7 @@ static struct aws_secure_tunnel *s_secure_tunnel_new_mock(const struct aws_secur
 static int before(struct aws_allocator *allocator, void *ctx) {
     struct secure_tunneling_test_context *test_context = ctx;
 
-    /* Initialize aws-c-http and aws-c-iot libraries. */
-    aws_http_library_init(allocator);
+    /* Initialize aws-c-iot library. */
     aws_iotdevice_library_init(allocator);
 
     /* Initialize event loop. */
@@ -247,7 +246,6 @@ static int after(struct aws_allocator *allocator, int setup_result, void *ctx) {
     aws_thread_join_all_managed();
 
     aws_iotdevice_library_clean_up();
-    aws_http_library_clean_up();
 
     return AWS_OP_SUCCESS;
 }
