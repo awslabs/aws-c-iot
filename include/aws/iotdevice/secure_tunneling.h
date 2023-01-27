@@ -16,7 +16,6 @@ struct aws_websocket;
 struct aws_websocket_incoming_frame;
 struct aws_http_proxy_options;
 
-/* STEVE TODO remove or move to private. We only support Destination Mode */
 enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
 
 /**
@@ -101,7 +100,6 @@ struct aws_secure_tunnel_message_view {
 typedef void(
     aws_secure_tunnel_message_received_fn)(const struct aws_secure_tunnel_message_view *message, void *user_data);
 
-/* STEVE TODO Old callbacks can probably be removed */
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
@@ -161,7 +159,6 @@ struct aws_secure_tunnel_options {
 
     void *user_data;
 
-    /* Steve TODO we only support destination mode so this can be removed outside of testing */
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
 
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
@@ -219,7 +216,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_acquire(struct aws_secure_tunnel *se
 AWS_IOTDEVICE_API
 void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 
-/* TODO STEVE NEW replace aws_secure_tunnel_connect and put it in a state where it wants to be connected */
 /**
  * Asynchronous notify to the secure tunnel that you want it to attempt to connect.
  * The secure tunnel will attempt to stay connected.
@@ -230,7 +226,6 @@ void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_start(struct aws_secure_tunnel *secure_tunnel);
 
-/* TODO STEVE NEW replace aws_secure_tunnel_close and put it in a state where it wants to be disconnected */
 /**
  * Asynchronous notify to the secure tunnel that you want it to transition to the stopped state. When the
  * secure tunnel reaches the stopped state, all session state is erased.

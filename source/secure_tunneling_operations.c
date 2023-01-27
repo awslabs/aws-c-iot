@@ -192,7 +192,7 @@ void aws_secure_tunnel_message_storage_clean_up(struct aws_secure_tunnel_message
     aws_byte_buf_clean_up(&message_storage->storage);
 }
 
-/* Sets the stream id on outbound messages*/
+/* Sets the stream id on outbound message based on the service id (or lack of for V1) to the current one being used. */
 static int s_aws_secure_tunnel_operation_message_set_stream_id(
     struct aws_secure_tunnel_operation *operation,
     struct aws_secure_tunnel *secure_tunnel) {
@@ -239,6 +239,10 @@ static int s_aws_secure_tunnel_operation_message_set_stream_id(
     return AWS_OP_SUCCESS;
 }
 
+/*
+ * Check the outbound stream start service id (or lack of one for V1) and set the secure tunnel and stream start
+ * message's stream id to the next value.
+ */
 static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
     struct aws_secure_tunnel_operation *operation,
     struct aws_secure_tunnel *secure_tunnel) {
@@ -632,7 +636,6 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->on_message_received = options->on_message_received;
     storage->user_data = options->user_data;
 
-    /* These can be deprecated/removed as secure tunnel from the iot sdk perspective only supports destination mode */
     storage->local_proxy_mode = options->local_proxy_mode;
     storage->on_connection_complete = options->on_connection_complete;
     storage->on_connection_shutdown = options->on_connection_shutdown;

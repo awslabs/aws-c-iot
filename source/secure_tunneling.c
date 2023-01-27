@@ -1858,8 +1858,3 @@ error:
     aws_secure_tunnel_operation_release(&message_op->base);
     return AWS_OP_ERR;
 }
-
-// /* Steve Todo a V2/V3 version is required to reset on a failed stream start attempt */
-// int aws_secure_tunnel_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
-//     return secure_tunnel->vtable->send_stream_reset(secure_tunnel);
-// }
