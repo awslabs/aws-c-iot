@@ -1014,55 +1014,6 @@ static uint64_t s_aws_high_res_clock_get_ticks_proxy(void) {
     return current_time;
 }
 
-// static int s_secure_tunneling_send_stream_start(struct aws_secure_tunnel *secure_tunnel) {
-//     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
-//         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Start can only be sent from src mode");
-//         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
-//     }
-//     secure_tunnel->config->stream_id += 1;
-//     if (secure_tunnel->config->stream_id == 0) {
-//         secure_tunnel->config->stream_id += 1;
-//     }
-//     return s_secure_tunneling_send(secure_tunnel, NULL, NULL, AWS_SECURE_TUNNEL_MT_STREAM_START);
-// }
-
-// static int s_secure_tunneling_send_stream_reset(struct aws_secure_tunnel *secure_tunnel) {
-//     if (secure_tunnel->config->stream_id == INVALID_STREAM_ID) {
-//         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Invalid Stream Id");
-//         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM;
-//     }
-
-//     int result = s_secure_tunneling_send(secure_tunnel, NULL, NULL, AWS_SECURE_TUNNEL_MT_STREAM_RESET);
-//     s_reset_secure_tunnel(secure_tunnel);
-//     return result;
-// }
-
-// static int s_secure_tunneling_send_data(
-//     struct aws_secure_tunnel *secure_tunnel,
-//     const struct aws_byte_cursor *payload_data) {
-//     if (secure_tunnel->config->stream_id == INVALID_STREAM_ID) {
-//         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Invalid Stream Id");
-//         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM;
-//     }
-//     struct aws_byte_cursor new_data = *payload_data;
-//     while (new_data.len) {
-//         size_t bytes_max = new_data.len;
-//         size_t amount_to_send = bytes_max < AWS_IOT_ST_SPLIT_MESSAGE_SIZE ? bytes_max :
-//         AWS_IOT_ST_SPLIT_MESSAGE_SIZE;
-
-//         struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&new_data, amount_to_send);
-//         AWS_FATAL_ASSERT(send_cursor.len > 0);
-//         if (send_cursor.len) {
-//             if (s_secure_tunneling_send(secure_tunnel, &send_cursor, NULL, AWS_SECURE_TUNNEL_MT_DATA) !=
-//                 AWS_OP_SUCCESS) {
-//                 AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
-//                 return AWS_OP_ERR;
-//             }
-//         }
-//     }
-//     return AWS_OP_SUCCESS;
-// }
-
 static struct aws_secure_tunnel_vtable s_default_secure_tunnel_vtable = {
     .get_current_time_fn = s_aws_high_res_clock_get_ticks_proxy,
 };
