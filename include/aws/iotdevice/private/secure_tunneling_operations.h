@@ -65,7 +65,7 @@ struct aws_secure_tunnel_operation {
     struct aws_linked_list_node node;
 
     enum aws_secure_tunnel_operation_type operation_type;
-    const void *message_view;
+    const struct aws_secure_tunnel_message_view *message_view;
 
     /* Size of the secure tunnel message this operation represents */
     size_t message_size;

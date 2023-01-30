@@ -248,6 +248,11 @@ int aws_secure_tunnel_send_message(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_stream_reset(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options);
+
 //***********************************************************************************************************************
 /* THESE API SHOULD ONLY BE USED FROM SOURCE MODE */
 //***********************************************************************************************************************
