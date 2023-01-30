@@ -1233,6 +1233,12 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                     /* Send the Data message through the WebSocket */
                     if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
                         error_code = aws_last_error();
+                        AWS_LOGF_ERROR(
+                            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                            "id=%p: failed to send DATA message with error %d(%s)",
+                            (void *)secure_tunnel,
+                            error_code,
+                            aws_error_debug_str(error_code));
                     }
                     aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
                 }
