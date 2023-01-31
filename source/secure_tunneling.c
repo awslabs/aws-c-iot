@@ -274,6 +274,11 @@ static void s_aws_secure_tunnel_on_service_ids_received(struct aws_secure_tunnel
             (void *)secure_tunnel,
             AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_3)));
     }
+
+    /* A connection can only be used once available service ids are established with the secure tunnel. */
+    if (secure_tunnel->config->on_connection_complete) {
+        secure_tunnel->config->on_connection_complete(AWS_ERROR_SUCCESS, secure_tunnel->config->user_data);
+    }
 }
 
 static void s_aws_secure_tunnel_connected_on_message_received(
@@ -595,7 +600,8 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
 
     secure_tunnel->websocket = setup->websocket;
 
-    if (secure_tunnel->config->on_connection_complete) {
+    /* Report a failed WebSocket Upgrade attempt */
+    if (setup->error_code && secure_tunnel->config->on_connection_complete) {
         secure_tunnel->config->on_connection_complete(setup->error_code, secure_tunnel->config->user_data);
     }
 
