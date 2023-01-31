@@ -113,7 +113,7 @@ void aws_secure_tunnel_message_view_log(
             log_handle,
             level,
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_message_view service_id set to" PRInSTR,
+            "id=%p: aws_secure_tunnel_message_view service_id set to " PRInSTR,
             (void *)message_view,
             AWS_BYTE_CURSOR_PRI(message_view->service_id));
     } else {
