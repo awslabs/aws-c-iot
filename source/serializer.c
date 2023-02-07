@@ -161,30 +161,30 @@ static int s_iot_st_compute_message_length(
         local_length += 2;
     }
 
-    if (message->payload.len != 0) {
+    if (message->payload != NULL && message->payload->len != 0) {
         /*
          * 1 byte key
          * 1-4 byte payload length varint
          * n bytes payload.len
          */
         size_t payload_length = 0;
-        if (s_iot_st_get_varint_size((uint32_t)message->payload.len, &payload_length)) {
+        if (s_iot_st_get_varint_size((uint32_t)message->payload->len, &payload_length)) {
             return AWS_OP_ERR;
         }
-        local_length += (1 + message->payload.len + payload_length);
+        local_length += (1 + message->payload->len + payload_length);
     }
 
-    if (message->service_id.len != 0) {
+    if (message->service_id != NULL && message->service_id->len != 0) {
         /*
          * 1 byte key
          * 1-4 byte payload length varint
          * n bytes service_id.len
          */
         size_t service_id_length = 0;
-        if (s_iot_st_get_varint_size((uint32_t)message->service_id.len, &service_id_length)) {
+        if (s_iot_st_get_varint_size((uint32_t)message->service_id->len, &service_id_length)) {
             return AWS_OP_ERR;
         }
-        local_length += (1 + message->service_id.len + service_id_length);
+        local_length += (1 + message->service_id->len + service_id_length);
     }
 
     *message_length = local_length;
@@ -225,14 +225,14 @@ int aws_iot_st_msg_serialize_from_view(
         }
     }
 
-    if (message_view->payload.len != 0) {
-        if (s_iot_st_encode_payload(&message_view->payload, buffer)) {
+    if (message_view->payload != NULL) {
+        if (s_iot_st_encode_payload(message_view->payload, buffer)) {
             goto cleanup;
         }
     }
 
-    if (message_view->service_id.len != 0) {
-        if (s_iot_st_encode_service_id(&message_view->service_id, buffer)) {
+    if (message_view->service_id != NULL) {
+        if (s_iot_st_encode_service_id(message_view->service_id, buffer)) {
             goto cleanup;
         }
     }
@@ -285,11 +285,15 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     uint8_t wire_type;
     uint8_t field_number;
     struct aws_byte_buf payload_buf;
+    struct aws_byte_cursor payload_cur;
     struct aws_byte_buf service_id_buf;
+    struct aws_byte_cursor service_id_cur;
     struct aws_byte_buf available_service_id_buf;
 
     AWS_ZERO_STRUCT(payload_buf);
+    AWS_ZERO_STRUCT(payload_cur);
     AWS_ZERO_STRUCT(service_id_buf);
+    AWS_ZERO_STRUCT(service_id_cur);
     int service_ids_set = 0;
 
     while ((aws_byte_cursor_is_valid(cursor)) && (cursor->len > 0)) {
@@ -337,7 +341,9 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
                             goto error;
                         }
                         aws_byte_cursor_advance(cursor, length);
-                        message->payload = aws_byte_cursor_from_buf(&payload_buf);
+
+                        payload_cur = aws_byte_cursor_from_buf(&payload_buf);
+                        message->payload = &payload_cur;
                         break;
 
                     case AWS_SECURE_TUNNEL_FN_SERVICE_ID:
@@ -346,7 +352,9 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
                             goto error;
                         }
                         aws_byte_cursor_advance(cursor, length);
-                        message->service_id = aws_byte_cursor_from_buf(&service_id_buf);
+
+                        service_id_cur = aws_byte_cursor_from_buf(&service_id_buf);
+                        message->service_id = &service_id_cur;
                         break;
 
                     case AWS_SECURE_TUNNEL_FN_AVAILABLE_SERVICE_IDS:

@@ -6,8 +6,9 @@
 #ifndef AWS_IOTDEVICE_SECURE_TUNNELING_H
 #define AWS_IOTDEVICE_SECURE_TUNNELING_H
 
-#include <aws/common/byte_buf.h>
 #include <aws/iotdevice/iotdevice.h>
+
+#include <aws/common/byte_buf.h>
 
 #define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
 
@@ -16,7 +17,10 @@ struct aws_websocket;
 struct aws_websocket_incoming_frame;
 struct aws_http_proxy_options;
 
-enum aws_secure_tunneling_local_proxy_mode { AWS_SECURE_TUNNELING_SOURCE_MODE, AWS_SECURE_TUNNELING_DESTINATION_MODE };
+enum aws_secure_tunneling_local_proxy_mode {
+    AWS_SECURE_TUNNELING_SOURCE_MODE,
+    AWS_SECURE_TUNNELING_DESTINATION_MODE,
+};
 
 /**
  * Type of IoT Secure Tunnel message.
@@ -88,8 +92,8 @@ struct aws_secure_tunnel_message_view {
     /**
      * Secure tunnel multiplexing identifier
      */
-    struct aws_byte_cursor service_id;
-    struct aws_byte_cursor payload;
+    struct aws_byte_cursor *service_id;
+    struct aws_byte_cursor *payload;
 };
 
 /* Callbacks */
@@ -248,16 +252,19 @@ int aws_secure_tunnel_send_message(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 
+//***********************************************************************************************************************
+/* THIS API SHOULD ONLY BE USED FROM SOURCE MODE */
+//***********************************************************************************************************************
 AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_reset(
+int aws_secure_tunnel_stream_start(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 
 //***********************************************************************************************************************
-/* THESE API SHOULD ONLY BE USED FROM SOURCE MODE */
+/* THIS API SHOULD NOT BE USED BY THE CUSTOMER AND SHOULD BE DEPRECATED */
 //***********************************************************************************************************************
 AWS_IOTDEVICE_API
-int aws_secure_tunnel_stream_start(
+int aws_secure_tunnel_stream_reset(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 

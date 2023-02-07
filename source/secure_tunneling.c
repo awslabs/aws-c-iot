@@ -641,7 +641,6 @@ void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, en
             .host = aws_byte_cursor_from_string(secure_tunnel->config->endpoint_host),
             .port = 443,
             .handshake_request = secure_tunnel->handshake_request,
-            .initial_window_size = MAX_WEBSOCKET_PAYLOAD,
             .manual_window_management = false,
             .user_data = secure_tunnel,
             .requested_event_loop = secure_tunnel->loop,
@@ -1222,7 +1221,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
 
                 break;
-            case AWS_STOT_DATA:
+            case AWS_STOT_MESSAGE:
                 /* If a data message attempts to be sent on an unopen stream, discard it. */
                 if ((*current_operation->vtable->aws_secure_tunnel_operation_set_stream_id_fn)(
                         current_operation, secure_tunnel)) {
@@ -1740,7 +1739,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
     if (secure_tunnel->config == NULL) {
         goto error;
     }
-    secure_tunnel->config->secure_tunnel = secure_tunnel;
 
     /* all secure tunnel activity will take place on this event loop */
     secure_tunnel->loop = aws_event_loop_group_get_next_loop(secure_tunnel->config->bootstrap->event_loop_group);
@@ -1826,7 +1824,7 @@ int aws_secure_tunnel_send_message(
     AWS_PRECONDITION(message_options != NULL);
 
     struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
-        secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_DATA);
+        secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_MESSAGE);
 
     if (message_op == NULL) {
         return AWS_OP_ERR;

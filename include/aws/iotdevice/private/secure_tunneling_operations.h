@@ -21,7 +21,7 @@ struct aws_secure_tunnel_operation;
 enum aws_secure_tunnel_operation_type {
     AWS_STOT_NONE,
     AWS_STOT_PING,
-    AWS_STOT_DATA,
+    AWS_STOT_MESSAGE,
     AWS_STOT_STREAM_RESET,
     AWS_STOT_STREAM_START
 };
@@ -83,50 +83,6 @@ struct aws_secure_tunnel_operation_message {
 struct aws_secure_tunnel_operation_pingreq {
     struct aws_secure_tunnel_operation base;
     struct aws_allocator *allocator;
-};
-
-/*
- * Secure tunnel configuration
- */
-struct aws_secure_tunnel_options_storage {
-
-    // struct aws_secure_tunnel_options options;
-    struct aws_allocator *allocator;
-    struct aws_secure_tunnel *secure_tunnel;
-
-    /* backup */
-
-    struct aws_client_bootstrap *bootstrap;
-    struct aws_socket_options socket_options;
-    struct aws_http_proxy_options http_proxy_options;
-    struct aws_http_proxy_config *http_proxy_config;
-    struct aws_string *access_token;
-    struct aws_string *client_token;
-
-    struct aws_string *endpoint_host;
-
-    /* Stream related info */
-    int32_t stream_id;
-    struct aws_string *service_id_1;
-    int32_t service_id_1_stream_id;
-    struct aws_string *service_id_2;
-    int32_t service_id_2_stream_id;
-    struct aws_string *service_id_3;
-    int32_t service_id_3_stream_id;
-
-    /* Callbacks */
-    aws_secure_tunnel_message_received_fn *on_message_received;
-    aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
-    aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
-    aws_secure_tunneling_on_stream_start_fn *on_stream_start;
-    aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
-    aws_secure_tunneling_on_session_reset_fn *on_session_reset;
-
-    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
-    aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
-
-    void *user_data;
-    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
 };
 
 AWS_EXTERN_C_BEGIN

@@ -13,6 +13,7 @@
 #include <aws/iotdevice/secure_tunneling.h>
 #include <inttypes.h>
 
+/* STEVE TODO explain max payload size value */
 #define MAX_PAYLOAD_SIZE 64512
 #define INVALID_STREAM_ID 0
 /*********************************************************************************************************************
@@ -81,7 +82,7 @@ int aws_secure_tunnel_message_view_validate(const struct aws_secure_tunnel_messa
         return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
     }
 
-    if (message_view->payload.len > MAX_PAYLOAD_SIZE) {
+    if (message_view->payload != NULL && message_view->payload->len > MAX_PAYLOAD_SIZE) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: aws_secure_tunnel_message_view - payload too long",
@@ -108,14 +109,14 @@ void aws_secure_tunnel_message_view_log(
         (void *)message_view,
         (int)message_view->stream_id);
 
-    if (message_view->service_id.len > 0) {
+    if (message_view->service_id != NULL) {
         AWS_LOGUF(
             log_handle,
             level,
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: aws_secure_tunnel_message_view service_id set to " PRInSTR,
             (void *)message_view,
-            AWS_BYTE_CURSOR_PRI(message_view->service_id));
+            AWS_BYTE_CURSOR_PRI(*message_view->service_id));
     } else {
         AWS_LOGUF(
             log_handle,
@@ -125,19 +126,21 @@ void aws_secure_tunnel_message_view_log(
             (void *)message_view);
     }
 
-    AWS_LOGUF(
-        log_handle,
-        level,
-        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        "id=%p: aws_secure_tunnel_message_view payload set containing %zu bytes",
-        (void *)message_view,
-        message_view->payload.len);
+    if (message_view->payload != NULL) {
+        AWS_LOGUF(
+            log_handle,
+            level,
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: aws_secure_tunnel_message_view payload set containing %zu bytes",
+            (void *)message_view,
+            message_view->payload->len);
+    }
 }
 
 static size_t s_aws_secure_tunnel_message_compute_storage_size(
     const struct aws_secure_tunnel_message_view *message_view) {
-    size_t storage_size = message_view->payload.len;
-    storage_size += message_view->service_id.len;
+    size_t storage_size = message_view->payload == NULL ? 0 : message_view->payload->len;
+    storage_size += message_view->service_id == NULL ? 0 : message_view->service_id->len;
 
     return storage_size;
 }
@@ -161,7 +164,7 @@ int aws_secure_tunnel_message_storage_init(
     storage_view->stream_id = message_options->stream_id;
 
     switch (type) {
-        case AWS_STOT_DATA:
+        case AWS_STOT_MESSAGE:
             storage_view->type = AWS_SECURE_TUNNEL_MT_DATA;
             break;
         case AWS_STOT_STREAM_START:
@@ -175,14 +178,20 @@ int aws_secure_tunnel_message_storage_init(
             break;
     }
 
-    storage_view->service_id = message_options->service_id;
-    if (aws_byte_buf_append_and_update(&message_storage->storage, &storage_view->service_id)) {
-        return AWS_OP_ERR;
+    if (message_options->service_id != NULL) {
+        message_storage->service_id = *message_options->service_id;
+        if (aws_byte_buf_append_and_update(&message_storage->storage, &message_storage->service_id)) {
+            return AWS_OP_ERR;
+        }
+        storage_view->service_id = &message_storage->service_id;
     }
 
-    storage_view->payload = message_options->payload;
-    if (aws_byte_buf_append_and_update(&message_storage->storage, &storage_view->payload)) {
-        return AWS_OP_ERR;
+    if (message_options->payload != NULL) {
+        message_storage->payload = *message_options->payload;
+        if (aws_byte_buf_append_and_update(&message_storage->storage, &message_storage->payload)) {
+            return AWS_OP_ERR;
+        }
+        storage_view->payload = &message_storage->payload;
     }
 
     return AWS_OP_SUCCESS;
@@ -202,9 +211,9 @@ static int s_aws_secure_tunnel_operation_message_set_stream_id(
 
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
-    if (message_view->service_id.len > 0) {
+    if (message_view->service_id != NULL) {
         struct aws_string *service_id = NULL;
-        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, &message_view->service_id);
+        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
 
         if (secure_tunnel->config->service_id_1 != NULL &&
             aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
@@ -252,9 +261,9 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
 
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
-    if (message_view->service_id.len > 0) {
+    if (message_view->service_id != NULL) {
         struct aws_string *service_id = NULL;
-        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, &message_view->service_id);
+        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
 
         if (secure_tunnel->config->service_id_1 != NULL &&
             aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
@@ -658,7 +667,7 @@ const char *aws_secure_tunnel_operation_type_to_c_string(enum aws_secure_tunnel_
             return "NONE";
         case AWS_STOT_PING:
             return "PING";
-        case AWS_STOT_DATA:
+        case AWS_STOT_MESSAGE:
             return "DATA";
         case AWS_STOT_STREAM_RESET:
             return "STREAM RESET";
