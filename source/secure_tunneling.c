@@ -177,7 +177,7 @@ static int s_aws_secure_tunnel_set_stream_id(
     const struct aws_byte_cursor *service_id,
     int32_t stream_id) {
     /* No service id means V1 protocol is being used */
-    if (service_id->len == 0) {
+    if (service_id == NULL || service_id->len == 0) {
         secure_tunnel->config->stream_id = stream_id;
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -227,7 +227,7 @@ static int s_aws_secure_tunnel_set_stream_id(
 static void s_aws_secure_tunnel_on_stream_start_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
-    int result = s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_view->service_id, message_view->stream_id);
+    int result = s_aws_secure_tunnel_set_stream_id(secure_tunnel, message_view->service_id, message_view->stream_id);
     if (secure_tunnel->config->on_stream_start) {
         secure_tunnel->config->on_stream_start(message_view, result, secure_tunnel->config->user_data);
     }
@@ -237,8 +237,8 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
     int result = AWS_OP_SUCCESS;
-    if (s_aws_secure_tunnel_stream_id_check_match(secure_tunnel, &message_view->service_id, message_view->stream_id)) {
-        result = s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_view->service_id, INVALID_STREAM_ID);
+    if (s_aws_secure_tunnel_stream_id_check_match(secure_tunnel, message_view->service_id, message_view->stream_id)) {
+        result = s_aws_secure_tunnel_set_stream_id(secure_tunnel, message_view->service_id, INVALID_STREAM_ID);
     }
     if (secure_tunnel->config->on_stream_reset) {
         secure_tunnel->config->on_stream_reset(message_view, result, secure_tunnel->config->user_data);
@@ -1286,7 +1286,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                         error_code = aws_last_error();
                     } else {
                         s_aws_secure_tunnel_set_stream_id(
-                            secure_tunnel, &current_operation->message_view->service_id, INVALID_STREAM_ID);
+                            secure_tunnel, current_operation->message_view->service_id, INVALID_STREAM_ID);
                     }
                     aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
                 }
@@ -1875,7 +1875,7 @@ int aws_secure_tunnel_stream_start(
         goto error;
     }
 
-    s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_options->service_id, message_options->stream_id);
+    s_aws_secure_tunnel_set_stream_id(secure_tunnel, message_options->service_id, message_options->stream_id);
 
     return AWS_OP_SUCCESS;
 
@@ -1907,7 +1907,7 @@ int aws_secure_tunnel_stream_reset(
         goto error;
     }
 
-    s_aws_secure_tunnel_set_stream_id(secure_tunnel, &message_options->service_id, message_options->stream_id);
+    s_aws_secure_tunnel_set_stream_id(secure_tunnel, message_options->service_id, message_options->stream_id);
 
     return AWS_OP_SUCCESS;
 
