@@ -276,13 +276,6 @@ static int s_iot_st_decode_varint_uint32_t(struct aws_byte_cursor *cursor, uint3
     return AWS_OP_SUCCESS;
 }
 
-// static int s_aws_st_decode_byte_range(struct aws_byte_cursor *cursor, struct aws_byte_buf *buffer, int length) {
-//     struct aws_byte_cursor temp = aws_byte_cursor_from_array(cursor->ptr, length);
-//     AWS_RETURN_ERROR_IF2(
-//         aws_byte_buf_append_dynamic_secure(buffer, &temp) == 0, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE);
-//     return AWS_OP_SUCCESS;
-// }
-
 int aws_secure_tunnel_deserialize_varint_from_cursor_to_message(
     struct aws_byte_cursor *cursor,
     uint8_t field_number,
@@ -318,15 +311,16 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     AWS_RETURN_ERROR_IF2(cursor->len < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     uint8_t wire_type;
     uint8_t field_number;
-    int service_ids_set = 0;
     struct aws_secure_tunnel_message_view message_view;
     AWS_ZERO_STRUCT(message_view);
 
     struct aws_byte_cursor payload_cur;
+    AWS_ZERO_STRUCT(payload_cur);
+
+    int service_ids_set = 0;
     struct aws_byte_cursor service_id_1_cur;
     struct aws_byte_cursor service_id_2_cur;
     struct aws_byte_cursor service_id_3_cur;
-    AWS_ZERO_STRUCT(payload_cur);
     AWS_ZERO_STRUCT(service_id_1_cur);
     AWS_ZERO_STRUCT(service_id_2_cur);
     AWS_ZERO_STRUCT(service_id_3_cur);

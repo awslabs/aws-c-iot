@@ -256,10 +256,21 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
 
+    /* Clean up existing service ids first */
+    if (secure_tunnel->config->service_id_1) {
+        aws_string_destroy(secure_tunnel->config->service_id_1);
+        secure_tunnel->config->service_id_1 = NULL;
+    }
+    if (secure_tunnel->config->service_id_2) {
+        aws_string_destroy(secure_tunnel->config->service_id_2);
+        secure_tunnel->config->service_id_2 = NULL;
+    }
+    if (secure_tunnel->config->service_id_3) {
+        aws_string_destroy(secure_tunnel->config->service_id_3);
+        secure_tunnel->config->service_id_3 = NULL;
+    }
+
     if (message_view->service_id != NULL) {
-        if (secure_tunnel->config->service_id_1) {
-            aws_string_destroy(secure_tunnel->config->service_id_1);
-        }
         secure_tunnel->config->service_id_1 =
             aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
         AWS_LOGF_INFO(
@@ -270,9 +281,6 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     }
 
     if (message_view->service_id_2 != NULL) {
-        if (secure_tunnel->config->service_id_2) {
-            aws_string_destroy(secure_tunnel->config->service_id_2);
-        }
         secure_tunnel->config->service_id_2 =
             aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_2);
         AWS_LOGF_INFO(
@@ -283,9 +291,6 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     }
 
     if (message_view->service_id_3 != NULL) {
-        if (secure_tunnel->config->service_id_3) {
-            aws_string_destroy(secure_tunnel->config->service_id_3);
-        }
         secure_tunnel->config->service_id_3 =
             aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_3);
         AWS_LOGF_INFO(
@@ -1241,7 +1246,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 break;
             case AWS_STOT_MESSAGE:
                 /* If a data message attempts to be sent on an unopen stream, discard it. */
-                if ((*current_operation->vtable->aws_secure_tunnel_operation_set_stream_id_fn)(
+                if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
                         current_operation, secure_tunnel)) {
 
                     error_code = aws_last_error();
@@ -1289,7 +1294,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
 
             case AWS_STOT_STREAM_RESET:
 
-                if ((*current_operation->vtable->aws_secure_tunnel_operation_set_stream_id_fn)(
+                if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
                         current_operation, secure_tunnel)) {
                     error_code = aws_last_error();
                     AWS_LOGF_DEBUG(

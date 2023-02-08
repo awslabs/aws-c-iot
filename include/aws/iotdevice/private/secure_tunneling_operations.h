@@ -45,8 +45,8 @@ struct aws_secure_tunnel_operation_vtable {
         int error_code,
         const void *completion_view);
 
-    /* Set the stream id of outgoing st_msg */
-    int (*aws_secure_tunnel_operation_set_stream_id_fn)(
+    /* Set the stream id of outgoing st_msg based on current service id */
+    int (*aws_secure_tunnel_operation_assign_stream_id_fn)(
         struct aws_secure_tunnel_operation *operation,
         struct aws_secure_tunnel *secure_tunnel);
 
@@ -100,7 +100,7 @@ AWS_IOTDEVICE_API void aws_secure_tunnel_operation_complete(
     int error_code,
     const void *associated_view);
 
-AWS_IOTDEVICE_API void aws_secure_tunnel_operation_set_stream_id(
+AWS_IOTDEVICE_API void aws_secure_tunnel_operation_assign_stream_id(
     struct aws_secure_tunnel_operation *operation,
     struct aws_secure_tunnel *secure_tunnel);
 

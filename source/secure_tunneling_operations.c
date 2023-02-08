@@ -13,8 +13,6 @@
 #include <aws/iotdevice/secure_tunneling.h>
 #include <inttypes.h>
 
-/* STEVE TODO explain max payload size value */
-#define MAX_PAYLOAD_SIZE 64512
 #define INVALID_STREAM_ID 0
 /*********************************************************************************************************************
  * Operation base
@@ -49,18 +47,18 @@ void aws_secure_tunnel_operation_complete(
     }
 }
 
-void aws_secure_tunnel_operation_set_stream_id(
+void aws_secure_tunnel_operation_assign_stream_id(
     struct aws_secure_tunnel_operation *operation,
     struct aws_secure_tunnel *secure_tunnel) {
     AWS_FATAL_ASSERT(operation->vtable != NULL);
-    if (operation->vtable->aws_secure_tunnel_operation_set_stream_id_fn != NULL) {
-        (*operation->vtable->aws_secure_tunnel_operation_set_stream_id_fn)(operation, secure_tunnel);
+    if (operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn != NULL) {
+        (*operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(operation, secure_tunnel);
     }
 }
 
 static struct aws_secure_tunnel_operation_vtable s_empty_operation_vtable = {
     .aws_secure_tunnel_operation_completion_fn = NULL,
-    .aws_secure_tunnel_operation_set_stream_id_fn = NULL,
+    .aws_secure_tunnel_operation_assign_stream_id_fn = NULL,
     .aws_secure_tunnel_operation_set_next_stream_id_fn = NULL,
 };
 
@@ -82,7 +80,7 @@ int aws_secure_tunnel_message_view_validate(const struct aws_secure_tunnel_messa
         return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
     }
 
-    if (message_view->payload != NULL && message_view->payload->len > MAX_PAYLOAD_SIZE) {
+    if (message_view->payload != NULL && message_view->payload->len > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: aws_secure_tunnel_message_view - payload too long",
@@ -303,7 +301,7 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
 }
 
 static struct aws_secure_tunnel_operation_vtable s_message_operation_vtable = {
-    .aws_secure_tunnel_operation_set_stream_id_fn = s_aws_secure_tunnel_operation_message_set_stream_id,
+    .aws_secure_tunnel_operation_assign_stream_id_fn = s_aws_secure_tunnel_operation_message_set_stream_id,
     .aws_secure_tunnel_operation_set_next_stream_id_fn = s_aws_secure_tunnel_operation_message_set_next_stream_id,
 };
 
