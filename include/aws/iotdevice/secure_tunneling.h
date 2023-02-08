@@ -185,9 +185,6 @@ struct aws_secure_tunnel_disconnect_completion_options {
     void *completion_user_data;
 };
 
-/* deprecated: "_config" is renamed "_options" for consistency with similar code in the aws-c libraries */
-#define aws_secure_tunneling_connection_config aws_secure_tunnel_options
-
 AWS_EXTERN_C_BEGIN
 
 /**
