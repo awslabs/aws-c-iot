@@ -398,19 +398,23 @@ struct aws_secure_tunnel_operation_pingreq *aws_secure_tunnel_operation_pingreq_
  * Validation of options on creation of a new secure tunnel
  */
 int aws_secure_tunnel_options_validate(const struct aws_secure_tunnel_options *options) {
-    AWS_ASSERT(options && options->allocator);
+    AWS_ASSERT(options);
+
     if (options->bootstrap == NULL) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "bootstrap cannot be NULL");
         return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
     }
+
     if (options->socket_options == NULL) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "socket options cannot be NULL");
         return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
     }
+
     if (options->access_token.len == 0) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "access token is required");
         return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
     }
+
     if (options->endpoint_host.len == 0) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "endpoint host is required");
         return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
@@ -571,20 +575,18 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
  * Copy and store secure tunnel options
  */
 struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
+    struct aws_allocator *allocator,
     const struct aws_secure_tunnel_options *options) {
+    AWS_PRECONDITION(allocator != NULL);
     AWS_PRECONDITION(options != NULL);
-    AWS_PRECONDITION(options->allocator != NULL);
 
     if (aws_secure_tunnel_options_validate(options)) {
         return NULL;
     }
 
-    struct aws_allocator *allocator = options->allocator;
-
     struct aws_secure_tunnel_options_storage *storage =
         aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_options_storage));
 
-    storage->allocator = options->allocator;
     storage->socket_options = *options->socket_options;
     storage->endpoint_host = aws_string_new_from_cursor(allocator, &options->endpoint_host);
     if (storage->endpoint_host == NULL) {

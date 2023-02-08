@@ -124,8 +124,6 @@ typedef void(aws_secure_tunneling_on_termination_complete_fn)(void *user_data);
  * Contains connection properties for the creation of a Secure Tunnel
  */
 struct aws_secure_tunnel_options {
-    struct aws_allocator *allocator;
-
     /**
      * Host to establish Secure Tunnel connection to
      */
@@ -175,7 +173,7 @@ struct aws_secure_tunnel_options {
 };
 
 /**
- * Signature of callback to invoke when a DISCONNECT is fully written to the socket (or fails to be)
+ * Signature of callback to invoke when secure tunnel enters a fully disconnected state
  */
 typedef void(aws_secure_tunnel_disconnect_completion_fn)(int error_code, void *complete_ctx);
 
@@ -199,7 +197,9 @@ AWS_EXTERN_C_BEGIN
  * @return a new secure tunnel or NULL
  */
 AWS_IOTDEVICE_API
-struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_options *options);
+struct aws_secure_tunnel *aws_secure_tunnel_new(
+    struct aws_allocator *allocator,
+    const struct aws_secure_tunnel_options *options);
 
 /**
  * Acquires a reference to a secure tunnel

@@ -162,6 +162,7 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
  */
 AWS_IOTDEVICE_API
 struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
+    struct aws_allocator *allocator,
     const struct aws_secure_tunnel_options *options);
 
 AWS_IOTDEVICE_API

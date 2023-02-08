@@ -1715,18 +1715,20 @@ static void s_secure_tunnel_service_task_fn(struct aws_task *task, void *arg, en
  * API Calls
  ********************************************************************************************************************/
 
-struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_options *options) {
+struct aws_secure_tunnel *aws_secure_tunnel_new(
+    struct aws_allocator *allocator,
+    const struct aws_secure_tunnel_options *options) {
     AWS_FATAL_ASSERT(options != NULL);
-    AWS_FATAL_ASSERT(options->allocator != NULL);
+    AWS_FATAL_ASSERT(allocator != NULL);
 
-    struct aws_secure_tunnel *secure_tunnel = aws_mem_calloc(options->allocator, 1, sizeof(struct aws_secure_tunnel));
+    struct aws_secure_tunnel *secure_tunnel = aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel));
     if (secure_tunnel == NULL) {
         return NULL;
     }
 
     aws_task_init(&secure_tunnel->service_task, s_secure_tunnel_service_task_fn, secure_tunnel, "SecureTunnelService");
 
-    secure_tunnel->allocator = options->allocator;
+    secure_tunnel->allocator = allocator;
     secure_tunnel->vtable = &s_default_secure_tunnel_vtable;
 
     aws_ref_count_init(&secure_tunnel->ref_count, secure_tunnel, s_on_secure_tunnel_zero_ref_count);
@@ -1735,7 +1737,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
     secure_tunnel->current_operation = NULL;
 
     /* store options */
-    secure_tunnel->config = aws_secure_tunnel_options_storage_new(options);
+    secure_tunnel->config = aws_secure_tunnel_options_storage_new(allocator, options);
     if (secure_tunnel->config == NULL) {
         goto error;
     }
@@ -1760,7 +1762,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
         }
     }
 
-    secure_tunnel->tls_ctx = aws_tls_client_ctx_new(options->allocator, &tls_ctx_opt);
+    secure_tunnel->tls_ctx = aws_tls_client_ctx_new(allocator, &tls_ctx_opt);
     if (secure_tunnel->tls_ctx == NULL) {
         goto error;
     }
@@ -1768,7 +1770,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
     /* tls_connection_options */
     aws_tls_connection_options_init_from_ctx(&secure_tunnel->tls_con_opt, secure_tunnel->tls_ctx);
     if (aws_tls_connection_options_set_server_name(
-            &secure_tunnel->tls_con_opt, options->allocator, (struct aws_byte_cursor *)&options->endpoint_host)) {
+            &secure_tunnel->tls_con_opt, allocator, (struct aws_byte_cursor *)&options->endpoint_host)) {
         goto error;
     }
 
@@ -1782,7 +1784,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(const struct aws_secure_tunnel_o
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->websocket = NULL;
 
-    aws_byte_buf_init(&secure_tunnel->received_data, options->allocator, MAX_WEBSOCKET_PAYLOAD);
+    aws_byte_buf_init(&secure_tunnel->received_data, allocator, MAX_WEBSOCKET_PAYLOAD);
 
     aws_secure_tunnel_options_storage_log(secure_tunnel->config, AWS_LL_DEBUG);
 

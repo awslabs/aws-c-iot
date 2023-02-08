@@ -105,8 +105,6 @@ struct data_tunnel_pair {
  * Secure tunnel configuration
  */
 struct aws_secure_tunnel_options_storage {
-
-    // struct aws_secure_tunnel_options options;
     struct aws_allocator *allocator;
 
     /* backup */

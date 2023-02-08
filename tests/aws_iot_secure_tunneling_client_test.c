@@ -84,7 +84,7 @@ static void s_init_secure_tunneling_connection_config(
     struct aws_secure_tunnel_options *config) {
 
     AWS_ZERO_STRUCT(*config);
-    config->allocator = allocator;
+    // config->allocator = allocator;
     config->bootstrap = bootstrap;
     config->socket_options = socket_options;
 
@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
         allocator, bootstrap, &socket_options, access_token, local_proxy_mode, endpoint, root_ca, &config);
 
     /* Create a secure tunnel object and connect */
-    struct aws_secure_tunnel *secure_tunnel = aws_secure_tunnel_new(&config);
+    struct aws_secure_tunnel *secure_tunnel = aws_secure_tunnel_new(allocator, &config);
     aws_secure_tunnel_start(secure_tunnel);
 
     /* wait here until the connection is done */
