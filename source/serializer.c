@@ -237,7 +237,7 @@ int aws_iot_st_msg_serialize_from_view(
         }
     }
 
-    if (buffer->capacity < AWS_IOT_ST_MAX_MESSAGE_SIZE) {
+    if (buffer->capacity > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
         aws_raise_error(AWS_ERROR_INVALID_BUFFER_SIZE);
         goto cleanup;
     }
