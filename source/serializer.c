@@ -76,7 +76,7 @@ static int s_iot_st_encode_varint(
     return s_iot_st_encode_varint_pos(buffer, value);
 }
 
-static int s_iot_st_encode_lengthdelim(
+static int s_iot_st_encode_byte_range(
     const uint8_t field_number,
     const uint8_t wire_type,
     const struct aws_byte_cursor *payload,
@@ -101,13 +101,13 @@ static int s_iot_st_encode_type(int32_t data, struct aws_byte_buf *buffer) {
 }
 
 static int s_iot_st_encode_payload(const struct aws_byte_cursor *payload, struct aws_byte_buf *buffer) {
-    return s_iot_st_encode_lengthdelim(
-        AWS_SECURE_TUNNEL_FN_PAYLOAD, AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMINTED, payload, buffer);
+    return s_iot_st_encode_byte_range(
+        AWS_SECURE_TUNNEL_FN_PAYLOAD, AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMITED, payload, buffer);
 }
 
 static int s_iot_st_encode_service_id(const struct aws_byte_cursor *service_id, struct aws_byte_buf *buffer) {
-    return s_iot_st_encode_lengthdelim(
-        AWS_SECURE_TUNNEL_FN_SERVICE_ID, AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMINTED, service_id, buffer);
+    return s_iot_st_encode_byte_range(
+        AWS_SECURE_TUNNEL_FN_SERVICE_ID, AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMITED, service_id, buffer);
 }
 
 static int s_iot_st_get_varint_size(size_t value, size_t *encode_size) {
@@ -115,11 +115,11 @@ static int s_iot_st_get_varint_size(size_t value, size_t *encode_size) {
         return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
     }
 
-    if (value < 128) {
+    if (value < AWS_IOT_ST_MAXIMUM_1_BYTE_VARINT_VALUE) {
         *encode_size = 1;
-    } else if (value < 16384) {
+    } else if (value < AWS_IOT_ST_MAXIMUM_2_BYTE_VARINT_VALUE) {
         *encode_size = 2;
-    } else if (value < 2097152) {
+    } else if (value < AWS_IOT_ST_MAXIMUM_3_BYTE_VARINT_VALUE) {
         *encode_size = 3;
     } else {
         *encode_size = 4;
@@ -237,7 +237,11 @@ int aws_iot_st_msg_serialize_from_view(
         }
     }
 
-    AWS_RETURN_ERROR_IF2(buffer->capacity < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
+    if (buffer->capacity < AWS_IOT_ST_MAX_MESSAGE_SIZE) {
+        aws_raise_error(AWS_ERROR_INVALID_BUFFER_SIZE);
+        goto cleanup;
+    }
+
     return AWS_OP_SUCCESS;
 
 cleanup:
@@ -259,20 +263,51 @@ static int s_iot_st_decode_varint_uint32_t(struct aws_byte_cursor *cursor, uint3
         // Zero out the first bit
         // 0x7F == b01111111
         *result += ((castPtrValue & 0x7F) << bits);
-        AWS_RETURN_ERROR_IF2(aws_byte_cursor_advance(cursor, 1).ptr != NULL, AWS_OP_ERR);
+        AWS_RETURN_ERROR_IF2(
+            aws_byte_cursor_advance(cursor, 1).ptr != NULL, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE);
         bits += 7;
     }
     castPtrValue = *cursor->ptr;
-    AWS_RETURN_ERROR_IF2(aws_byte_cursor_advance(cursor, 1).ptr != NULL, AWS_OP_ERR);
+    AWS_RETURN_ERROR_IF2(
+        aws_byte_cursor_advance(cursor, 1).ptr != NULL, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE);
     // Zero out the first bit
     // 0x7F == b01111111
     *result += ((castPtrValue & 0x7F) << bits);
     return AWS_OP_SUCCESS;
 }
 
-static int s_aws_st_decode_lengthdelim(struct aws_byte_cursor *cursor, struct aws_byte_buf *buffer, int length) {
+static int s_aws_st_decode_byte_range(struct aws_byte_cursor *cursor, struct aws_byte_buf *buffer, int length) {
     struct aws_byte_cursor temp = aws_byte_cursor_from_array(cursor->ptr, length);
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_dynamic_secure(buffer, &temp) == 0, AWS_OP_ERR);
+    AWS_RETURN_ERROR_IF2(
+        aws_byte_buf_append_dynamic_secure(buffer, &temp) == 0, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE);
+    return AWS_OP_SUCCESS;
+}
+
+int aws_secure_tunnel_deserialize_varint_from_cursor_to_message(
+    struct aws_byte_cursor *cursor,
+    uint8_t field_number,
+    struct aws_secure_tunnel_message_view *message) {
+    uint32_t result = 0;
+
+    if (s_iot_st_decode_varint_uint32_t(cursor, &result)) {
+        return AWS_OP_ERR;
+    }
+
+    switch (field_number) {
+        case AWS_SECURE_TUNNEL_FN_TYPE:
+            message->type = result;
+            break;
+        case AWS_SECURE_TUNNEL_FN_STREAM_ID:
+            message->stream_id = result;
+            break;
+        case AWS_SECURE_TUNNEL_FN_IGNORABLE:
+            message->ignorable = result;
+            break;
+        default:
+            /* Unexpected field_number */
+            break;
+    }
+
     return AWS_OP_SUCCESS;
 }
 
@@ -307,37 +342,22 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
         message->ignorable = false;
 
         switch (wire_type) {
-            case AWS_SECURE_TUNNEL_PBWT_VARINT: {
-                uint32_t res = 0;
-                if (s_iot_st_decode_varint_uint32_t(cursor, &res)) {
-                    return AWS_OP_ERR;
+            case AWS_SECURE_TUNNEL_PBWT_VARINT:
+                if (aws_secure_tunnel_deserialize_varint_from_cursor_to_message(cursor, field_number, message)) {
+                    goto error;
                 }
-                switch (field_number) {
-                    case AWS_SECURE_TUNNEL_FN_TYPE:
-                        message->type = res;
-                        break;
-                    case AWS_SECURE_TUNNEL_FN_STREAM_ID:
-                        message->stream_id = res;
-                        break;
-                    case AWS_SECURE_TUNNEL_FN_IGNORABLE:
-                        message->ignorable = res;
-                        break;
-                    default:
-                        /* Unexpected field_number */
-                        break;
-                }
-            } break;
+                break;
 
-            case AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMINTED: {
+            case AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMITED: {
                 uint32_t length = 0;
                 if (s_iot_st_decode_varint_uint32_t(cursor, &length)) {
                     goto error;
                 }
-
                 switch (field_number) {
                     case AWS_SECURE_TUNNEL_FN_PAYLOAD:
+
                         if (aws_byte_buf_init(&payload_buf, secure_tunnel->allocator, length) ||
-                            s_aws_st_decode_lengthdelim(cursor, &payload_buf, length)) {
+                            s_aws_st_decode_byte_range(cursor, &payload_buf, length)) {
                             goto error;
                         }
                         aws_byte_cursor_advance(cursor, length);
@@ -347,8 +367,9 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
                         break;
 
                     case AWS_SECURE_TUNNEL_FN_SERVICE_ID:
+
                         if (aws_byte_buf_init(&service_id_buf, secure_tunnel->allocator, length) ||
-                            s_aws_st_decode_lengthdelim(cursor, &service_id_buf, length)) {
+                            s_aws_st_decode_byte_range(cursor, &service_id_buf, length)) {
                             goto error;
                         }
                         aws_byte_cursor_advance(cursor, length);
@@ -360,7 +381,7 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
                     case AWS_SECURE_TUNNEL_FN_AVAILABLE_SERVICE_IDS:
                         AWS_ZERO_STRUCT(available_service_id_buf);
                         if (aws_byte_buf_init(&available_service_id_buf, secure_tunnel->allocator, length) ||
-                            s_aws_st_decode_lengthdelim(cursor, &available_service_id_buf, length)) {
+                            s_aws_st_decode_byte_range(cursor, &available_service_id_buf, length)) {
                             goto error;
                         }
 
@@ -410,6 +431,7 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     }
 
     on_message_received(secure_tunnel, message);
+
     aws_byte_buf_clean_up(&payload_buf);
     aws_byte_buf_clean_up(&service_id_buf);
     /* If any service ids were set, clear the ones that haven't been set by this message. */

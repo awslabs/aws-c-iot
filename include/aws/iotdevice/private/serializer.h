@@ -14,6 +14,9 @@
 #define AWS_IOT_ST_FIELD_NUMBER_SHIFT 3
 
 #define AWS_IOT_ST_MAXIMUM_VARINT 268435455
+#define AWS_IOT_ST_MAXIMUM_1_BYTE_VARINT_VALUE 128
+#define AWS_IOT_ST_MAXIMUM_2_BYTE_VARINT_VALUE 16384
+#define AWS_IOT_ST_MAXIMUM_3_BYTE_VARINT_VALUE 2097152
 #define AWS_IOT_ST_MAX_MESSAGE_SIZE (64 * 1024)
 
 enum aws_secure_tunnel_field_number {
@@ -27,12 +30,12 @@ enum aws_secure_tunnel_field_number {
 };
 
 enum aws_secure_tunnel_protocol_buffer_wire_type {
-    AWS_SECURE_TUNNEL_PBWT_VARINT = 0,            /* int32, int64, uint32, uint64, sint32, sint64, bool, enum */
-    AWS_SECURE_TUNNEL_PBWT_64_BIT = 1,            /* fixed64, sfixed64, double */
-    AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMINTED = 2, /* string, bytes, embedded messages, packed repeated fields */
-    AWS_SECURE_TUNNEL_PBWT_START_GROUP = 3,       /* groups (deprecated) */
-    AWS_SECURE_TUNNEL_PBWT_END_GROUP = 4,         /* groups (deprecated) */
-    AWS_SECURE_TUNNEL_PBWT_32_BIT = 5,            /* fixed32, sfixed32, float */
+    AWS_SECURE_TUNNEL_PBWT_VARINT = 0,           /* int32, int64, uint32, uint64, sint32, sint64, bool, enum */
+    AWS_SECURE_TUNNEL_PBWT_64_BIT = 1,           /* fixed64, sfixed64, double */
+    AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMITED = 2, /* string, bytes, embedded messages, packed repeated fields */
+    AWS_SECURE_TUNNEL_PBWT_START_GROUP = 3,      /* groups (deprecated) */
+    AWS_SECURE_TUNNEL_PBWT_END_GROUP = 4,        /* groups (deprecated) */
+    AWS_SECURE_TUNNEL_PBWT_32_BIT = 5,           /* fixed32, sfixed32, float */
 };
 
 typedef void(aws_secure_tunnel_on_message_received_fn)(

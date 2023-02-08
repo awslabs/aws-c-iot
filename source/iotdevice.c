@@ -81,6 +81,9 @@ static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_TERMINATED,
         "Secure Tunnel terminated by user request."),
+        AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+            AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE,
+            "Error occured while decoding an incoming message." ),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE
