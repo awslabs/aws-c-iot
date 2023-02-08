@@ -332,10 +332,8 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         aws_byte_cursor_advance(&cursor, data_length);
         tmp_cursor = cursor;
 
-        struct aws_secure_tunnel_message_view message_view;
-        AWS_ZERO_STRUCT(message_view);
         aws_secure_tunnel_deserialize_message_from_cursor(
-            secure_tunnel, &message_view, &st_frame, &s_aws_secure_tunnel_connected_on_message_received);
+            secure_tunnel, &st_frame, &s_aws_secure_tunnel_connected_on_message_received);
     }
 
     if (cursor.ptr != received_data->buffer) {

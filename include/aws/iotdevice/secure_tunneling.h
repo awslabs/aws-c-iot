@@ -93,6 +93,9 @@ struct aws_secure_tunnel_message_view {
      * Secure tunnel multiplexing identifier
      */
     struct aws_byte_cursor *service_id;
+    struct aws_byte_cursor *service_id_2;
+    struct aws_byte_cursor *service_id_3;
+
     struct aws_byte_cursor *payload;
 };
 

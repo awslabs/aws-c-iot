@@ -313,23 +313,25 @@ int aws_secure_tunnel_deserialize_varint_from_cursor_to_message(
 
 int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_secure_tunnel *secure_tunnel,
-    struct aws_secure_tunnel_message_view *message,
     struct aws_byte_cursor *cursor,
     aws_secure_tunnel_on_message_received_fn *on_message_received) {
     AWS_RETURN_ERROR_IF2(cursor->len < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     uint8_t wire_type;
     uint8_t field_number;
+    int service_ids_set = 0;
+    struct aws_secure_tunnel_message_view message_view;
+    AWS_ZERO_STRUCT(message_view);
+
+    /* STEVE TODO REMOVE THESE BUFS */
     struct aws_byte_buf payload_buf;
     struct aws_byte_cursor payload_cur;
     struct aws_byte_buf service_id_buf;
     struct aws_byte_cursor service_id_cur;
     struct aws_byte_buf available_service_id_buf;
-
     AWS_ZERO_STRUCT(payload_buf);
     AWS_ZERO_STRUCT(payload_cur);
     AWS_ZERO_STRUCT(service_id_buf);
     AWS_ZERO_STRUCT(service_id_cur);
-    int service_ids_set = 0;
 
     while ((aws_byte_cursor_is_valid(cursor)) && (cursor->len > 0)) {
         // wire_type is only the first 3 bits, Zeroing out the first 5
@@ -339,11 +341,11 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
         aws_byte_cursor_advance(cursor, 1);
 
         /* ignorable defaults to false unless set to true in the incoming message*/
-        message->ignorable = false;
+        message_view.ignorable = false;
 
         switch (wire_type) {
             case AWS_SECURE_TUNNEL_PBWT_VARINT:
-                if (aws_secure_tunnel_deserialize_varint_from_cursor_to_message(cursor, field_number, message)) {
+                if (aws_secure_tunnel_deserialize_varint_from_cursor_to_message(cursor, field_number, &message_view)) {
                     goto error;
                 }
                 break;
@@ -356,26 +358,30 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
                 switch (field_number) {
                     case AWS_SECURE_TUNNEL_FN_PAYLOAD:
 
-                        if (aws_byte_buf_init(&payload_buf, secure_tunnel->allocator, length) ||
-                            s_aws_st_decode_byte_range(cursor, &payload_buf, length)) {
-                            goto error;
-                        }
-                        aws_byte_cursor_advance(cursor, length);
+                        payload_cur = aws_byte_cursor_advance(cursor, length);
+                        message_view.payload = &payload_cur;
+                        // if (aws_byte_buf_init(&payload_buf, secure_tunnel->allocator, length) ||
+                        //     s_aws_st_decode_byte_range(cursor, &payload_buf, length)) {
+                        //     goto error;
+                        // }
+                        // aws_byte_cursor_advance(cursor, length);
 
-                        payload_cur = aws_byte_cursor_from_buf(&payload_buf);
-                        message->payload = &payload_cur;
+                        // payload_cur = aws_byte_cursor_from_buf(&payload_buf);
+                        // message_view.payload = &payload_cur;
                         break;
 
                     case AWS_SECURE_TUNNEL_FN_SERVICE_ID:
 
-                        if (aws_byte_buf_init(&service_id_buf, secure_tunnel->allocator, length) ||
-                            s_aws_st_decode_byte_range(cursor, &service_id_buf, length)) {
-                            goto error;
-                        }
-                        aws_byte_cursor_advance(cursor, length);
+                        service_id_cur = aws_byte_cursor_advance(cursor, length);
+                        message_view.service_id = &service_id_cur;
+                        // if (aws_byte_buf_init(&service_id_buf, secure_tunnel->allocator, length) ||
+                        //     s_aws_st_decode_byte_range(cursor, &service_id_buf, length)) {
+                        //     goto error;
+                        // }
+                        // aws_byte_cursor_advance(cursor, length);
 
-                        service_id_cur = aws_byte_cursor_from_buf(&service_id_buf);
-                        message->service_id = &service_id_cur;
+                        // service_id_cur = aws_byte_cursor_from_buf(&service_id_buf);
+                        // message_view.service_id = &service_id_cur;
                         break;
 
                     case AWS_SECURE_TUNNEL_FN_AVAILABLE_SERVICE_IDS:
@@ -430,7 +436,7 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
         }
     }
 
-    on_message_received(secure_tunnel, message);
+    on_message_received(secure_tunnel, &message_view);
 
     aws_byte_buf_clean_up(&payload_buf);
     aws_byte_buf_clean_up(&service_id_buf);

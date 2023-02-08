@@ -53,7 +53,6 @@ int aws_iot_st_msg_serialize_from_view(
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_secure_tunnel *secure_tunnel,
-    struct aws_secure_tunnel_message_view *message,
     struct aws_byte_cursor *cursor,
     aws_secure_tunnel_on_message_received_fn *on_message_received);
 
