@@ -276,12 +276,12 @@ static int s_iot_st_decode_varint_uint32_t(struct aws_byte_cursor *cursor, uint3
     return AWS_OP_SUCCESS;
 }
 
-static int s_aws_st_decode_byte_range(struct aws_byte_cursor *cursor, struct aws_byte_buf *buffer, int length) {
-    struct aws_byte_cursor temp = aws_byte_cursor_from_array(cursor->ptr, length);
-    AWS_RETURN_ERROR_IF2(
-        aws_byte_buf_append_dynamic_secure(buffer, &temp) == 0, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE);
-    return AWS_OP_SUCCESS;
-}
+// static int s_aws_st_decode_byte_range(struct aws_byte_cursor *cursor, struct aws_byte_buf *buffer, int length) {
+//     struct aws_byte_cursor temp = aws_byte_cursor_from_array(cursor->ptr, length);
+//     AWS_RETURN_ERROR_IF2(
+//         aws_byte_buf_append_dynamic_secure(buffer, &temp) == 0, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE);
+//     return AWS_OP_SUCCESS;
+// }
 
 int aws_secure_tunnel_deserialize_varint_from_cursor_to_message(
     struct aws_byte_cursor *cursor,
@@ -322,16 +322,14 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_secure_tunnel_message_view message_view;
     AWS_ZERO_STRUCT(message_view);
 
-    /* STEVE TODO REMOVE THESE BUFS */
-    struct aws_byte_buf payload_buf;
     struct aws_byte_cursor payload_cur;
-    struct aws_byte_buf service_id_buf;
-    struct aws_byte_cursor service_id_cur;
-    struct aws_byte_buf available_service_id_buf;
-    AWS_ZERO_STRUCT(payload_buf);
+    struct aws_byte_cursor service_id_1_cur;
+    struct aws_byte_cursor service_id_2_cur;
+    struct aws_byte_cursor service_id_3_cur;
     AWS_ZERO_STRUCT(payload_cur);
-    AWS_ZERO_STRUCT(service_id_buf);
-    AWS_ZERO_STRUCT(service_id_cur);
+    AWS_ZERO_STRUCT(service_id_1_cur);
+    AWS_ZERO_STRUCT(service_id_2_cur);
+    AWS_ZERO_STRUCT(service_id_3_cur);
 
     while ((aws_byte_cursor_is_valid(cursor)) && (cursor->len > 0)) {
         // wire_type is only the first 3 bits, Zeroing out the first 5
@@ -351,76 +349,41 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
                 break;
 
             case AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMITED: {
+
                 uint32_t length = 0;
                 if (s_iot_st_decode_varint_uint32_t(cursor, &length)) {
                     goto error;
                 }
+
                 switch (field_number) {
                     case AWS_SECURE_TUNNEL_FN_PAYLOAD:
-
                         payload_cur = aws_byte_cursor_advance(cursor, length);
                         message_view.payload = &payload_cur;
-                        // if (aws_byte_buf_init(&payload_buf, secure_tunnel->allocator, length) ||
-                        //     s_aws_st_decode_byte_range(cursor, &payload_buf, length)) {
-                        //     goto error;
-                        // }
-                        // aws_byte_cursor_advance(cursor, length);
-
-                        // payload_cur = aws_byte_cursor_from_buf(&payload_buf);
-                        // message_view.payload = &payload_cur;
                         break;
 
                     case AWS_SECURE_TUNNEL_FN_SERVICE_ID:
-
-                        service_id_cur = aws_byte_cursor_advance(cursor, length);
-                        message_view.service_id = &service_id_cur;
-                        // if (aws_byte_buf_init(&service_id_buf, secure_tunnel->allocator, length) ||
-                        //     s_aws_st_decode_byte_range(cursor, &service_id_buf, length)) {
-                        //     goto error;
-                        // }
-                        // aws_byte_cursor_advance(cursor, length);
-
-                        // service_id_cur = aws_byte_cursor_from_buf(&service_id_buf);
-                        // message_view.service_id = &service_id_cur;
+                        service_id_1_cur = aws_byte_cursor_advance(cursor, length);
+                        message_view.service_id = &service_id_1_cur;
                         break;
 
                     case AWS_SECURE_TUNNEL_FN_AVAILABLE_SERVICE_IDS:
-                        AWS_ZERO_STRUCT(available_service_id_buf);
-                        if (aws_byte_buf_init(&available_service_id_buf, secure_tunnel->allocator, length) ||
-                            s_aws_st_decode_byte_range(cursor, &available_service_id_buf, length)) {
-                            goto error;
-                        }
-
-                        aws_byte_cursor_advance(cursor, length);
                         switch (service_ids_set) {
                             case 0:
-                                if (secure_tunnel->config->service_id_1) {
-                                    aws_string_destroy(secure_tunnel->config->service_id_1);
-                                }
-                                secure_tunnel->config->service_id_1 =
-                                    aws_string_new_from_buf(secure_tunnel->allocator, &available_service_id_buf);
+                                service_id_1_cur = aws_byte_cursor_advance(cursor, length);
+                                message_view.service_id = &service_id_1_cur;
                                 break;
                             case 1:
-                                if (secure_tunnel->config->service_id_2) {
-                                    aws_string_destroy(secure_tunnel->config->service_id_2);
-                                }
-                                secure_tunnel->config->service_id_2 =
-                                    aws_string_new_from_buf(secure_tunnel->allocator, &available_service_id_buf);
+                                service_id_2_cur = aws_byte_cursor_advance(cursor, length);
+                                message_view.service_id_2 = &service_id_2_cur;
                                 break;
                             case 2:
-                                if (secure_tunnel->config->service_id_3) {
-                                    aws_string_destroy(secure_tunnel->config->service_id_3);
-                                }
-                                secure_tunnel->config->service_id_3 =
-                                    aws_string_new_from_buf(secure_tunnel->allocator, &available_service_id_buf);
+                                service_id_3_cur = aws_byte_cursor_advance(cursor, length);
+                                message_view.service_id_3 = &service_id_3_cur;
                                 break;
                             default:
-                                aws_byte_buf_clean_up(&available_service_id_buf);
                                 goto error;
                                 break;
                         }
-
-                        aws_byte_buf_clean_up(&available_service_id_buf);
                         service_ids_set++;
                         break;
                 }
@@ -438,23 +401,10 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
 
     on_message_received(secure_tunnel, &message_view);
 
-    aws_byte_buf_clean_up(&payload_buf);
-    aws_byte_buf_clean_up(&service_id_buf);
-    /* If any service ids were set, clear the ones that haven't been set by this message. */
-    if (service_ids_set) {
-        switch (service_ids_set) {
-            case 1:
-                aws_string_destroy(secure_tunnel->config->service_id_2);
-            case 2:
-                aws_string_destroy(secure_tunnel->config->service_id_3);
-        }
-    }
     return AWS_OP_SUCCESS;
 
 error:
-    aws_byte_buf_clean_up(&payload_buf);
-    aws_byte_buf_clean_up(&service_id_buf);
-    return AWS_OP_ERR;
+    return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE;
 }
 
 const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type) {

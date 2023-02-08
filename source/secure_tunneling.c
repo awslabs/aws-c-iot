@@ -252,22 +252,42 @@ static void s_aws_secure_tunnel_on_session_reset_received(struct aws_secure_tunn
     }
 }
 
-static void s_aws_secure_tunnel_on_service_ids_received(struct aws_secure_tunnel *secure_tunnel) {
-    if (secure_tunnel->config->service_id_1) {
+static void s_aws_secure_tunnel_on_service_ids_received(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_message_view *message_view) {
+
+    if (message_view->service_id != NULL) {
+        if (secure_tunnel->config->service_id_1) {
+            aws_string_destroy(secure_tunnel->config->service_id_1);
+        }
+        secure_tunnel->config->service_id_1 =
+            aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: secure tunnel service id 1 set to: " PRInSTR,
             (void *)secure_tunnel,
             AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_1)));
     }
-    if (secure_tunnel->config->service_id_2) {
+
+    if (message_view->service_id_2 != NULL) {
+        if (secure_tunnel->config->service_id_2) {
+            aws_string_destroy(secure_tunnel->config->service_id_2);
+        }
+        secure_tunnel->config->service_id_2 =
+            aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_2);
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: secure tunnel service id 2 set to: " PRInSTR,
             (void *)secure_tunnel,
             AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_2)));
     }
-    if (secure_tunnel->config->service_id_3) {
+
+    if (message_view->service_id_3 != NULL) {
+        if (secure_tunnel->config->service_id_3) {
+            aws_string_destroy(secure_tunnel->config->service_id_3);
+        }
+        secure_tunnel->config->service_id_3 =
+            aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_3);
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: secure tunnel service id 3 set to: " PRInSTR,
@@ -300,7 +320,7 @@ static void s_aws_secure_tunnel_connected_on_message_received(
             s_aws_secure_tunnel_on_session_reset_received(secure_tunnel);
             break;
         case AWS_SECURE_TUNNEL_MT_SERVICE_IDS:
-            s_aws_secure_tunnel_on_service_ids_received(secure_tunnel);
+            s_aws_secure_tunnel_on_service_ids_received(secure_tunnel, message_view);
             break;
         case AWS_SECURE_TUNNEL_MT_CONNECTION_START:
         case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
