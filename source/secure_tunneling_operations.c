@@ -200,7 +200,7 @@ void aws_secure_tunnel_message_storage_clean_up(struct aws_secure_tunnel_message
 }
 
 /* Sets the stream id on outbound message based on the service id (or lack of for V1) to the current one being used. */
-static int s_aws_secure_tunnel_operation_message_set_stream_id(
+static int s_aws_secure_tunnel_operation_message_assign_stream_id(
     struct aws_secure_tunnel_operation *operation,
     struct aws_secure_tunnel *secure_tunnel) {
 
@@ -309,7 +309,7 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
 }
 
 static struct aws_secure_tunnel_operation_vtable s_message_operation_vtable = {
-    .aws_secure_tunnel_operation_assign_stream_id_fn = s_aws_secure_tunnel_operation_message_set_stream_id,
+    .aws_secure_tunnel_operation_assign_stream_id_fn = s_aws_secure_tunnel_operation_message_assign_stream_id,
     .aws_secure_tunnel_operation_set_next_stream_id_fn = s_aws_secure_tunnel_operation_message_set_next_stream_id,
 };
 

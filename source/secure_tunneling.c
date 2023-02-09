@@ -1251,12 +1251,23 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
 
                     error_code = aws_last_error();
 
-                    AWS_LOGF_DEBUG(
-                        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                        "id=%p: failed to send DATA message with error %d(%s)",
-                        (void *)secure_tunnel,
-                        error_code,
-                        aws_error_debug_str(error_code));
+                    if (current_operation->message_view->service_id) {
+                        AWS_LOGF_DEBUG(
+                            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                            "id=%p: failed to assign service id '" PRInSTR
+                            "' DATA message a stream id with error %d(%s)",
+                            (void *)secure_tunnel,
+                            AWS_BYTE_CURSOR_PRI(*current_operation->message_view->service_id),
+                            error_code,
+                            aws_error_debug_str(error_code));
+                    } else {
+                        AWS_LOGF_DEBUG(
+                            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                            "id=%p: failed to assign V1 DATA message a stream id with error %d(%s)",
+                            (void *)secure_tunnel,
+                            error_code,
+                            aws_error_debug_str(error_code));
+                    }
                 } else {
                     /* Send the Data message through the WebSocket */
                     if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
@@ -1899,8 +1910,6 @@ int aws_secure_tunnel_stream_start(
     if (s_submit_operation(secure_tunnel, &message_op->base)) {
         goto error;
     }
-
-    s_aws_secure_tunnel_set_stream_id(secure_tunnel, message_options->service_id, message_options->stream_id);
 
     return AWS_OP_SUCCESS;
 
