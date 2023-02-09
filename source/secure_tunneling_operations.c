@@ -297,6 +297,14 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
     }
 
     message_op->options_storage.storage_view.stream_id = stream_id;
+
+    AWS_LOGF_INFO(
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: Secure tunnel service_id '" PRInSTR "' stream_id set to %d",
+        (void *)secure_tunnel,
+        AWS_BYTE_CURSOR_PRI(*message_view->service_id),
+        stream_id);
+
     return AWS_OP_SUCCESS;
 }
 

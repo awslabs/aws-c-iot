@@ -1932,8 +1932,6 @@ int aws_secure_tunnel_stream_reset(
         goto error;
     }
 
-    s_aws_secure_tunnel_set_stream_id(secure_tunnel, message_options->service_id, message_options->stream_id);
-
     return AWS_OP_SUCCESS;
 
 error:
