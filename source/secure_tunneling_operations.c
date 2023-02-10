@@ -267,7 +267,7 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
 
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
-    if (message_view->service_id != NULL) {
+    if (message_view->service_id != NULL && message_view->service_id->len > 0) {
         struct aws_string *service_id = NULL;
         service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
 
