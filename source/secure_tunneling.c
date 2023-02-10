@@ -357,8 +357,16 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         aws_byte_cursor_advance(&cursor, data_length);
         tmp_cursor = cursor;
 
-        aws_secure_tunnel_deserialize_message_from_cursor(
-            secure_tunnel, &st_frame, &s_aws_secure_tunnel_connected_on_message_received);
+        if (aws_secure_tunnel_deserialize_message_from_cursor(
+                secure_tunnel, &st_frame, &s_aws_secure_tunnel_connected_on_message_received)) {
+            int error_code = aws_last_error();
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: failed to deserialize message with error %d(%s)",
+                (void *)secure_tunnel,
+                error_code,
+                aws_error_debug_str(error_code));
+        }
     }
 
     if (cursor.ptr != received_data->buffer) {

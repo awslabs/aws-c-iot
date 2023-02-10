@@ -308,6 +308,13 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_byte_cursor *cursor,
     aws_secure_tunnel_on_message_received_fn *on_message_received) {
+
+    AWS_LOGF_DEBUG(
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: deserializing message from cursor of size %zu.",
+        (void *)secure_tunnel,
+        cursor->len);
+
     AWS_RETURN_ERROR_IF2(cursor->len < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     uint8_t wire_type;
     uint8_t field_number;
