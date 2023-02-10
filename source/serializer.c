@@ -203,7 +203,7 @@ int aws_iot_st_msg_serialize_from_view(
     AWS_LOGF_DEBUG(
         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
         "id=%p: serializing message from view of size %zu.",
-        (void *)secure_tunnel,
+        (void *)message_view,
         message_total_length);
 
     if (aws_byte_buf_init(buffer, allocator, message_total_length) != AWS_OP_SUCCESS) {
