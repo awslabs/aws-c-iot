@@ -309,6 +309,7 @@ static void s_aws_secure_tunnel_on_service_ids_received(
 static void s_aws_secure_tunnel_connected_on_message_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
+    aws_secure_tunnel_message_view_log(message_view, AWS_LL_DEBUG);
     switch (message_view->type) {
         case AWS_SECURE_TUNNEL_MT_DATA:
             if (secure_tunnel->config->on_message_received) {

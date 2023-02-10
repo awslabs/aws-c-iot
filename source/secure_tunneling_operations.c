@@ -99,6 +99,14 @@ void aws_secure_tunnel_message_view_log(
         return;
     }
 
+    AWS_LOGUF(
+        log_handle,
+        level,
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: aws_secure_tunnel_message_view type '%s'",
+        (void *)message_view,
+        aws_secure_tunnel_message_type_to_c_string(message_view->type));
+
     if (message_view->service_id != NULL) {
         AWS_LOGUF(
             log_handle,
