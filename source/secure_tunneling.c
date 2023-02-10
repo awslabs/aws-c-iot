@@ -300,9 +300,16 @@ static void s_aws_secure_tunnel_on_service_ids_received(
             AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_3)));
     }
 
+    struct aws_secure_tunnel_connection_view connection_view;
+    AWS_ZERO_STRUCT(connection_view);
+    connection_view.service_id_1 = message_view->service_id;
+    connection_view.service_id_2 = message_view->service_id_2;
+    connection_view.service_id_3 = message_view->service_id_3;
+
     /* A connection can only be used once available service ids are established with the secure tunnel. */
     if (secure_tunnel->config->on_connection_complete) {
-        secure_tunnel->config->on_connection_complete(AWS_ERROR_SUCCESS, secure_tunnel->config->user_data);
+        secure_tunnel->config->on_connection_complete(
+            &connection_view, AWS_ERROR_SUCCESS, secure_tunnel->config->user_data);
     }
 }
 
@@ -634,7 +641,7 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
 
     /* Report a failed WebSocket Upgrade attempt */
     if (setup->error_code && secure_tunnel->config->on_connection_complete) {
-        secure_tunnel->config->on_connection_complete(setup->error_code, secure_tunnel->config->user_data);
+        secure_tunnel->config->on_connection_complete(NULL, setup->error_code, secure_tunnel->config->user_data);
     }
 
     /* Failed/Successful websocket creation and associated errors logged by "websocket-setup" */

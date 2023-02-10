@@ -99,6 +99,15 @@ struct aws_secure_tunnel_message_view {
     struct aws_byte_cursor *payload;
 };
 
+/**
+ * Read-only snapshot of a Secure Tunnel Connection Completion Data
+ */
+struct aws_secure_tunnel_connection_view {
+    struct aws_byte_cursor *service_id_1;
+    struct aws_byte_cursor *service_id_2;
+    struct aws_byte_cursor *service_id_3;
+};
+
 /* Callbacks */
 
 /**
@@ -107,7 +116,10 @@ struct aws_secure_tunnel_message_view {
 typedef void(
     aws_secure_tunnel_message_received_fn)(const struct aws_secure_tunnel_message_view *message, void *user_data);
 
-typedef void(aws_secure_tunneling_on_connection_complete_fn)(int error_code, void *user_data);
+typedef void(aws_secure_tunneling_on_connection_complete_fn)(
+    const struct aws_secure_tunnel_connection_view *connection_view,
+    int error_code,
+    void *user_data);
 typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_stream_start_fn)(
