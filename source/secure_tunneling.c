@@ -612,8 +612,7 @@ static void s_secure_tunnel_setup(struct aws_client_bootstrap *bootstrap, int er
     if (error_code != AWS_OP_SUCCESS) {
         if (secure_tunnel->config->on_connection_complete) {
             if (secure_tunnel->config->on_connection_complete) {
-                secure_tunnel->config->on_connection_complete(
-                    NULL, AWS_ERROR_SUCCESS, secure_tunnel->config->user_data);
+                secure_tunnel->config->on_connection_complete(NULL, error_code, secure_tunnel->config->user_data);
             }
         }
         s_on_websocket_shutdown(secure_tunnel->websocket, error_code, secure_tunnel);
