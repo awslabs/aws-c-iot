@@ -134,6 +134,7 @@ struct aws_secure_tunnel_options_storage {
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
+    aws_secure_tunneling_on_stopped_fn *on_stopped;
 
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;

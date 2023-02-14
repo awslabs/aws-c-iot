@@ -858,6 +858,10 @@ static void s_change_current_state_to_stopped(struct aws_secure_tunnel *secure_t
 
     /* Stop works as a complete session wipe, and so the next time we connect, we want it to be clean */
     s_reset_secure_tunnel(secure_tunnel);
+
+    if (secure_tunnel->config->on_stopped) {
+        secure_tunnel->config->on_stopped(secure_tunnel->config->user_data);
+    }
 }
 
 static void s_change_current_state_to_connecting(struct aws_secure_tunnel *secure_tunnel) {

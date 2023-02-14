@@ -668,6 +668,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->on_stream_start = options->on_stream_start;
     storage->on_stream_reset = options->on_stream_reset;
     storage->on_session_reset = options->on_session_reset;
+    storage->on_stopped = options->on_stopped;
     storage->on_termination_complete = options->on_termination_complete;
 
     return storage;
