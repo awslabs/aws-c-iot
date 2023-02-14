@@ -601,6 +601,8 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     struct aws_secure_tunnel_options_storage *storage =
         aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_options_storage));
 
+    storage->allocator = allocator;
+
     storage->socket_options = *options->socket_options;
     storage->endpoint_host = aws_string_new_from_cursor(allocator, &options->endpoint_host);
     if (storage->endpoint_host == NULL) {
