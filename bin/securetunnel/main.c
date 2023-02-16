@@ -202,7 +202,8 @@ static void s_on_connection_complete(
         "\nSecure Tunnel Client received s_on_connection_complete callback with error_code:%d (%s)\n",
         error_code,
         aws_error_name(error_code));
-    struct aws_secure_tunnel *secure_tunnel = user_data;
+    struct app_ctx *ctx = user_data;
+    struct aws_secure_tunnel *secure_tunnel = ctx->secure_tunnel;
 
     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         printf("\nConnected in Destination Mode\n");

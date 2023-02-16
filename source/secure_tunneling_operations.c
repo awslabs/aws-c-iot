@@ -15,6 +15,36 @@
 
 #define INVALID_STREAM_ID 0
 
+/* for the hash table, to destroy elements */
+static void s_destroy_service_id(void *data) {
+    struct aws_service_id_element *elem = data;
+    aws_string_destroy(elem->service_id_string);
+    aws_mem_release(elem->allocator, elem);
+}
+
+struct aws_service_id_element *aws_service_id_element_new(
+    struct aws_allocator *allocator,
+    const struct aws_byte_cursor *service_id,
+    int32_t stream_id) {
+    AWS_PRECONDITION(allocator != NULL);
+    AWS_PRECONDITION(service_id != NULL);
+
+    struct aws_service_id_element *elem = aws_mem_calloc(allocator, 1, sizeof(struct aws_service_id_element));
+    elem->allocator = allocator;
+    elem->service_id_string = aws_string_new_from_cursor(allocator, service_id);
+    if (elem->service_id_string == NULL) {
+        goto error;
+    }
+    elem->service_id_cur = aws_byte_cursor_from_string(elem->service_id_string);
+    elem->stream_id = stream_id;
+
+    return elem;
+
+error:
+    s_destroy_service_id(elem);
+    return NULL;
+}
+
 /*********************************************************************************************************************
  * Operation base
  ********************************************************************************************************************/
@@ -229,9 +259,8 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id));
             stream_id = INVALID_STREAM_ID;
         } else {
-
-            int32_t *stored_id = elem->value;
-            stream_id = *stored_id;
+            struct aws_service_id_element *service_id_elem = elem->value;
+            stream_id = service_id_elem->stream_id;
         }
 
         // struct aws_string *service_id = NULL;
@@ -289,15 +318,19 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
         if (elem == NULL) {
             AWS_LOGF_WARN(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: invalid service_id:'" PRInSTR "' attempted to be used with an outbound message",
+                "id=%p: invalid service_id:'" PRInSTR
+                "' attempted to be used to set next stream id on an outbound message",
                 (void *)message_view,
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id));
             stream_id = INVALID_STREAM_ID;
         } else {
+            struct aws_service_id_element *service_id_elem = elem->value;
+            stream_id = service_id_elem->stream_id + 1;
 
-            int32_t *stored_id = elem->value;
-            stream_id = *stored_id + 1;
-            aws_hash_table_put(&secure_tunnel->config->service_ids, message_view->service_id, &stream_id, NULL);
+            struct aws_service_id_element *replacement_elem =
+                aws_service_id_element_new(secure_tunnel->allocator, message_view->service_id, stream_id);
+            aws_hash_table_put(
+                &secure_tunnel->config->service_ids, &replacement_elem->service_id_cur, replacement_elem, NULL);
         }
 
         // struct aws_string *service_id = NULL;
@@ -656,7 +689,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
             aws_hash_byte_cursor_ptr,
             (aws_hash_callback_eq_fn *)aws_byte_cursor_eq,
             NULL,
-            NULL)) {
+            s_destroy_service_id)) {
         goto error;
     }
 

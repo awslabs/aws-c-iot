@@ -26,6 +26,13 @@ enum aws_secure_tunnel_operation_type {
     AWS_STOT_STREAM_START
 };
 
+struct aws_service_id_element {
+    struct aws_allocator *allocator;
+    struct aws_byte_cursor service_id_cur;
+    struct aws_string *service_id_string;
+    int32_t stream_id;
+};
+
 struct aws_secure_tunnel_message_storage {
     struct aws_allocator *allocator;
     struct aws_secure_tunnel_message_view storage_view;
@@ -183,6 +190,12 @@ struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
     struct aws_allocator *allocator,
     const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_view);
+
+AWS_IOTDEVICE_API
+struct aws_service_id_element *aws_service_id_element_new(
+    struct aws_allocator *allocator,
+    const struct aws_byte_cursor *service_id,
+    int32_t stream_id);
 
 AWS_EXTERN_C_END
 
