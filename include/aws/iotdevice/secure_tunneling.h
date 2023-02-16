@@ -232,7 +232,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_acquire(struct aws_secure_tunnel *se
  * @return NULL
  */
 AWS_IOTDEVICE_API
-void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
+struct aws_secure_tunnel *aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel);
 
 /**
  * Asynchronous notify to the secure tunnel that you want it to attempt to connect.

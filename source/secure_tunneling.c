@@ -1792,10 +1792,12 @@ struct aws_secure_tunnel *aws_secure_tunnel_acquire(struct aws_secure_tunnel *se
     return secure_tunnel;
 }
 
-void aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
+struct aws_secure_tunnel *aws_secure_tunnel_release(struct aws_secure_tunnel *secure_tunnel) {
     if (secure_tunnel != NULL) {
         aws_ref_count_release(&secure_tunnel->ref_count);
     }
+
+    return NULL;
 }
 
 int aws_secure_tunnel_start(struct aws_secure_tunnel *secure_tunnel) {
