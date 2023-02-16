@@ -80,6 +80,12 @@ static const char *s_get_proxy_mode_string(enum aws_secure_tunneling_local_proxy
     return "destination";
 }
 
+static int s_reset_service_id(void *context, struct aws_hash_element *p_element) {
+    (void)context;
+    p_element->value = INVALID_STREAM_ID;
+    return AWS_COMMON_HASH_TABLE_ITER_CONTINUE;
+}
+
 /*********************************************************************************************************************
  * Secure Tunnel Clean Up
  ********************************************************************************************************************/
@@ -127,9 +133,10 @@ static void s_reset_secure_tunnel(struct aws_secure_tunnel *secure_tunnel) {
     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: Secure tunnel session reset.", (void *)secure_tunnel);
 
     secure_tunnel->config->stream_id = INVALID_STREAM_ID;
-    secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
-    secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
-    secure_tunnel->config->service_id_3_stream_id = INVALID_STREAM_ID;
+    aws_hash_table_foreach(&secure_tunnel->config->service_ids, s_reset_service_id, NULL);
+    // secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
+    // secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
+    // secure_tunnel->config->service_id_3_stream_id = INVALID_STREAM_ID;
     secure_tunnel->received_data.len = 0; /* Drop any incomplete secure tunnel frame */
 }
 
@@ -142,34 +149,48 @@ static bool s_aws_secure_tunnel_stream_id_check_match(
         return (secure_tunnel->config->stream_id == stream_id);
     }
 
-    struct aws_string *service_id_to_set = aws_string_new_from_cursor(secure_tunnel->allocator, service_id);
-    if (service_id_to_set == NULL) {
-        return false;
-    }
-    int32_t current_stream_id = INVALID_STREAM_ID;
-
-    if (secure_tunnel->config->service_id_1 != NULL &&
-        aws_string_compare(secure_tunnel->config->service_id_1, service_id_to_set) == 0) {
-        current_stream_id = secure_tunnel->config->service_id_1_stream_id;
-    } else if (
-        secure_tunnel->config->service_id_2 != NULL &&
-        aws_string_compare(secure_tunnel->config->service_id_2, service_id_to_set) == 0) {
-        current_stream_id = secure_tunnel->config->service_id_2_stream_id;
-    } else if (
-        secure_tunnel->config->service_id_3 != NULL &&
-        aws_string_compare(secure_tunnel->config->service_id_3, service_id_to_set) == 0) {
-        current_stream_id = secure_tunnel->config->service_id_3_stream_id;
-    } else {
+    struct aws_hash_element *elem = NULL;
+    aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+    if (elem == NULL) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure tunnel stream id check request for unsupported service_id: " PRInSTR,
             (void *)secure_tunnel,
             AWS_BYTE_CURSOR_PRI(*service_id));
-        aws_string_destroy(service_id_to_set);
         return false;
     }
 
-    return (stream_id == current_stream_id);
+    int32_t *stored_id = elem->value;
+    return (stream_id == *stored_id);
+
+    // struct aws_string *service_id_to_set = aws_string_new_from_cursor(secure_tunnel->allocator, service_id);
+    // if (service_id_to_set == NULL) {
+    //     return false;
+    // }
+    // int32_t current_stream_id = INVALID_STREAM_ID;
+
+    // if (secure_tunnel->config->service_id_1 != NULL &&
+    //     aws_string_compare(secure_tunnel->config->service_id_1, service_id_to_set) == 0) {
+    //     current_stream_id = secure_tunnel->config->service_id_1_stream_id;
+    // } else if (
+    //     secure_tunnel->config->service_id_2 != NULL &&
+    //     aws_string_compare(secure_tunnel->config->service_id_2, service_id_to_set) == 0) {
+    //     current_stream_id = secure_tunnel->config->service_id_2_stream_id;
+    // } else if (
+    //     secure_tunnel->config->service_id_3 != NULL &&
+    //     aws_string_compare(secure_tunnel->config->service_id_3, service_id_to_set) == 0) {
+    //     current_stream_id = secure_tunnel->config->service_id_3_stream_id;
+    // } else {
+    //     AWS_LOGF_WARN(
+    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+    //         "id=%p: Secure tunnel stream id check request for unsupported service_id: " PRInSTR,
+    //         (void *)secure_tunnel,
+    //         AWS_BYTE_CURSOR_PRI(*service_id));
+    //     aws_string_destroy(service_id_to_set);
+    //     return false;
+    // }
+
+    // return (stream_id == current_stream_id);
 }
 
 static int s_aws_secure_tunnel_set_stream_id(
@@ -187,32 +208,18 @@ static int s_aws_secure_tunnel_set_stream_id(
         return AWS_OP_SUCCESS;
     }
 
-    struct aws_string *service_id_to_set = aws_string_new_from_cursor(secure_tunnel->allocator, service_id);
-    if (service_id_to_set == NULL) {
-        return AWS_OP_ERR;
-    }
-
-    if (secure_tunnel->config->service_id_1 != NULL &&
-        aws_string_compare(secure_tunnel->config->service_id_1, service_id_to_set) == 0) {
-        secure_tunnel->config->service_id_1_stream_id = stream_id;
-    } else if (
-        secure_tunnel->config->service_id_2 != NULL &&
-        aws_string_compare(secure_tunnel->config->service_id_2, service_id_to_set) == 0) {
-        secure_tunnel->config->service_id_2_stream_id = stream_id;
-    } else if (
-        secure_tunnel->config->service_id_3 != NULL &&
-        aws_string_compare(secure_tunnel->config->service_id_3, service_id_to_set) == 0) {
-        secure_tunnel->config->service_id_3_stream_id = stream_id;
-    } else {
+    struct aws_hash_element *elem = NULL;
+    aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+    if (elem == NULL) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure tunnel request for unsupported service_id: " PRInSTR,
             (void *)secure_tunnel,
             AWS_BYTE_CURSOR_PRI(*service_id));
-        aws_string_destroy(service_id_to_set);
-        return AWS_OP_ERR;
+        return false;
     }
 
+    aws_hash_table_put(&secure_tunnel->config->service_ids, service_id, &stream_id, NULL);
     AWS_LOGF_INFO(
         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
         "id=%p: Secure tunnel service_id '" PRInSTR "' stream_id set to %d",
@@ -220,8 +227,43 @@ static int s_aws_secure_tunnel_set_stream_id(
         AWS_BYTE_CURSOR_PRI(*service_id),
         stream_id);
 
-    aws_string_destroy(service_id_to_set);
     return AWS_OP_SUCCESS;
+
+    // struct aws_string *service_id_to_set = aws_string_new_from_cursor(secure_tunnel->allocator, service_id);
+    // if (service_id_to_set == NULL) {
+    //     return AWS_OP_ERR;
+    // }
+
+    // if (secure_tunnel->config->service_id_1 != NULL &&
+    //     aws_string_compare(secure_tunnel->config->service_id_1, service_id_to_set) == 0) {
+    //     secure_tunnel->config->service_id_1_stream_id = stream_id;
+    // } else if (
+    //     secure_tunnel->config->service_id_2 != NULL &&
+    //     aws_string_compare(secure_tunnel->config->service_id_2, service_id_to_set) == 0) {
+    //     secure_tunnel->config->service_id_2_stream_id = stream_id;
+    // } else if (
+    //     secure_tunnel->config->service_id_3 != NULL &&
+    //     aws_string_compare(secure_tunnel->config->service_id_3, service_id_to_set) == 0) {
+    //     secure_tunnel->config->service_id_3_stream_id = stream_id;
+    // } else {
+    //     AWS_LOGF_WARN(
+    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+    //         "id=%p: Secure tunnel request for unsupported service_id: " PRInSTR,
+    //         (void *)secure_tunnel,
+    //         AWS_BYTE_CURSOR_PRI(*service_id));
+    //     aws_string_destroy(service_id_to_set);
+    //     return AWS_OP_ERR;
+    // }
+
+    // AWS_LOGF_INFO(
+    //     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+    //     "id=%p: Secure tunnel service_id '" PRInSTR "' stream_id set to %d",
+    //     (void *)secure_tunnel,
+    //     AWS_BYTE_CURSOR_PRI(*service_id),
+    //     stream_id);
+
+    // aws_string_destroy(service_id_to_set);
+    // return AWS_OP_SUCCESS;
 }
 
 static void s_aws_secure_tunnel_on_stream_start_received(
@@ -256,49 +298,78 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
 
-    /* Clean up existing service ids first */
-    if (secure_tunnel->config->service_id_1) {
-        aws_string_destroy(secure_tunnel->config->service_id_1);
-        secure_tunnel->config->service_id_1 = NULL;
-    }
-    if (secure_tunnel->config->service_id_2) {
-        aws_string_destroy(secure_tunnel->config->service_id_2);
-        secure_tunnel->config->service_id_2 = NULL;
-    }
-    if (secure_tunnel->config->service_id_3) {
-        aws_string_destroy(secure_tunnel->config->service_id_3);
-        secure_tunnel->config->service_id_3 = NULL;
-    }
+    aws_hash_table_clear(&secure_tunnel->config->service_ids);
 
     if (message_view->service_id != NULL) {
-        secure_tunnel->config->service_id_1 =
-            aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
+        aws_hash_table_put(&secure_tunnel->config->service_ids, message_view->service_id, INVALID_STREAM_ID, NULL);
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: secure tunnel service id 1 set to: " PRInSTR,
             (void *)secure_tunnel,
-            AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_1)));
+            AWS_BYTE_CURSOR_PRI(*message_view->service_id));
+        if (message_view->service_id_2 != NULL) {
+            aws_hash_table_put(
+                &secure_tunnel->config->service_ids, message_view->service_id_2, INVALID_STREAM_ID, NULL);
+            AWS_LOGF_INFO(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: secure tunnel service id 2 set to: " PRInSTR,
+                (void *)secure_tunnel,
+                AWS_BYTE_CURSOR_PRI(*message_view->service_id_2));
+            if (message_view->service_id_3 != NULL) {
+                aws_hash_table_put(
+                    &secure_tunnel->config->service_ids, message_view->service_id_3, INVALID_STREAM_ID, NULL);
+                AWS_LOGF_INFO(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: secure tunnel service id 3 set to: " PRInSTR,
+                    (void *)secure_tunnel,
+                    AWS_BYTE_CURSOR_PRI(*message_view->service_id_3));
+            }
+        }
     }
 
-    if (message_view->service_id_2 != NULL) {
-        secure_tunnel->config->service_id_2 =
-            aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_2);
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: secure tunnel service id 2 set to: " PRInSTR,
-            (void *)secure_tunnel,
-            AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_2)));
-    }
+    /* Clean up existing service ids first */
+    // if (secure_tunnel->config->service_id_1) {
+    //     aws_string_destroy(secure_tunnel->config->service_id_1);
+    //     secure_tunnel->config->service_id_1 = NULL;
+    // }
+    // if (secure_tunnel->config->service_id_2) {
+    //     aws_string_destroy(secure_tunnel->config->service_id_2);
+    //     secure_tunnel->config->service_id_2 = NULL;
+    // }
+    // if (secure_tunnel->config->service_id_3) {
+    //     aws_string_destroy(secure_tunnel->config->service_id_3);
+    //     secure_tunnel->config->service_id_3 = NULL;
+    // }
 
-    if (message_view->service_id_3 != NULL) {
-        secure_tunnel->config->service_id_3 =
-            aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_3);
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: secure tunnel service id 3 set to: " PRInSTR,
-            (void *)secure_tunnel,
-            AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_3)));
-    }
+    // if (message_view->service_id != NULL) {
+    //     secure_tunnel->config->service_id_1 =
+    //         aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
+    //     AWS_LOGF_INFO(
+    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+    //         "id=%p: secure tunnel service id 1 set to: " PRInSTR,
+    //         (void *)secure_tunnel,
+    //         AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_1)));
+    // }
+
+    // if (message_view->service_id_2 != NULL) {
+    //     secure_tunnel->config->service_id_2 =
+    //         aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_2);
+    //     AWS_LOGF_INFO(
+    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+    //         "id=%p: secure tunnel service id 2 set to: " PRInSTR,
+    //         (void *)secure_tunnel,
+    //         AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_2)));
+    // }
+
+    // if (message_view->service_id_3 != NULL) {
+    //     secure_tunnel->config->service_id_3 =
+    //         aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_3);
+    //     AWS_LOGF_INFO(
+    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+    //         "id=%p: secure tunnel service id 3 set to: " PRInSTR,
+    //         (void *)secure_tunnel,
+    //         AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_3)));
+    // }
 
     struct aws_secure_tunnel_connection_view connection_view;
     AWS_ZERO_STRUCT(connection_view);
@@ -402,7 +473,7 @@ static void s_secure_tunneling_websocket_on_send_data_complete_callback(
     secure_tunnel->pending_write_completion = false;
 }
 
-bool secure_tunneling_websocket_stream_outgoing_payload(
+static bool secure_tunneling_websocket_stream_outgoing_payload(
     struct aws_websocket *websocket,
     struct aws_byte_buf *out_buf,
     void *user_data) {
@@ -1797,9 +1868,13 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 
     /* Connection reset */
     secure_tunnel->config->stream_id = INVALID_STREAM_ID;
-    secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
-    secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
-    secure_tunnel->config->service_id_3_stream_id = INVALID_STREAM_ID;
+
+    aws_hash_table_foreach(&secure_tunnel->config->service_ids, s_reset_service_id, NULL);
+
+    // secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
+    // secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
+    // secure_tunnel->config->service_id_3_stream_id = INVALID_STREAM_ID;
+
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->websocket = NULL;
 

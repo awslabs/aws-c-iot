@@ -14,6 +14,7 @@
 #include <inttypes.h>
 
 #define INVALID_STREAM_ID 0
+
 /*********************************************************************************************************************
  * Operation base
  ********************************************************************************************************************/
@@ -218,30 +219,45 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
     if (message_view->service_id != NULL) {
-        struct aws_string *service_id = NULL;
-        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
-
-        if (secure_tunnel->config->service_id_1 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
-            stream_id = secure_tunnel->config->service_id_1_stream_id;
-        } else if (
-            secure_tunnel->config->service_id_2 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
-            stream_id = secure_tunnel->config->service_id_2_stream_id;
-        } else if (
-            secure_tunnel->config->service_id_3 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
-            stream_id = secure_tunnel->config->service_id_3_stream_id;
-        } else {
-            /* service_id doesn't match any existing service id*/
-            AWS_LOGF_DEBUG(
+        struct aws_hash_element *elem = NULL;
+        aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
+        if (elem == NULL) {
+            AWS_LOGF_WARN(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: invalid service_id:%s attempted to be used with an outbound message",
+                "id=%p: invalid service_id:'" PRInSTR "' attempted to be used with an outbound message",
                 (void *)message_view,
-                aws_string_c_str(service_id));
+                AWS_BYTE_CURSOR_PRI(*message_view->service_id));
             stream_id = INVALID_STREAM_ID;
+        } else {
+
+            int32_t *stored_id = elem->value;
+            stream_id = *stored_id;
         }
-        aws_string_destroy(service_id);
+
+        // struct aws_string *service_id = NULL;
+        // service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
+
+        // if (secure_tunnel->config->service_id_1 != NULL &&
+        //     aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
+        //     stream_id = secure_tunnel->config->service_id_1_stream_id;
+        // } else if (
+        //     secure_tunnel->config->service_id_2 != NULL &&
+        //     aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
+        //     stream_id = secure_tunnel->config->service_id_2_stream_id;
+        // } else if (
+        //     secure_tunnel->config->service_id_3 != NULL &&
+        //     aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
+        //     stream_id = secure_tunnel->config->service_id_3_stream_id;
+        // } else {
+        //     /* service_id doesn't match any existing service id*/
+        //     AWS_LOGF_DEBUG(
+        //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        //         "id=%p: invalid service_id:%s attempted to be used with an outbound message",
+        //         (void *)message_view,
+        //         aws_string_c_str(service_id));
+        //     stream_id = INVALID_STREAM_ID;
+        // }
+        // aws_string_destroy(service_id);
     } else {
         stream_id = secure_tunnel->config->stream_id;
     }
@@ -268,33 +284,49 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
     if (message_view->service_id != NULL && message_view->service_id->len > 0) {
-        struct aws_string *service_id = NULL;
-        service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
-
-        if (secure_tunnel->config->service_id_1 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
-            stream_id = secure_tunnel->config->service_id_1_stream_id + 1;
-            secure_tunnel->config->service_id_1_stream_id = stream_id;
-        } else if (
-            secure_tunnel->config->service_id_2 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
-            stream_id = secure_tunnel->config->service_id_2_stream_id + 1;
-            secure_tunnel->config->service_id_2_stream_id = stream_id;
-        } else if (
-            secure_tunnel->config->service_id_3 != NULL &&
-            aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
-            stream_id = secure_tunnel->config->service_id_3_stream_id + 1;
-            secure_tunnel->config->service_id_3_stream_id = stream_id;
-        } else {
-            /* service_id doesn't match any existing service id*/
-            AWS_LOGF_DEBUG(
+        struct aws_hash_element *elem = NULL;
+        aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
+        if (elem == NULL) {
+            AWS_LOGF_WARN(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: invalid service_id:%s attempted to be used with an outbound message",
+                "id=%p: invalid service_id:'" PRInSTR "' attempted to be used with an outbound message",
                 (void *)message_view,
-                aws_string_c_str(service_id));
+                AWS_BYTE_CURSOR_PRI(*message_view->service_id));
             stream_id = INVALID_STREAM_ID;
+        } else {
+
+            int32_t *stored_id = elem->value;
+            stream_id = *stored_id + 1;
+            aws_hash_table_put(&secure_tunnel->config->service_ids, message_view->service_id, &stream_id, NULL);
         }
-        aws_string_destroy(service_id);
+
+        // struct aws_string *service_id = NULL;
+        // service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
+
+        // if (secure_tunnel->config->service_id_1 != NULL &&
+        //     aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
+        //     stream_id = secure_tunnel->config->service_id_1_stream_id + 1;
+        //     secure_tunnel->config->service_id_1_stream_id = stream_id;
+        // } else if (
+        //     secure_tunnel->config->service_id_2 != NULL &&
+        //     aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
+        //     stream_id = secure_tunnel->config->service_id_2_stream_id + 1;
+        //     secure_tunnel->config->service_id_2_stream_id = stream_id;
+        // } else if (
+        //     secure_tunnel->config->service_id_3 != NULL &&
+        //     aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
+        //     stream_id = secure_tunnel->config->service_id_3_stream_id + 1;
+        //     secure_tunnel->config->service_id_3_stream_id = stream_id;
+        // } else {
+        //     /* service_id doesn't match any existing service id*/
+        //     AWS_LOGF_DEBUG(
+        //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        //         "id=%p: invalid service_id:%s attempted to be used with an outbound message",
+        //         (void *)message_view,
+        //         aws_string_c_str(service_id));
+        //     stream_id = INVALID_STREAM_ID;
+        // }
+        // aws_string_destroy(service_id);
     } else {
         stream_id = secure_tunnel->config->stream_id + 1;
         secure_tunnel->config->stream_id = stream_id;
@@ -520,50 +552,6 @@ void aws_secure_tunnel_options_storage_log(
                 (void *)options_storage->http_proxy_options.proxy_strategy);
         }
     }
-
-    bool is_service_id_used = false;
-
-    if (options_storage->service_id_1 != NULL) {
-        is_service_id_used = true;
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_options_storage service id 1:%s",
-            (void *)options_storage,
-            aws_string_c_str(options_storage->service_id_1));
-    }
-
-    if (options_storage->service_id_2 != NULL) {
-        is_service_id_used = true;
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_options_storage service id 2:%s",
-            (void *)options_storage,
-            aws_string_c_str(options_storage->service_id_2));
-    }
-
-    if (options_storage->service_id_3 != NULL) {
-        is_service_id_used = true;
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_options_storage service id 3:%s",
-            (void *)options_storage,
-            aws_string_c_str(options_storage->service_id_3));
-    }
-
-    if (!is_service_id_used) {
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_options_storage no service id set",
-            (void *)options_storage);
-    }
 }
 
 /*
@@ -579,9 +567,10 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
     aws_string_destroy(storage->endpoint_host);
     aws_string_destroy(storage->access_token);
     aws_string_destroy(storage->client_token);
-    aws_string_destroy(storage->service_id_1);
-    aws_string_destroy(storage->service_id_2);
-    aws_string_destroy(storage->service_id_3);
+    // aws_string_destroy(storage->service_id_1);
+    // aws_string_destroy(storage->service_id_2);
+    // aws_string_destroy(storage->service_id_3);
+    aws_hash_table_clean_up(&storage->service_ids);
     aws_mem_release(storage->allocator, storage);
 }
 
@@ -658,6 +647,17 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
         }
 
         aws_http_proxy_options_init_from_config(&storage->http_proxy_options, storage->http_proxy_config);
+    }
+
+    if (aws_hash_table_init(
+            &storage->service_ids,
+            allocator,
+            3,
+            aws_hash_byte_cursor_ptr,
+            (aws_hash_callback_eq_fn *)aws_byte_cursor_eq,
+            NULL,
+            NULL)) {
+        goto error;
     }
 
     storage->on_message_received = options->on_message_received;

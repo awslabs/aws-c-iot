@@ -8,6 +8,7 @@
 #include <aws/iotdevice/secure_tunneling.h>
 
 #include <aws/common/condition_variable.h>
+#include <aws/common/hash_table.h>
 #include <aws/common/mutex.h>
 #include <aws/common/task_scheduler.h>
 #include <aws/http/proxy.h>
@@ -121,12 +122,14 @@ struct aws_secure_tunnel_options_storage {
 
     /* Stream related info */
     int32_t stream_id;
-    struct aws_string *service_id_1;
-    int32_t service_id_1_stream_id;
-    struct aws_string *service_id_2;
-    int32_t service_id_2_stream_id;
-    struct aws_string *service_id_3;
-    int32_t service_id_3_stream_id;
+    // struct aws_string *service_id_1;
+    // int32_t service_id_1_stream_id;
+    // struct aws_string *service_id_2;
+    // int32_t service_id_2_stream_id;
+    // struct aws_string *service_id_3;
+    // int32_t service_id_3_stream_id;
+
+    struct aws_hash_table service_ids;
 
     /* Callbacks */
     aws_secure_tunnel_message_received_fn *on_message_received;
