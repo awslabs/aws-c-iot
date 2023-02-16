@@ -135,9 +135,6 @@ static void s_reset_secure_tunnel(struct aws_secure_tunnel *secure_tunnel) {
 
     secure_tunnel->config->stream_id = INVALID_STREAM_ID;
     aws_hash_table_foreach(&secure_tunnel->config->service_ids, s_reset_service_id, NULL);
-    // secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
-    // secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
-    // secure_tunnel->config->service_id_3_stream_id = INVALID_STREAM_ID;
     secure_tunnel->received_data.len = 0; /* Drop any incomplete secure tunnel frame */
 }
 
@@ -163,35 +160,6 @@ static bool s_aws_secure_tunnel_stream_id_check_match(
 
     struct aws_service_id_element *service_id_elem = elem->value;
     return (stream_id == service_id_elem->stream_id);
-
-    // struct aws_string *service_id_to_set = aws_string_new_from_cursor(secure_tunnel->allocator, service_id);
-    // if (service_id_to_set == NULL) {
-    //     return false;
-    // }
-    // int32_t current_stream_id = INVALID_STREAM_ID;
-
-    // if (secure_tunnel->config->service_id_1 != NULL &&
-    //     aws_string_compare(secure_tunnel->config->service_id_1, service_id_to_set) == 0) {
-    //     current_stream_id = secure_tunnel->config->service_id_1_stream_id;
-    // } else if (
-    //     secure_tunnel->config->service_id_2 != NULL &&
-    //     aws_string_compare(secure_tunnel->config->service_id_2, service_id_to_set) == 0) {
-    //     current_stream_id = secure_tunnel->config->service_id_2_stream_id;
-    // } else if (
-    //     secure_tunnel->config->service_id_3 != NULL &&
-    //     aws_string_compare(secure_tunnel->config->service_id_3, service_id_to_set) == 0) {
-    //     current_stream_id = secure_tunnel->config->service_id_3_stream_id;
-    // } else {
-    //     AWS_LOGF_WARN(
-    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-    //         "id=%p: Secure tunnel stream id check request for unsupported service_id: " PRInSTR,
-    //         (void *)secure_tunnel,
-    //         AWS_BYTE_CURSOR_PRI(*service_id));
-    //     aws_string_destroy(service_id_to_set);
-    //     return false;
-    // }
-
-    // return (stream_id == current_stream_id);
 }
 
 static int s_aws_secure_tunnel_set_stream_id(
@@ -232,42 +200,6 @@ static int s_aws_secure_tunnel_set_stream_id(
         stream_id);
 
     return AWS_OP_SUCCESS;
-
-    // struct aws_string *service_id_to_set = aws_string_new_from_cursor(secure_tunnel->allocator, service_id);
-    // if (service_id_to_set == NULL) {
-    //     return AWS_OP_ERR;
-    // }
-
-    // if (secure_tunnel->config->service_id_1 != NULL &&
-    //     aws_string_compare(secure_tunnel->config->service_id_1, service_id_to_set) == 0) {
-    //     secure_tunnel->config->service_id_1_stream_id = stream_id;
-    // } else if (
-    //     secure_tunnel->config->service_id_2 != NULL &&
-    //     aws_string_compare(secure_tunnel->config->service_id_2, service_id_to_set) == 0) {
-    //     secure_tunnel->config->service_id_2_stream_id = stream_id;
-    // } else if (
-    //     secure_tunnel->config->service_id_3 != NULL &&
-    //     aws_string_compare(secure_tunnel->config->service_id_3, service_id_to_set) == 0) {
-    //     secure_tunnel->config->service_id_3_stream_id = stream_id;
-    // } else {
-    //     AWS_LOGF_WARN(
-    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-    //         "id=%p: Secure tunnel request for unsupported service_id: " PRInSTR,
-    //         (void *)secure_tunnel,
-    //         AWS_BYTE_CURSOR_PRI(*service_id));
-    //     aws_string_destroy(service_id_to_set);
-    //     return AWS_OP_ERR;
-    // }
-
-    // AWS_LOGF_INFO(
-    //     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-    //     "id=%p: Secure tunnel service_id '" PRInSTR "' stream_id set to %d",
-    //     (void *)secure_tunnel,
-    //     AWS_BYTE_CURSOR_PRI(*service_id),
-    //     stream_id);
-
-    // aws_string_destroy(service_id_to_set);
-    // return AWS_OP_SUCCESS;
 }
 
 static void s_aws_secure_tunnel_on_stream_start_received(
@@ -337,50 +269,6 @@ static void s_aws_secure_tunnel_on_service_ids_received(
             }
         }
     }
-
-    /* Clean up existing service ids first */
-    // if (secure_tunnel->config->service_id_1) {
-    //     aws_string_destroy(secure_tunnel->config->service_id_1);
-    //     secure_tunnel->config->service_id_1 = NULL;
-    // }
-    // if (secure_tunnel->config->service_id_2) {
-    //     aws_string_destroy(secure_tunnel->config->service_id_2);
-    //     secure_tunnel->config->service_id_2 = NULL;
-    // }
-    // if (secure_tunnel->config->service_id_3) {
-    //     aws_string_destroy(secure_tunnel->config->service_id_3);
-    //     secure_tunnel->config->service_id_3 = NULL;
-    // }
-
-    // if (message_view->service_id != NULL) {
-    //     secure_tunnel->config->service_id_1 =
-    //         aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
-    //     AWS_LOGF_INFO(
-    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-    //         "id=%p: secure tunnel service id 1 set to: " PRInSTR,
-    //         (void *)secure_tunnel,
-    //         AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_1)));
-    // }
-
-    // if (message_view->service_id_2 != NULL) {
-    //     secure_tunnel->config->service_id_2 =
-    //         aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_2);
-    //     AWS_LOGF_INFO(
-    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-    //         "id=%p: secure tunnel service id 2 set to: " PRInSTR,
-    //         (void *)secure_tunnel,
-    //         AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_2)));
-    // }
-
-    // if (message_view->service_id_3 != NULL) {
-    //     secure_tunnel->config->service_id_3 =
-    //         aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id_3);
-    //     AWS_LOGF_INFO(
-    //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-    //         "id=%p: secure tunnel service id 3 set to: " PRInSTR,
-    //         (void *)secure_tunnel,
-    //         AWS_BYTE_CURSOR_PRI(aws_byte_cursor_from_string(secure_tunnel->config->service_id_3)));
-    // }
 
     struct aws_secure_tunnel_connection_view connection_view;
     AWS_ZERO_STRUCT(connection_view);
@@ -821,7 +709,7 @@ static struct aws_http_message *s_new_handshake_request(const struct aws_secure_
         goto error;
     }
 
-    // /* Secure Tunnel specific headers */
+    /* Secure Tunnel specific headers */
     struct aws_http_header header_protocol = {
         .name = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(WEBSOCKET_HEADER_NAME_PROTOCOL),
         .value = AWS_BYTE_CUR_INIT_FROM_STRING_LITERAL(WEBSOCKET_HEADER_PROTOCOL_VALUE),
@@ -1881,10 +1769,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->config->stream_id = INVALID_STREAM_ID;
 
     aws_hash_table_foreach(&secure_tunnel->config->service_ids, s_reset_service_id, NULL);
-
-    // secure_tunnel->config->service_id_1_stream_id = INVALID_STREAM_ID;
-    // secure_tunnel->config->service_id_2_stream_id = INVALID_STREAM_ID;
-    // secure_tunnel->config->service_id_3_stream_id = INVALID_STREAM_ID;
 
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->websocket = NULL;

@@ -262,31 +262,6 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
             struct aws_service_id_element *service_id_elem = elem->value;
             stream_id = service_id_elem->stream_id;
         }
-
-        // struct aws_string *service_id = NULL;
-        // service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
-
-        // if (secure_tunnel->config->service_id_1 != NULL &&
-        //     aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
-        //     stream_id = secure_tunnel->config->service_id_1_stream_id;
-        // } else if (
-        //     secure_tunnel->config->service_id_2 != NULL &&
-        //     aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
-        //     stream_id = secure_tunnel->config->service_id_2_stream_id;
-        // } else if (
-        //     secure_tunnel->config->service_id_3 != NULL &&
-        //     aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
-        //     stream_id = secure_tunnel->config->service_id_3_stream_id;
-        // } else {
-        //     /* service_id doesn't match any existing service id*/
-        //     AWS_LOGF_DEBUG(
-        //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        //         "id=%p: invalid service_id:%s attempted to be used with an outbound message",
-        //         (void *)message_view,
-        //         aws_string_c_str(service_id));
-        //     stream_id = INVALID_STREAM_ID;
-        // }
-        // aws_string_destroy(service_id);
     } else {
         stream_id = secure_tunnel->config->stream_id;
     }
@@ -332,34 +307,6 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
             aws_hash_table_put(
                 &secure_tunnel->config->service_ids, &replacement_elem->service_id_cur, replacement_elem, NULL);
         }
-
-        // struct aws_string *service_id = NULL;
-        // service_id = aws_string_new_from_cursor(secure_tunnel->allocator, message_view->service_id);
-
-        // if (secure_tunnel->config->service_id_1 != NULL &&
-        //     aws_string_compare(secure_tunnel->config->service_id_1, service_id) == 0) {
-        //     stream_id = secure_tunnel->config->service_id_1_stream_id + 1;
-        //     secure_tunnel->config->service_id_1_stream_id = stream_id;
-        // } else if (
-        //     secure_tunnel->config->service_id_2 != NULL &&
-        //     aws_string_compare(secure_tunnel->config->service_id_2, service_id) == 0) {
-        //     stream_id = secure_tunnel->config->service_id_2_stream_id + 1;
-        //     secure_tunnel->config->service_id_2_stream_id = stream_id;
-        // } else if (
-        //     secure_tunnel->config->service_id_3 != NULL &&
-        //     aws_string_compare(secure_tunnel->config->service_id_3, service_id) == 0) {
-        //     stream_id = secure_tunnel->config->service_id_3_stream_id + 1;
-        //     secure_tunnel->config->service_id_3_stream_id = stream_id;
-        // } else {
-        //     /* service_id doesn't match any existing service id*/
-        //     AWS_LOGF_DEBUG(
-        //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        //         "id=%p: invalid service_id:%s attempted to be used with an outbound message",
-        //         (void *)message_view,
-        //         aws_string_c_str(service_id));
-        //     stream_id = INVALID_STREAM_ID;
-        // }
-        // aws_string_destroy(service_id);
     } else {
         stream_id = secure_tunnel->config->stream_id + 1;
         secure_tunnel->config->stream_id = stream_id;
@@ -600,9 +547,6 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
     aws_string_destroy(storage->endpoint_host);
     aws_string_destroy(storage->access_token);
     aws_string_destroy(storage->client_token);
-    // aws_string_destroy(storage->service_id_1);
-    // aws_string_destroy(storage->service_id_2);
-    // aws_string_destroy(storage->service_id_3);
     aws_hash_table_clean_up(&storage->service_ids);
     aws_mem_release(storage->allocator, storage);
 }
