@@ -420,16 +420,10 @@ bool secure_tunneling_websocket_stream_outgoing_payload(
     }
 
     if (pair->length_prefix_written == true) {
+        pair->cur = aws_byte_buf_write_to_capacity(out_buf, &pair->cur);
+
         size_t bytes_max = pair->cur.len;
         size_t amount_to_send = bytes_max < space_available ? bytes_max : space_available;
-
-        struct aws_byte_cursor send_cursor = aws_byte_cursor_advance(&pair->cur, amount_to_send);
-        if (send_cursor.len) {
-            if (!aws_byte_buf_write_from_whole_cursor(out_buf, send_cursor)) {
-                AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure writing data to out_buf");
-                return false;
-            }
-        }
     }
 
     return true;
