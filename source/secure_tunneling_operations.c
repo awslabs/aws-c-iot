@@ -680,6 +680,52 @@ error:
     return NULL;
 }
 
+/*********************************************************************************************************************
+ * Data Tunnel Pair
+ ********************************************************************************************************************/
+
+/*
+ * Clean up data tunnel pair
+ */
+void aws_secure_tunnel_data_tunnel_pair_destroy(struct data_tunnel_pair *pair) {
+    aws_byte_buf_clean_up(&pair->buf);
+    aws_mem_release(pair->allocator, (void *)pair);
+}
+
+/*
+ * Create a new data tunnel pair
+ */
+struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
+    struct aws_allocator *allocator,
+    const struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_view) {
+    AWS_PRECONDITION(allocator != NULL);
+    AWS_PRECONDITION(secure_tunnel != NULL);
+    AWS_PRECONDITION(message_view != NULL);
+
+    struct data_tunnel_pair *pair = aws_mem_calloc(allocator, 1, sizeof(struct data_tunnel_pair));
+    pair->allocator = allocator;
+    pair->secure_tunnel = secure_tunnel;
+    pair->length_prefix_written = false;
+    if (aws_iot_st_msg_serialize_from_view(&pair->buf, allocator, message_view)) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
+        goto error;
+    }
+    if (pair->buf.len > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message size greater than AWS_IOT_ST_MAX_MESSAGE_SIZE");
+        goto error;
+    }
+
+    pair->cur = aws_byte_cursor_from_buf(&pair->buf);
+
+    return pair;
+
+error:
+
+    aws_secure_tunnel_data_tunnel_pair_destroy(pair);
+    return NULL;
+}
+
 const char *aws_secure_tunnel_operation_type_to_c_string(enum aws_secure_tunnel_operation_type operation_type) {
     switch (operation_type) {
         case AWS_STOT_NONE:

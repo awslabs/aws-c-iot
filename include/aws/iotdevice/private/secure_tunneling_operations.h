@@ -173,6 +173,17 @@ void aws_secure_tunnel_options_storage_log(
 AWS_IOTDEVICE_API
 const char *aws_secure_tunnel_operation_type_to_c_string(enum aws_secure_tunnel_operation_type operation_type);
 
+/* Data Tunnel Pair */
+
+AWS_IOTDEVICE_API
+void aws_secure_tunnel_data_tunnel_pair_destroy(struct data_tunnel_pair *pair);
+
+AWS_IOTDEVICE_API
+struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
+    struct aws_allocator *allocator,
+    const struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_view);
+
 AWS_EXTERN_C_END
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_OPERATION_H */

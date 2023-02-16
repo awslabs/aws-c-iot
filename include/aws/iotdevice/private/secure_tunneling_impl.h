@@ -95,6 +95,7 @@ enum aws_secure_tunnel_state {
 };
 
 struct data_tunnel_pair {
+    struct aws_allocator *allocator;
     struct aws_byte_buf buf;
     struct aws_byte_cursor cur;
     const struct aws_secure_tunnel *secure_tunnel;
