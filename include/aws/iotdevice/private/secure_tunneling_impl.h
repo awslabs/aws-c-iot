@@ -136,6 +136,7 @@ struct aws_secure_tunnel_options_storage {
 
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
+    void *secure_tunnel_on_termination_user_data;
 
     void *user_data;
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;

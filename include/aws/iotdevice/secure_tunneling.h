@@ -186,7 +186,12 @@ struct aws_secure_tunnel_options {
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
     aws_secure_tunneling_on_stopped_fn *on_stopped;
+
+    /**
+     * Callback for when the secure tunnel has completely destroyed itself.
+     */
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
+    void *secure_tunnel_on_termination_user_data;
 };
 
 /**

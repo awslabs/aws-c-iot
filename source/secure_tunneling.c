@@ -100,7 +100,7 @@ static void s_secure_tunnel_final_destroy(struct aws_secure_tunnel *secure_tunne
     void *termination_complete_user_data = NULL;
     if (secure_tunnel->config != NULL) {
         on_termination_complete = secure_tunnel->config->on_termination_complete;
-        termination_complete_user_data = secure_tunnel->config->user_data;
+        termination_complete_user_data = secure_tunnel->config->secure_tunnel_on_termination_user_data;
     }
 
     aws_secure_tunnel_operational_state_clean_up(secure_tunnel);
