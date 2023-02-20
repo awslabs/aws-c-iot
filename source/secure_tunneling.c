@@ -548,17 +548,23 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     }
 }
 
-static void s_secure_tunnel_setup(struct aws_client_bootstrap *bootstrap, int error_code, void *user_data) {
-    (void)bootstrap;
+/* Called on successful or failed websocket setup attempt */
+static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_data *setup, void *user_data) {
     struct aws_secure_tunnel *secure_tunnel = user_data;
+    secure_tunnel->handshake_request = aws_http_message_release(secure_tunnel->handshake_request);
 
-    if (error_code != AWS_OP_SUCCESS) {
+    /* Setup callback contract is: if error_code is non-zero then websocket is NULL. */
+    AWS_FATAL_ASSERT((setup->error_code != 0) == (setup->websocket == NULL));
+
+    secure_tunnel->websocket = setup->websocket;
+
+    if (setup->error_code != AWS_OP_SUCCESS) {
+        /* Report a failed WebSocket Upgrade attempt */
         if (secure_tunnel->config->on_connection_complete) {
-            if (secure_tunnel->config->on_connection_complete) {
-                secure_tunnel->config->on_connection_complete(NULL, error_code, secure_tunnel->config->user_data);
-            }
+            secure_tunnel->config->on_connection_complete(NULL, setup->error_code, secure_tunnel->config->user_data);
         }
-        s_on_websocket_shutdown(secure_tunnel->websocket, error_code, secure_tunnel);
+        /* Failed/Successful websocket creation and associated errors logged by "websocket-setup" */
+        s_on_websocket_shutdown(secure_tunnel->websocket, setup->error_code, secure_tunnel);
         return;
     }
 
@@ -574,27 +580,7 @@ static void s_secure_tunnel_setup(struct aws_client_bootstrap *bootstrap, int er
 
     return;
 error:
-    s_on_websocket_shutdown(secure_tunnel->websocket, error_code, secure_tunnel);
-}
-
-/* Called on successful or failed websocket setup attempt */
-static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_data *setup, void *user_data) {
-    struct aws_secure_tunnel *secure_tunnel = user_data;
-    secure_tunnel->handshake_request = aws_http_message_release(secure_tunnel->handshake_request);
-
-    /* Setup callback contract is: if error_code is non-zero then websocket is NULL. */
-    AWS_FATAL_ASSERT((setup->error_code != 0) == (setup->websocket == NULL));
-
-    secure_tunnel->websocket = setup->websocket;
-
-    /* Report a failed WebSocket Upgrade attempt */
-    if (setup->error_code && secure_tunnel->config->on_connection_complete) {
-        secure_tunnel->config->on_connection_complete(NULL, setup->error_code, secure_tunnel->config->user_data);
-    }
-
-    /* Failed/Successful websocket creation and associated errors logged by "websocket-setup" */
-
-    s_secure_tunnel_setup(secure_tunnel->config->bootstrap, setup->error_code, secure_tunnel);
+    s_on_websocket_shutdown(secure_tunnel->websocket, setup->error_code, secure_tunnel);
 }
 
 struct aws_secure_tunnel_websocket_transform_complete_task {

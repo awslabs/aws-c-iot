@@ -392,14 +392,10 @@ int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_conne
     test_fixture->server_function_table->on_incoming_frame_payload_fn = options->on_incoming_frame_payload;
     test_fixture->server_function_table->on_incoming_frame_complete_fn = options->on_incoming_frame_complete;
 
-    // struct aws_websocket websocket =
-    // {
+    // struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = AWS_ERROR_SUCCESS,
+    //                                                                  .websocket = test_fixture};
 
-    // }
-
-    struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = AWS_ERROR_SUCCESS};
-
-    (test_fixture->server_function_table->on_connection_setup_fn)(&websocket_setup, secure_tunnel);
+    // (test_fixture->server_function_table->on_connection_setup_fn)(&websocket_setup, secure_tunnel);
 
     return AWS_OP_SUCCESS;
 }
