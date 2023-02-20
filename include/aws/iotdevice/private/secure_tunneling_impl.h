@@ -145,6 +145,11 @@ struct aws_secure_tunnel_options_storage {
 struct aws_secure_tunnel_vtable {
     /* aws_high_res_clock_get_ticks */
     uint64_t (*get_current_time_fn)(void);
+
+    /* For test verification */
+    int (*aws_websocket_client_connect_fn)(const struct aws_websocket_client_connection_options *options);
+
+    void *vtable_user_data;
 };
 
 struct aws_secure_tunnel {
@@ -235,5 +240,22 @@ struct aws_secure_tunnel {
      */
     uint64_t next_ping_time;
 };
+
+AWS_EXTERN_C_BEGIN
+
+/*
+ * Override the vtable used by the secure tunnel; useful for mocking certain scenarios.
+ */
+AWS_IOTDEVICE_API void aws_secure_tunnel_set_vtable(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_vtable *vtable);
+
+/*
+ * Gets the default vtable used by the secure tunnel.  In order to mock something, we start with the default and then
+ * mutate it selectively to achieve the scenario we're interested in.
+ */
+AWS_IOTDEVICE_API const struct aws_secure_tunnel_vtable *aws_secure_tunnel_get_default_vtable(void);
+
+AWS_EXTERN_C_END
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_IMPL_H */

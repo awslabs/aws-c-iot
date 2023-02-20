@@ -629,7 +629,7 @@ void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, en
             .port = 443,
             .handshake_request = secure_tunnel->handshake_request,
             .manual_window_management = false,
-            .user_data = secure_tunnel,
+            .user_data = secure_tunnel->config->user_data,
             .requested_event_loop = secure_tunnel->loop,
 
             .on_connection_setup = s_on_websocket_setup,
@@ -643,7 +643,7 @@ void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, en
             websocket_options.proxy_options = &secure_tunnel->config->http_proxy_options;
         }
 
-        if (aws_websocket_client_connect(&websocket_options)) {
+        if (secure_tunnel->vtable->aws_websocket_client_connect_fn(&websocket_options)) {
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: Failed to initiate websocket connection.",
@@ -1052,7 +1052,20 @@ static uint64_t s_aws_high_res_clock_get_ticks_proxy(void) {
 
 static struct aws_secure_tunnel_vtable s_default_secure_tunnel_vtable = {
     .get_current_time_fn = s_aws_high_res_clock_get_ticks_proxy,
+    .aws_websocket_client_connect_fn = aws_websocket_client_connect,
+
+    .vtable_user_data = NULL,
 };
+
+void aws_secure_tunnel_set_vtable(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_vtable *vtable) {
+    secure_tunnel->vtable = vtable;
+}
+
+const struct aws_secure_tunnel_vtable *aws_secure_tunnel_get_default_vtable(void) {
+    return &s_default_secure_tunnel_vtable;
+}
 
 /*********************************************************************************************************************
  * Operations
