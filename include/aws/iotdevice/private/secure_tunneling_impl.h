@@ -149,6 +149,17 @@ struct aws_secure_tunnel_vtable {
     /* For test verification */
     int (*aws_websocket_client_connect_fn)(const struct aws_websocket_client_connection_options *options);
 
+    /* For test verification */
+    int (*aws_websocket_send_frame_fn)(
+        struct aws_websocket *websocket,
+        const struct aws_websocket_send_frame_options *options);
+
+    /* For test verification */
+    void (*aws_websocket_release_fn)(struct aws_websocket *websocket);
+
+    /* For test verification */
+    void (*aws_websocket_close_fn)(struct aws_websocket *websocket, bool free_scarce_resources_immediately);
+
     void *vtable_user_data;
 };
 
@@ -157,7 +168,7 @@ struct aws_secure_tunnel {
     struct aws_allocator *allocator;
     struct aws_ref_count ref_count;
 
-    struct aws_secure_tunnel_vtable *vtable;
+    const struct aws_secure_tunnel_vtable *vtable;
 
     /*
      * Secure tunnel configuration

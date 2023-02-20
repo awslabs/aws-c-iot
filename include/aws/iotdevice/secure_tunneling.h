@@ -13,8 +13,6 @@
 #define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
 
 struct aws_secure_tunnel;
-struct aws_websocket;
-struct aws_websocket_incoming_frame;
 struct aws_http_proxy_options;
 
 enum aws_secure_tunneling_local_proxy_mode {

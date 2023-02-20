@@ -434,7 +434,7 @@ static int s_secure_tunneling_send(
 
     /* Prevent further operations that attempt to write to the WebSocket until current operation is completed */
     secure_tunnel->pending_write_completion = true;
-    return aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
+    return secure_tunnel->vtable->aws_websocket_send_frame_fn(secure_tunnel->websocket, &frame_options);
 }
 
 /*****************************************************************************************************************
@@ -629,7 +629,7 @@ void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, en
             .port = 443,
             .handshake_request = secure_tunnel->handshake_request,
             .manual_window_management = false,
-            .user_data = secure_tunnel->config->user_data,
+            .user_data = secure_tunnel,
             .requested_event_loop = secure_tunnel->loop,
 
             .on_connection_setup = s_on_websocket_setup,
@@ -1053,6 +1053,9 @@ static uint64_t s_aws_high_res_clock_get_ticks_proxy(void) {
 static struct aws_secure_tunnel_vtable s_default_secure_tunnel_vtable = {
     .get_current_time_fn = s_aws_high_res_clock_get_ticks_proxy,
     .aws_websocket_client_connect_fn = aws_websocket_client_connect,
+    .aws_websocket_send_frame_fn = aws_websocket_send_frame,
+    .aws_websocket_release_fn = aws_websocket_release,
+    .aws_websocket_close_fn = aws_websocket_close,
 
     .vtable_user_data = NULL,
 };
@@ -1220,7 +1223,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 AWS_ZERO_STRUCT(frame_options);
                 frame_options.opcode = AWS_WEBSOCKET_OPCODE_PING;
                 frame_options.fin = true;
-                aws_websocket_send_frame(secure_tunnel->websocket, &frame_options);
+                secure_tunnel->vtable->aws_websocket_send_frame_fn(secure_tunnel->websocket, &frame_options);
 
                 break;
             case AWS_STOT_MESSAGE:

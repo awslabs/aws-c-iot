@@ -20,7 +20,6 @@
 #include <aws/testing/aws_test_harness.h>
 #include <stdint.h>
 
-AWS_STATIC_STRING_FROM_LITERAL(s_client_token, "IAmAClientToken");
 AWS_STATIC_STRING_FROM_LITERAL(s_access_token, "IAmAnAccessToken");
 AWS_STATIC_STRING_FROM_LITERAL(s_endpoint_host, "IAmAnEndpointHost");
 
@@ -54,13 +53,20 @@ typedef void(aws_secure_tunnel_mock_server_service_fn)(
     void *user_data);
 
 struct aws_secure_tunnel_mock_server_vtable {
+    // STEVE TODO Not needed?
     aws_secure_tunnel_on_mock_server_message_received_fn *packet_handler_fn;
     aws_secure_tunnel_mock_server_service_fn *service_task_fn;
+
+    aws_websocket_on_connection_setup_fn *on_connection_setup_fn;
+    aws_websocket_on_connection_shutdown_fn *on_connection_shutdown_fn;
+    aws_websocket_on_incoming_frame_begin_fn *on_incoming_frame_begin_fn;
+    aws_websocket_on_incoming_frame_payload_fn *on_incoming_frame_payload_fn;
+    aws_websocket_on_incoming_frame_complete_fn *on_incoming_frame_complete_fn;
 };
 
 struct aws_secure_tunnel_mock_test_fixture_options {
     struct aws_secure_tunnel_options *secure_tunnel_options;
-    const struct aws_secure_tunnel_mock_server_vtable *server_function_table;
+    struct aws_secure_tunnel_mock_server_vtable *server_function_table;
 
     void *mock_server_user_data;
 };
@@ -78,7 +84,7 @@ struct aws_secure_tunnel_mock_test_fixture {
     struct aws_socket *listener;
     struct aws_channel *server_channel;
 
-    const struct aws_secure_tunnel_mock_server_vtable *server_function_table;
+    struct aws_secure_tunnel_mock_server_vtable *server_function_table;
     void *mock_server_user_data;
 
     struct aws_secure_tunnel *secure_tunnel;
@@ -356,12 +362,63 @@ static void s_wait_on_listener_cleanup(struct aws_secure_tunnel_mock_test_fixtur
     aws_mutex_unlock(&test_fixture->lock);
 }
 
+/*****************************************************************************************************************
+ *                                    WEBSOCKET MOCK FUNCTIONS
+ *****************************************************************************************************************/
+
 int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_connection_options *options) {
-    struct aws_secure_tunnel_mock_test_fixture *test_fixture = options->user_data;
-    struct aws_secure_tunnel *secure_tunnel = test_fixture->secure_tunnel;
-    (void)secure_tunnel;
+    struct aws_secure_tunnel *secure_tunnel = options->user_data;
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture = secure_tunnel->config->user_data;
+
+    if (!options->handshake_request) {
+        AWS_LOGF_ERROR(
+            AWS_LS_HTTP_WEBSOCKET_SETUP,
+            "id=static: Invalid connection options, missing required request for websocket client handshake.");
+        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
+    }
+
+    const struct aws_http_headers *request_headers = aws_http_message_get_headers(options->handshake_request);
+    struct aws_byte_cursor access_token_cur;
+    if (aws_http_headers_get(request_headers, aws_byte_cursor_from_c_str("access-token"), &access_token_cur)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_HTTP_WEBSOCKET_SETUP,
+            "id=static: Websocket handshake request is missing required 'access-token' header");
+        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
+    }
+
+    test_fixture->server_function_table->on_connection_setup_fn = options->on_connection_setup;
+    test_fixture->server_function_table->on_connection_shutdown_fn = options->on_connection_shutdown;
+    test_fixture->server_function_table->on_incoming_frame_begin_fn = options->on_incoming_frame_begin;
+    test_fixture->server_function_table->on_incoming_frame_payload_fn = options->on_incoming_frame_payload;
+    test_fixture->server_function_table->on_incoming_frame_complete_fn = options->on_incoming_frame_complete;
+
+    // struct aws_websocket websocket =
+    // {
+
+    // }
+
+    struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = AWS_ERROR_SUCCESS};
+
+    (test_fixture->server_function_table->on_connection_setup_fn)(&websocket_setup, secure_tunnel);
+
     return AWS_OP_SUCCESS;
 }
+
+int aws_websocket_send_frame_mock_fn(
+    struct aws_websocket *websocket,
+    const struct aws_websocket_send_frame_options *options) {
+    (void)websocket;
+    (void)options;
+    return AWS_OP_SUCCESS;
+}
+
+void aws_websocket_release_mock_fn(struct aws_websocket *websocket) {}
+
+void aws_websocket_close_mock_fn(struct aws_websocket *websocket, bool free_scarce_resources_immediately) {}
+
+/*****************************************************************************************************************
+ *                                    TEST FIXTURE
+ *****************************************************************************************************************/
 
 int aws_secure_tunnel_mock_test_fixture_init(
     struct aws_secure_tunnel_mock_test_fixture *test_fixture,
@@ -444,6 +501,9 @@ int aws_secure_tunnel_mock_test_fixture_init(
 
     test_fixture->secure_tunnel_vtable = *aws_secure_tunnel_get_default_vtable();
     test_fixture->secure_tunnel_vtable.aws_websocket_client_connect_fn = aws_websocket_client_connect_mock_fn;
+    test_fixture->secure_tunnel_vtable.aws_websocket_send_frame_fn = aws_websocket_send_frame_mock_fn;
+    test_fixture->secure_tunnel_vtable.aws_websocket_release_fn = aws_websocket_release_mock_fn;
+    test_fixture->secure_tunnel_vtable.aws_websocket_close_fn = aws_websocket_close_mock_fn;
     test_fixture->secure_tunnel_vtable.vtable_user_data = test_fixture;
 
     aws_secure_tunnel_set_vtable(test_fixture->secure_tunnel, &test_fixture->secure_tunnel_vtable);
@@ -466,26 +526,6 @@ void aws_secure_tunnel_mock_test_fixture_clean_up(struct aws_secure_tunnel_mock_
 
     // aws_thread_join_all_managed();
 
-    // for (size_t i = 0; i < aws_array_list_length(&test_fixture->server_received_packets); ++i) {
-    //     struct aws_mqtt5_mock_server_packet_record *packet = NULL;
-    //     aws_array_list_get_at_ptr(&test_fixture->server_received_packets, (void **)&packet, i);
-
-    //     s_destroy_packet_storage(packet->packet_storage, packet->storage_allocator, packet->packet_type);
-    // }
-
-    // aws_array_list_clean_up(&test_fixture->server_received_packets);
-
-    // for (size_t i = 0; i < aws_array_list_length(&test_fixture->lifecycle_events); ++i) {
-    //     struct aws_mqtt5_lifecycle_event_record *event = NULL;
-    //     aws_array_list_get_at(&test_fixture->lifecycle_events, &event, i);
-
-    //     s_destroy_lifecycle_event_storage(event);
-    // }
-
-    // aws_array_list_clean_up(&test_fixture->lifecycle_events);
-    // aws_array_list_clean_up(&test_fixture->client_states);
-    // aws_array_list_clean_up(&test_fixture->client_statistics);
-
     aws_mutex_clean_up(&test_fixture->lock);
     aws_condition_variable_clean_up(&test_fixture->signal);
 }
@@ -495,7 +535,6 @@ void aws_secure_tunnel_mock_test_fixture_clean_up(struct aws_secure_tunnel_mock_
  ********************************************************************************************************************/
 
 static int s_secure_tunneling_serializer_data_message_test_fn(struct aws_allocator *allocator, void *ctx) {
-    return AWS_OP_SUCCESS;
     // aws_iotdevice_library_init(allocator);
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
