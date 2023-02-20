@@ -192,6 +192,32 @@ static int s_iot_st_compute_message_length(
         local_length += (1 + message->service_id->len + service_id_length);
     }
 
+    if (message->service_id_2 != NULL && message->service_id_2->len != 0) {
+        /*
+         * 1 byte key
+         * 1-4 byte payload length varint
+         * n bytes service_id.len
+         */
+        size_t service_id_length_2 = 0;
+        if (s_iot_st_get_varint_size((uint32_t)message->service_id_2->len, &service_id_length_2)) {
+            return AWS_OP_ERR;
+        }
+        local_length += (1 + message->service_id_2->len + service_id_length_2);
+    }
+
+    if (message->service_id_3 != NULL && message->service_id_3->len != 0) {
+        /*
+         * 1 byte key
+         * 1-4 byte payload length varint
+         * n bytes service_id.len
+         */
+        size_t service_id_length_3 = 0;
+        if (s_iot_st_get_varint_size((uint32_t)message->service_id_3->len, &service_id_length_3)) {
+            return AWS_OP_ERR;
+        }
+        local_length += (1 + message->service_id_3->len + service_id_length_3);
+    }
+
     *message_length = local_length;
     return AWS_OP_SUCCESS;
 }
