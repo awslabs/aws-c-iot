@@ -110,6 +110,11 @@ static int s_iot_st_encode_service_id(const struct aws_byte_cursor *service_id, 
         AWS_SECURE_TUNNEL_FN_SERVICE_ID, AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMITED, service_id, buffer);
 }
 
+static int s_iot_st_encode_service_ids(const struct aws_byte_cursor *service_id, struct aws_byte_buf *buffer) {
+    return s_iot_st_encode_byte_range(
+        AWS_SECURE_TUNNEL_FN_AVAILABLE_SERVICE_IDS, AWS_SECURE_TUNNEL_PBWT_LENGTH_DELIMITED, service_id, buffer);
+}
+
 static int s_iot_st_get_varint_size(size_t value, size_t *encode_size) {
     if (value > AWS_IOT_ST_MAXIMUM_VARINT) {
         return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
@@ -237,7 +242,23 @@ int aws_iot_st_msg_serialize_from_view(
         }
     }
 
-    if (message_view->service_id != NULL) {
+    if (message_view->type == AWS_SECURE_TUNNEL_MT_SERVICE_IDS) {
+        if (message_view->service_id != 0) {
+            if (s_iot_st_encode_service_ids(message_view->service_id, buffer)) {
+                goto cleanup;
+            }
+        }
+        if (message_view->service_id_2 != 0) {
+            if (s_iot_st_encode_service_ids(message_view->service_id_2, buffer)) {
+                goto cleanup;
+            }
+        }
+        if (message_view->service_id_3 != 0) {
+            if (s_iot_st_encode_service_ids(message_view->service_id_3, buffer)) {
+                goto cleanup;
+            }
+        }
+    } else if (message_view->service_id != NULL) {
         if (s_iot_st_encode_service_id(message_view->service_id, buffer)) {
             goto cleanup;
         }
