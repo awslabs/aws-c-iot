@@ -840,14 +840,13 @@ static void s_change_current_state_to_websocket_shutdown(struct aws_secure_tunne
     AWS_FATAL_ASSERT(
         current_state == AWS_STS_CONNECTING || current_state == AWS_STS_CONNECTED ||
         current_state == AWS_STS_CLEAN_DISCONNECT);
+    secure_tunnel->current_state = AWS_STS_WEBSOCKET_SHUTDOWN;
 
     if (secure_tunnel->websocket) {
         secure_tunnel->vtable->aws_websocket_close_fn(secure_tunnel->websocket, false);
     } else {
         s_on_websocket_shutdown(secure_tunnel->websocket, AWS_ERROR_UNKNOWN, secure_tunnel);
     }
-
-    secure_tunnel->current_state = AWS_STS_WEBSOCKET_SHUTDOWN;
 }
 
 static void s_update_reconnect_delay_for_pending_reconnect(struct aws_secure_tunnel *secure_tunnel) {
