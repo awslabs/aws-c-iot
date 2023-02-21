@@ -534,7 +534,7 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     struct aws_secure_tunnel *secure_tunnel = user_data;
     s_secure_tunnel_shutdown(secure_tunnel->config->bootstrap, error_code, secure_tunnel);
 
-    aws_websocket_release(websocket);
+    secure_tunnel->vtable->aws_websocket_release_fn(websocket);
     websocket = NULL;
 
     if (secure_tunnel->config->on_connection_shutdown) {
@@ -842,7 +842,7 @@ static void s_change_current_state_to_websocket_shutdown(struct aws_secure_tunne
         current_state == AWS_STS_CLEAN_DISCONNECT);
 
     if (secure_tunnel->websocket) {
-        aws_websocket_close(secure_tunnel->websocket, false);
+        secure_tunnel->vtable->aws_websocket_close_fn(secure_tunnel->websocket, false);
     } else {
         s_on_websocket_shutdown(secure_tunnel->websocket, AWS_ERROR_UNKNOWN, secure_tunnel);
     }
