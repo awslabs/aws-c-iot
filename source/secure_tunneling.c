@@ -185,7 +185,7 @@ static int s_aws_secure_tunnel_set_stream_id(
             "id=%p: Secure tunnel request for unsupported service_id: " PRInSTR,
             (void *)secure_tunnel,
             AWS_BYTE_CURSOR_PRI(*service_id));
-        return false;
+        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_BAD_SERVICE_ID;
     }
 
     struct aws_service_id_element *replacement_elem =
