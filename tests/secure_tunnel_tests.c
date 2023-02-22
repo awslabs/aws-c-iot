@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+#include <aws/iotdevice/iotdevice.h>
+#include <aws/iotdevice/private/secure_tunneling_impl.h>
+#include <aws/iotdevice/private/secure_tunneling_operations.h>
+#include <aws/iotdevice/private/serializer.h>
+#include <aws/iotdevice/secure_tunneling.h>
+
 #include <aws/common/allocator.h>
 #include <aws/common/byte_buf.h>
 #include <aws/common/clock.h>
@@ -13,11 +19,6 @@
 #include <aws/io/event_loop.h>
 #include <aws/io/host_resolver.h>
 #include <aws/io/socket.h>
-#include <aws/iotdevice/iotdevice.h>
-#include <aws/iotdevice/private/secure_tunneling_impl.h>
-#include <aws/iotdevice/private/secure_tunneling_operations.h>
-#include <aws/iotdevice/private/serializer.h>
-#include <aws/iotdevice/secure_tunneling.h>
 #include <aws/testing/aws_test_harness.h>
 #include <stdint.h>
 
@@ -115,6 +116,7 @@ static void s_on_test_secure_tunnel_connection_complete(
     const struct aws_secure_tunnel_connection_view *connection_view,
     int error_code,
     void *user_data) {
+    (void)connection_view;
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = user_data;
 
     aws_mutex_lock(&test_fixture->lock);
@@ -128,6 +130,7 @@ static void s_on_test_secure_tunnel_connection_complete(
 }
 
 static void s_on_test_secure_tunnel_connection_shutdown(int error_code, void *user_data) {
+    (void)error_code;
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = user_data;
 
     aws_mutex_lock(&test_fixture->lock);
@@ -408,6 +411,7 @@ void aws_websocket_release_mock_fn(struct aws_websocket *websocket) {
 }
 
 void aws_websocket_close_mock_fn(struct aws_websocket *websocket, bool free_scarce_resources_immediately) {
+    (void)free_scarce_resources_immediately;
     void *pointer = websocket;
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = pointer;
     test_fixture->websocket_function_table->on_connection_shutdown_fn(websocket, 0, test_fixture->secure_tunnel);
@@ -513,6 +517,7 @@ void aws_secure_tunnel_mock_test_fixture_clean_up(struct aws_secure_tunnel_mock_
 
 /* [Func-UC1] */
 int secure_tunneling_access_token_check(const struct aws_http_headers *request_headers, void *user_data) {
+    (void)user_data;
     struct aws_byte_cursor access_token_cur;
     if (aws_http_headers_get(request_headers, aws_byte_cursor_from_c_str("access-token"), &access_token_cur)) {
         AWS_LOGF_ERROR(
@@ -525,6 +530,7 @@ int secure_tunneling_access_token_check(const struct aws_http_headers *request_h
 }
 
 static int s_secure_tunneling_functionality_connect_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
@@ -564,6 +570,7 @@ AWS_TEST_CASE(secure_tunneling_functionality_connect_test, s_secure_tunneling_fu
 
 /* [Func-UC2] */
 int secure_tunneling_client_token_check(const struct aws_http_headers *request_headers, void *user_data) {
+    (void)user_data;
     struct aws_byte_cursor client_token_cur;
     if (aws_http_headers_get(request_headers, aws_byte_cursor_from_c_str("client-token"), &client_token_cur)) {
         AWS_LOGF_ERROR(
@@ -576,6 +583,7 @@ int secure_tunneling_client_token_check(const struct aws_http_headers *request_h
 }
 
 static int s_secure_tunneling_functionality_client_token_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
@@ -670,6 +678,7 @@ int aws_websocket_client_connect_fail_once_fn(const struct aws_websocket_client_
 }
 
 static int s_secure_tunneling_fail_and_retry_connection_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
@@ -715,6 +724,7 @@ AWS_TEST_CASE(secure_tunneling_fail_and_retry_connection_test, s_secure_tunnelin
 /* [Func-UC4] */
 
 static int s_secure_tunneling_store_service_ids_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
@@ -767,6 +777,7 @@ AWS_TEST_CASE(secure_tunneling_store_service_ids_test, s_secure_tunneling_store_
 /* [Func-UC5] */
 
 static int s_secure_tunneling_receive_stream_start_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
@@ -824,6 +835,7 @@ AWS_TEST_CASE(secure_tunneling_receive_stream_start_test, s_secure_tunneling_rec
 /* [Func-UC6] */
 
 static int s_secure_tunneling_rejected_service_id_stream_start_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
@@ -876,6 +888,7 @@ AWS_TEST_CASE(
 /* [Func-UC7] */
 
 static int s_secure_tunneling_close_stream_on_stream_reset_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
@@ -942,6 +955,7 @@ AWS_TEST_CASE(
 
 /* [Func-UC8] */
 static int s_secure_tunneling_session_reset_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
@@ -1040,47 +1054,8 @@ static int s_secure_tunneling_session_reset_test_fn(struct aws_allocator *alloca
 
 AWS_TEST_CASE(secure_tunneling_session_reset_test, s_secure_tunneling_session_reset_test_fn)
 
-/*
-static int s_secure_tunneling_template_test_fn(struct aws_allocator *allocator, void *ctx) {
-    aws_http_library_init(allocator);
-    aws_iotdevice_library_init(allocator);
-
-    struct secure_tunnel_test_options test_options;
-    s_secure_tunnel_test_init_default_options(&test_options);
-
-    struct aws_secure_tunnel_mock_test_fixture_options test_fixture_options = {
-        .secure_tunnel_options = &test_options.secure_tunnel_options,
-        .websocket_function_table = &test_options.websocket_function_table,
-    };
-
-    struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    ASSERT_SUCCESS(aws_secure_tunnel_mock_test_fixture_init(&test_fixture, allocator, &test_fixture_options));
-
-    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
-
-    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
-    s_wait_for_connected_successfully(&test_fixture);
-
-    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
-    s_wait_for_connection_shutdown(&test_fixture);
-
-    aws_secure_tunnel_release(secure_tunnel);
-    s_wait_for_secure_tunnel_terminated(&test_fixture);
-
-    aws_secure_tunnel_mock_test_fixture_clean_up(&test_fixture);
-    aws_iotdevice_library_clean_up();
-    aws_http_library_clean_up();
-    aws_iotdevice_library_clean_up();
-
-    return AWS_OP_SUCCESS;
-}
-
-AWS_TEST_CASE(secure_tunneling_template_test, s_secure_tunneling_template_test_fn)
-*/
-
-/* [Func-UC9] */
-
 static int s_secure_tunneling_serializer_data_message_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
