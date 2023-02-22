@@ -18,6 +18,11 @@
 #include <inttypes.h>
 #include <math.h>
 
+#ifdef _MSC_VER
+#    pragma warning(push)
+#    pragma warning(disable : 4232) /* function pointer to dll symbol */
+#endif
+
 #define MAX_WEBSOCKET_PAYLOAD 131076
 #define INVALID_STREAM_ID 0
 #define PAYLOAD_BYTE_LENGTH_PREFIX 2
