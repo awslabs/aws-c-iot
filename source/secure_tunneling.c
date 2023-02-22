@@ -98,8 +98,11 @@ static int s_reset_service_id(void *context, struct aws_hash_element *p_element)
 
 static void s_secure_tunnel_final_destroy(struct aws_secure_tunnel *secure_tunnel) {
     if (secure_tunnel == NULL) {
+        AWS_LOGF_TRACE(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: secure_tunnel is NULL on final destroy", (void *)secure_tunnel);
         return;
     }
+    AWS_LOGF_TRACE(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: secure_tunnel final destroy", (void *)secure_tunnel);
 
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete = NULL;
     void *termination_complete_user_data = NULL;
