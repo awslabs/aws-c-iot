@@ -318,7 +318,7 @@ static void s_aws_secure_tunnel_connected_on_message_received(
         case AWS_SECURE_TUNNEL_MT_UNKNOWN:
         default:
             if (!message_view->ignorable) {
-                AWS_LOGF_WARN(
+                AWS_LOGF_ERROR(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                     "Encountered an unknown but un-ignorable message. type=%s",
                     aws_secure_tunnel_message_type_to_c_string(message_view->type));
@@ -327,7 +327,7 @@ static void s_aws_secure_tunnel_connected_on_message_received(
     }
 }
 
-static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
+static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
     struct aws_byte_buf *received_data = &secure_tunnel->received_data;
     struct aws_byte_cursor cursor = aws_byte_cursor_from_buf(received_data);
     uint16_t data_length = 0;
@@ -352,6 +352,7 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
                 (void *)secure_tunnel,
                 error_code,
                 aws_error_debug_str(error_code));
+            return error_code;
         }
     }
 
@@ -360,6 +361,8 @@ static void s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         received_data->len = 0;
         aws_byte_buf_append(received_data, &cursor);
     }
+
+    return AWS_OP_SUCCESS;
 }
 
 /*****************************************************************************************************************
@@ -473,7 +476,9 @@ static bool s_on_websocket_incoming_frame_payload(
     if (data.len > 0) {
         struct aws_secure_tunnel *secure_tunnel = user_data;
         aws_byte_buf_append(&secure_tunnel->received_data, &data);
-        s_process_received_data(secure_tunnel);
+        if (s_process_received_data(secure_tunnel)) {
+            return false;
+        }
     }
 
     return true;
@@ -1207,7 +1212,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
         switch (current_operation->operation_type) {
             case AWS_STOT_PING:;
                 /*
-                 * Currently, pings are sent to keep the websocket alive but we do not receive responses from the
+                 * TODO Currently, pings are sent to keep the websocket alive but we do not receive responses from the
                  * secure tunnel service until a src is also connected. This is a known bug that is in their
                  * backlog. Once it is fixed, we should implement ping timeout checks to determine whether we are
                  * still connected to the secure tunnel through WebSocket.

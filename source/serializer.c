@@ -350,6 +350,10 @@ int aws_secure_tunnel_deserialize_varint_from_cursor_to_message(
             message->ignorable = result;
             break;
         default:
+            AWS_LOGF_WARN(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Unexpected field number in message encountered.",
+                (void *)message);
             /* Unexpected field_number */
             break;
     }
@@ -448,6 +452,10 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
             case AWS_SECURE_TUNNEL_PBWT_START_GROUP:
             case AWS_SECURE_TUNNEL_PBWT_END_GROUP:
             case AWS_SECURE_TUNNEL_PBWT_32_BIT:
+                AWS_LOGF_ERROR(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: Unexpected wire type in message encountered.",
+                    (void *)secure_tunnel);
                 goto error;
                 break;
         }
@@ -464,7 +472,7 @@ error:
 const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type) {
     switch (message_type) {
         case AWS_SECURE_TUNNEL_MT_UNKNOWN:
-            return "UNKNOWN";
+            return "ST_MT_UNKNOWN";
 
         case AWS_SECURE_TUNNEL_MT_DATA:
             return "DATA";
