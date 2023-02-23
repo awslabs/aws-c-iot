@@ -19,25 +19,71 @@ static struct aws_error_info s_errors[] = {
         "Bits marked as reserved were incorrectly set"),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_REPORT_INTERVAL,
-        "Invalid defender task reporting interval. Must be greater than 5 minutes"),
+        "Invalid defender task reporting interval. Must be greater than 5 minutes."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_UNSUPPORTED_REPORT_FORMAT,
-        "Unknown format value selected for defender reporting task"),
+        "Unknown format value selected for defender reporting task."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_REPORT_SERIALIZATION_FAILURE,
-        "Error serializing report for publishing"),
+        "Error serializing report for publishing."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_UNKNOWN_CUSTOM_METRIC_TYPE,
-        "Unknown custom metric type found in reporting task"),
+        "Unknown custom metric type found in reporting task."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_INVALID_TASK_CONFIG,
-        "Invalid configuration detected in defender reporting task config. Check prior errors"),
+        "Invalid configuration detected in defender reporting task config. Check prior errors."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_DEFENDER_PUBLISH_FAILURE,
-        "Mqtt client error while attempting to publish defender report"),
+        "Mqtt client error while attempting to publish defender report."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
          AWS_ERROR_IOTDEVICE_DEFENDER_UNKNOWN_TASK_STATUS,
-        "Device defender task was invoked with an unknown task status"),
+        "Device defender task was invoked with an unknown task status."),
+
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM,
+        "Secure Tunnel invalid stream id."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE,
+        "Secure Tunnel stream cannot be started while in Destination Mode."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_BAD_SERVICE_ID,
+        "Secure Tunnel stream start request with bad service id."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION,
+        "Invalid Secure Tunnel data message options value."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_STREAM_OPTIONS_VALIDATION,
+        "Invalid Secure Tunnel stream options value."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_SECURE_TUNNEL_TERMINATED,
+        "Secure Tunnel terminated by user request."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_WEBSOCKET_TIMEOUT,
+        "Remote endpoint did not respond to connect request before timeout exceeded."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PING_RESPONSE_TIMEOUT,
+        "Remote endpoint did not respond to a PINGREQ before timeout exceeded."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_DISCONNECTION,
+        "Secure Tunnel operation failed due to disconnected state."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_PROCESSING_FAILURE,
+        "Error while processing secure tunnel operational state."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY,
+        "Error while processing secure tunnel operational state."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_UNEXPECTED_HANGUP,
+        "The connection was closed unexpectedly."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP,
+        "Secure Tunnel connection interrupted by user request."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_TERMINATED,
+        "Secure Tunnel terminated by user request."),
+        AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+            AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE,
+            "Error occured while decoding an incoming message." ),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE
