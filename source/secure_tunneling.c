@@ -32,7 +32,7 @@
 #define WEBSOCKET_HEADER_NAME_ACCESS_TOKEN "access-token"
 #define WEBSOCKET_HEADER_NAME_CLIENT_TOKEN "client-token"
 #define WEBSOCKET_HEADER_NAME_PROTOCOL "Sec-WebSocket-Protocol"
-#define WEBSOCKET_HEADER_PROTOCOL_VALUE "aws.iot.securetunneling-2.0"
+#define WEBSOCKET_HEADER_PROTOCOL_VALUE "aws.iot.securetunneling-3.0"
 
 static void s_change_current_state(struct aws_secure_tunnel *secure_tunnel, enum aws_secure_tunnel_state next_state);
 void aws_secure_tunnel_operational_state_clean_up(struct aws_secure_tunnel *secure_tunnel);
@@ -1307,6 +1307,11 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
 
                 break;
 
+            case AWS_STOT_CONNECTION_START:
+            case AWS_STOT_CONNECTION_RESET:
+                // Steve TODO implement these
+                break;
+
             case AWS_STOT_NONE:
                 break;
         }
@@ -1861,7 +1866,7 @@ int aws_secure_tunnel_stream_start(
     AWS_PRECONDITION(message_options != NULL);
 
     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Stream Start can only be sent from source mode");
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Stream Start can only be sent from Source Mode");
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
     }
 
@@ -1889,6 +1894,49 @@ error:
     return AWS_OP_ERR;
 }
 
+int aws_secure_tunnel_connection_start(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options) {
+    AWS_PRECONDITION(secure_tunnel != NULL);
+    AWS_PRECONDITION(message_options != NULL);
+
+    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start can only be sent from Source Mode");
+        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
+    }
+
+    struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
+        secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_CONNECTION_START);
+
+    if (message_op == NULL) {
+        return AWS_OP_ERR;
+    }
+
+    AWS_LOGF_DEBUG(
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: Submitting CONNECTION START operation (%p)",
+        (void *)secure_tunnel,
+        (void *)message_op);
+
+    if (s_submit_operation(secure_tunnel, &message_op->base)) {
+        goto error;
+    }
+
+    return AWS_OP_SUCCESS;
+
+error:
+    aws_secure_tunnel_operation_release(&message_op->base);
+    return AWS_OP_ERR;
+}
+
+/*********************************************************************************************************************
+ * Internal Operation Calls
+ ********************************************************************************************************************/
+
+/*
+ * This is currently exposed by the initial implementation of Secure Tunnel and has been marked as deprecated.
+ * Should this be called, it will be honored but it should be made private when possible.
+ */
 int aws_secure_tunnel_stream_reset(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options) {
@@ -1897,6 +1945,36 @@ int aws_secure_tunnel_stream_reset(
 
     struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
         secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_STREAM_RESET);
+
+    if (message_op == NULL) {
+        return AWS_OP_ERR;
+    }
+
+    AWS_LOGF_DEBUG(
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: Submitting STREAM RESET operation (%p)",
+        (void *)secure_tunnel,
+        (void *)message_op);
+
+    if (s_submit_operation(secure_tunnel, &message_op->base)) {
+        goto error;
+    }
+
+    return AWS_OP_SUCCESS;
+
+error:
+    aws_secure_tunnel_operation_release(&message_op->base);
+    return AWS_OP_ERR;
+}
+
+int aws_secure_tunnel_connection_reset(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options) {
+    AWS_PRECONDITION(secure_tunnel != NULL);
+    AWS_PRECONDITION(message_options != NULL);
+
+    struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
+        secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_CONNECTION_RESET);
 
     if (message_op == NULL) {
         return AWS_OP_ERR;

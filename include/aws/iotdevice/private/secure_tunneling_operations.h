@@ -23,7 +23,9 @@ enum aws_secure_tunnel_operation_type {
     AWS_STOT_PING,
     AWS_STOT_MESSAGE,
     AWS_STOT_STREAM_RESET,
-    AWS_STOT_STREAM_START
+    AWS_STOT_STREAM_START,
+    AWS_STOT_CONNECTION_START,
+    AWS_STOT_CONNECTION_RESET,
 };
 
 struct aws_service_id_element {
@@ -39,6 +41,7 @@ struct aws_secure_tunnel_message_storage {
 
     bool ignorable;
     int32_t stream_id;
+    uint32_t connection_id;
     struct aws_byte_cursor service_id;
     struct aws_byte_cursor payload;
 

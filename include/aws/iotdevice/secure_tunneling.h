@@ -86,6 +86,7 @@ struct aws_secure_tunnel_message_view {
     bool ignorable;
 
     int32_t stream_id;
+    uint32_t connection_id;
 
     /**
      * Secure tunnel multiplexing identifier
@@ -119,6 +120,8 @@ typedef void(aws_secure_tunneling_on_connection_complete_fn)(
     int error_code,
     void *user_data);
 typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(int error_code, void *user_data);
+typedef void(
+    aws_secure_tunneling_on_connection_reset_fn)(const struct aws_secure_tunnel_message_view *message, void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_stream_start_fn)(
     const struct aws_secure_tunnel_message_view *message,
@@ -180,6 +183,7 @@ struct aws_secure_tunnel_options {
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
+    aws_secure_tunneling_on_connection_reset_fn *on_connection_reset;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
@@ -274,6 +278,11 @@ int aws_secure_tunnel_send_message(
 //***********************************************************************************************************************
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_start(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options);
+
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_connection_start(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 

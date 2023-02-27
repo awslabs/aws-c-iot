@@ -14,6 +14,7 @@
 #include <inttypes.h>
 
 #define INVALID_STREAM_ID 0
+#define DEFAULT_CONNECTION_ID 1
 
 /* for the hash table, to destroy elements */
 static void s_destroy_service_id(void *data) {
@@ -163,6 +164,14 @@ void aws_secure_tunnel_message_view_log(
         (void *)message_view,
         (int)message_view->stream_id);
 
+    AWS_LOGUF(
+        log_handle,
+        level,
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: aws_secure_tunnel_message_view connection_id set to %d",
+        (void *)message_view,
+        (int)message_view->connection_id);
+
     if (message_view->payload != NULL) {
         AWS_LOGUF(
             log_handle,
@@ -199,6 +208,7 @@ int aws_secure_tunnel_message_storage_init(
     storage_view->type = message_options->type;
     storage_view->ignorable = message_options->ignorable;
     storage_view->stream_id = message_options->stream_id;
+    storage_view->connection_id = message_options->connection_id;
 
     switch (type) {
         case AWS_STOT_MESSAGE:
@@ -209,6 +219,12 @@ int aws_secure_tunnel_message_storage_init(
             break;
         case AWS_STOT_STREAM_RESET:
             storage_view->type = AWS_SECURE_TUNNEL_MT_STREAM_RESET;
+            break;
+        case AWS_STOT_CONNECTION_START:
+            storage_view->type = AWS_SECURE_TUNNEL_MT_CONNECTION_START;
+            break;
+        case AWS_STOT_CONNECTION_RESET:
+            storage_view->type = AWS_SECURE_TUNNEL_MT_CONNECTION_RESET;
             break;
         default:
             storage_view->type = AWS_SECURE_TUNNEL_MT_UNKNOWN;
@@ -238,6 +254,8 @@ void aws_secure_tunnel_message_storage_clean_up(struct aws_secure_tunnel_message
     aws_byte_buf_clean_up(&message_storage->storage);
 }
 
+// Steve TODO assign connection id here. We will use the one that's been provided by the SendMessage() function
+// but if it's missing we will default to 1.
 /* Sets the stream id on outbound message based on the service id (or lack of for V1) to the current one being used. */
 static int s_aws_secure_tunnel_operation_message_assign_stream_id(
     struct aws_secure_tunnel_operation *operation,
@@ -259,10 +277,16 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id));
             stream_id = INVALID_STREAM_ID;
         } else {
+            // Steve TODO check against hash table of currently active connection ids
+            // to see if the user set connection id is active. If it isn't, log a warning and fail
+            // the message being attempted.
             struct aws_service_id_element *service_id_elem = elem->value;
             stream_id = service_id_elem->stream_id;
         }
     } else {
+        // Steve TODO check against hash table of currently active connection ids
+        // to see if the user set connection id is active. If it isn't, log a warning and fail
+        // the message being attempted.
         stream_id = secure_tunnel->config->stream_id;
     }
 
@@ -306,10 +330,24 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
                 aws_service_id_element_new(secure_tunnel->allocator, message_view->service_id, stream_id);
             aws_hash_table_put(
                 &secure_tunnel->config->service_ids, &replacement_elem->service_id_cur, replacement_elem, NULL);
+
+            AWS_LOGF_INFO(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Secure tunnel service_id '" PRInSTR "' stream_id set to %d",
+                (void *)secure_tunnel,
+                AWS_BYTE_CURSOR_PRI(*message_view->service_id),
+                stream_id);
         }
     } else {
         stream_id = secure_tunnel->config->stream_id + 1;
         secure_tunnel->config->stream_id = stream_id;
+
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Secure tunnel stream_id set to %d",
+            (void *)secure_tunnel,
+            AWS_BYTE_CURSOR_PRI(*message_view->service_id),
+            stream_id);
     }
 
     if (stream_id == INVALID_STREAM_ID) {
@@ -317,13 +355,6 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
     }
 
     message_op->options_storage.storage_view.stream_id = stream_id;
-
-    AWS_LOGF_INFO(
-        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        "id=%p: Secure tunnel service_id '" PRInSTR "' stream_id set to %d",
-        (void *)secure_tunnel,
-        AWS_BYTE_CURSOR_PRI(*message_view->service_id),
-        stream_id);
 
     return AWS_OP_SUCCESS;
 }
@@ -643,6 +674,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->local_proxy_mode = options->local_proxy_mode;
     storage->on_connection_complete = options->on_connection_complete;
     storage->on_connection_shutdown = options->on_connection_shutdown;
+    storage->on_connection_reset = options->on_connection_reset;
     storage->on_send_data_complete = options->on_send_data_complete;
     storage->on_stream_start = options->on_stream_start;
     storage->on_stream_reset = options->on_stream_reset;

@@ -122,13 +122,14 @@ struct aws_secure_tunnel_options_storage {
 
     /* Stream related info */
     int32_t stream_id;
-
     struct aws_hash_table service_ids;
+    // Steve TODO Add an aws_hash_table for connection id with no service id
 
     /* Callbacks */
     aws_secure_tunnel_message_received_fn *on_message_received;
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
+    aws_secure_tunneling_on_connection_reset_fn *on_connection_reset;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
