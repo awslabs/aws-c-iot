@@ -674,7 +674,6 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->local_proxy_mode = options->local_proxy_mode;
     storage->on_connection_complete = options->on_connection_complete;
     storage->on_connection_shutdown = options->on_connection_shutdown;
-    storage->on_connection_reset = options->on_connection_reset;
     storage->on_send_data_complete = options->on_send_data_complete;
     storage->on_stream_start = options->on_stream_start;
     storage->on_stream_reset = options->on_stream_reset;
