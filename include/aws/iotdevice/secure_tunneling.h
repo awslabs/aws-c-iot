@@ -114,20 +114,25 @@ struct aws_secure_tunnel_connection_view {
  */
 typedef void(
     aws_secure_tunnel_message_received_fn)(const struct aws_secure_tunnel_message_view *message, void *user_data);
-
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(
     const struct aws_secure_tunnel_connection_view *connection_view,
     int error_code,
     void *user_data);
 typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(int error_code, void *user_data);
-typedef void(
-    aws_secure_tunneling_on_connection_reset_fn)(const struct aws_secure_tunnel_message_view *message, void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_stream_start_fn)(
     const struct aws_secure_tunnel_message_view *message,
     int error_code,
     void *user_data);
 typedef void(aws_secure_tunneling_on_stream_reset_fn)(
+    const struct aws_secure_tunnel_message_view *message,
+    int error_code,
+    void *user_data);
+typedef void(aws_secure_tunneling_on_connection_start_fn)(
+    const struct aws_secure_tunnel_message_view *message,
+    int error_code,
+    void *user_data);
+typedef void(aws_secure_tunneling_on_connection_reset_fn)(
     const struct aws_secure_tunnel_message_view *message,
     int error_code,
     void *user_data);
@@ -183,9 +188,10 @@ struct aws_secure_tunnel_options {
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
-    aws_secure_tunneling_on_connection_reset_fn *on_connection_reset;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
+    aws_secure_tunneling_on_connection_start_fn *on_connection_start;
+    aws_secure_tunneling_on_connection_reset_fn *on_connection_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
     aws_secure_tunneling_on_stopped_fn *on_stopped;
 

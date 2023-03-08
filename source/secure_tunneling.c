@@ -291,6 +291,38 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     }
 }
 
+static int s_aws_secure_tunnel_set_connection_id(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_byte_cursor *service_id,
+    int32_t stream_id,
+    uint32_t connection_id) {
+    (void)secure_tunnel;
+    (void)service_id;
+    (void)stream_id;
+    (void)connection_id;
+    // Steve TODO
+    return AWS_OP_SUCCESS;
+}
+
+static void s_aws_secure_tunnel_on_connection_start_received(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_message_view *message_view) {
+    int result = s_aws_secure_tunnel_set_connection_id(
+        secure_tunnel, message_view->service_id, message_view->stream_id, message_view->connection_id);
+
+    if (secure_tunnel->config->on_connection_start) {
+        secure_tunnel->config->on_connection_start(message_view, result, secure_tunnel->config->user_data);
+    }
+}
+
+static void s_aws_secure_tunnel_on_connection_reset_received(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_message_view *message_view) {
+    (void)secure_tunnel;
+    (void)message_view;
+    // Steve TODO
+}
+
 static void s_aws_secure_tunnel_connected_on_message_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
@@ -314,7 +346,11 @@ static void s_aws_secure_tunnel_connected_on_message_received(
             s_aws_secure_tunnel_on_service_ids_received(secure_tunnel, message_view);
             break;
         case AWS_SECURE_TUNNEL_MT_CONNECTION_START:
+            s_aws_secure_tunnel_on_connection_start_received(secure_tunnel, message_view);
+            break;
         case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
+            s_aws_secure_tunnel_on_connection_reset_received(secure_tunnel, message_view);
+            break;
         case AWS_SECURE_TUNNEL_MT_UNKNOWN:
         default:
             if (!message_view->ignorable) {
@@ -401,7 +437,7 @@ static bool secure_tunneling_websocket_stream_outgoing_payload(
     }
 
     if (pair->length_prefix_written == true) {
-        pair->cur = aws_byte_buf_write_to_capacity(out_buf, &pair->cur);
+        aws_byte_buf_write_to_capacity(out_buf, &pair->cur);
     }
 
     return true;

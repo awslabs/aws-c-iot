@@ -315,11 +315,6 @@ int aws_iot_st_msg_serialize_from_view(
         }
     }
 
-    if (buffer->capacity > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
-        aws_raise_error(AWS_ERROR_INVALID_BUFFER_SIZE);
-        goto cleanup;
-    }
-
     return AWS_OP_SUCCESS;
 
 cleanup:
@@ -400,7 +395,6 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
         (void *)secure_tunnel,
         cursor->len);
 
-    AWS_RETURN_ERROR_IF2(cursor->len < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     uint8_t wire_type;
     uint8_t field_number;
     struct aws_secure_tunnel_message_view message_view;

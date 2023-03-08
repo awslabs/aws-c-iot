@@ -107,15 +107,15 @@ int aws_secure_tunnel_message_view_validate(const struct aws_secure_tunnel_messa
     if (message_view->type == AWS_SECURE_TUNNEL_MT_DATA && message_view->stream_id != 0) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_message_view stream id for DATA MESSAGES must be 0",
+            "id=%p: aws_secure_tunnel_message_view - stream id for DATA MESSAGES must be 0",
             (void *)message_view);
         return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
     }
 
-    if (message_view->payload != NULL && message_view->payload->len > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
+    if (message_view->payload != NULL && message_view->payload->len > AWS_IOT_ST_MAX_PAYLOAD_SIZE) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_message_view - payload too long",
+            "id=%p: aws_secure_tunnel_message_view - payload too large",
             (void *)message_view);
         return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
     }
@@ -678,6 +678,8 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->on_send_data_complete = options->on_send_data_complete;
     storage->on_stream_start = options->on_stream_start;
     storage->on_stream_reset = options->on_stream_reset;
+    storage->on_connection_start = options->on_connection_start;
+    storage->on_connection_reset = options->on_connection_reset;
     storage->on_session_reset = options->on_session_reset;
     storage->on_stopped = options->on_stopped;
     storage->on_termination_complete = options->on_termination_complete;
@@ -719,10 +721,6 @@ struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
     pair->length_prefix_written = false;
     if (aws_iot_st_msg_serialize_from_view(&pair->buf, allocator, message_view)) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
-        goto error;
-    }
-    if (pair->buf.len > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message size greater than AWS_IOT_ST_MAX_MESSAGE_SIZE");
         goto error;
     }
 
