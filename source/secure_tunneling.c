@@ -401,7 +401,7 @@ static bool secure_tunneling_websocket_stream_outgoing_payload(
     }
 
     if (pair->length_prefix_written == true) {
-        pair->cur = aws_byte_buf_write_to_capacity(out_buf, &pair->cur);
+        aws_byte_buf_write_to_capacity(out_buf, &pair->cur);
     }
 
     return true;
