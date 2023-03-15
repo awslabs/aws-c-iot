@@ -174,7 +174,7 @@ static bool s_aws_secure_tunnel_protocol_version_match_check(
     return true;
 }
 
-static bool s_aws_secure_tunnel_stream_id_check_match(
+static bool s_aws_secure_tunnel_stream_id_match_check(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *service_id,
     int32_t stream_id) {
@@ -382,7 +382,7 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
         // Steve Todo Reset the connection
     }
 
-    if (s_aws_secure_tunnel_stream_id_check_match(secure_tunnel, message_view->service_id, message_view->stream_id)) {
+    if (s_aws_secure_tunnel_stream_id_match_check(secure_tunnel, message_view->service_id, message_view->stream_id)) {
         result = s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, INVALID_STREAM_ID, 0);
         if (secure_tunnel->config->on_stream_reset) {
             secure_tunnel->config->on_stream_reset(message_view, result, secure_tunnel->config->user_data);
