@@ -33,6 +33,12 @@ struct aws_service_id_element {
     struct aws_byte_cursor service_id_cur;
     struct aws_string *service_id_string;
     int32_t stream_id;
+    struct aws_hash_table connection_ids;
+};
+
+struct aws_connection_id_element {
+    struct aws_allocator *allocator;
+    uint32_t connection_id;
 };
 
 struct aws_secure_tunnel_message_storage {
@@ -199,6 +205,11 @@ struct aws_service_id_element *aws_service_id_element_new(
     struct aws_allocator *allocator,
     const struct aws_byte_cursor *service_id,
     int32_t stream_id);
+
+AWS_IOTDEVICE_API
+struct aws_connection_id_element *aws_connection_id_element_new(
+    struct aws_allocator *allocator,
+    uint32_t connection_id);
 
 AWS_EXTERN_C_END
 

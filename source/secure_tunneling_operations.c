@@ -16,9 +16,44 @@
 #define INVALID_STREAM_ID 0
 #define DEFAULT_CONNECTION_ID 1
 
+static const uint32_t s_bit_scrambling_magic = 0x45d9f3bU;
+static const uint32_t s_bit_shift_magic = 16U;
+
+/* this is a repurposed hash function based on the technique in splitmix64. The magic number was a result of numerical
+ * analysis on maximum bit entropy. */
+uint64_t aws_secure_tunnel_hash_connection_id(const void *to_hash) {
+    uint32_t int_to_hash = *(const uint32_t *)to_hash;
+    uint32_t hash = ((int_to_hash >> s_bit_shift_magic) ^ int_to_hash) * s_bit_scrambling_magic;
+    hash = ((hash >> s_bit_shift_magic) ^ hash) * s_bit_scrambling_magic;
+    hash = (hash >> s_bit_shift_magic) ^ hash;
+    return (uint64_t)hash;
+}
+
+bool aws_secure_tunnel_connection_id_eq(const void *a, const void *b) {
+    return *(const uint32_t *)a == *(const uint32_t *)b;
+}
+
+static void s_destroy_connection_id(void *data) {
+    struct aws_connection_id_element *elem = data;
+    aws_mem_release(elem->allocator, elem);
+}
+
+struct aws_connection_id_element *aws_connection_id_element_new(
+    struct aws_allocator *allocator,
+    uint32_t connection_id) {
+    AWS_PRECONDITION(allocator != NULL);
+    AWS_PRECONDITION(connection_id > 0);
+    struct aws_connection_id_element *elem = aws_mem_calloc(allocator, 1, sizeof(struct aws_service_id_element));
+    elem->allocator = allocator;
+    elem->connection_id = connection_id;
+
+    return elem;
+}
+
 /* for the hash table, to destroy elements */
 static void s_destroy_service_id(void *data) {
     struct aws_service_id_element *elem = data;
+    aws_hash_table_clean_up(&elem->connection_ids);
     aws_string_destroy(elem->service_id_string);
     aws_mem_release(elem->allocator, elem);
 }
@@ -38,6 +73,17 @@ struct aws_service_id_element *aws_service_id_element_new(
     }
     elem->service_id_cur = aws_byte_cursor_from_string(elem->service_id_string);
     elem->stream_id = stream_id;
+
+    if (aws_hash_table_init(
+            &elem->connection_ids,
+            allocator,
+            1,
+            aws_secure_tunnel_hash_connection_id,
+            aws_secure_tunnel_connection_id_eq,
+            NULL,
+            s_destroy_connection_id)) {
+        goto error;
+    }
 
     return elem;
 
@@ -139,38 +185,83 @@ void aws_secure_tunnel_message_view_log(
         (void *)message_view,
         aws_secure_tunnel_message_type_to_c_string(message_view->type));
 
-    if (message_view->service_id != NULL) {
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_message_view service_id set to '" PRInSTR "'",
-            (void *)message_view,
-            AWS_BYTE_CURSOR_PRI(*message_view->service_id));
-    } else {
-        AWS_LOGUF(
-            log_handle,
-            level,
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_message_view service_id not set",
-            (void *)message_view);
+    switch (message_view->type) {
+        case AWS_SECURE_TUNNEL_MT_DATA:
+        case AWS_SECURE_TUNNEL_MT_STREAM_START:
+        case AWS_SECURE_TUNNEL_MT_STREAM_RESET:
+        case AWS_SECURE_TUNNEL_MT_CONNECTION_START:
+        case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
+            if (message_view->service_id != NULL) {
+                AWS_LOGUF(
+                    log_handle,
+                    level,
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: aws_secure_tunnel_message_view service_id set to '" PRInSTR "'",
+                    (void *)message_view,
+                    AWS_BYTE_CURSOR_PRI(*message_view->service_id));
+            } else {
+                AWS_LOGUF(
+                    log_handle,
+                    level,
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: aws_secure_tunnel_message_view service_id not set",
+                    (void *)message_view);
+            }
+
+            AWS_LOGUF(
+                log_handle,
+                level,
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: aws_secure_tunnel_message_view stream_id set to %d",
+                (void *)message_view,
+                (int)message_view->stream_id);
+
+            if (message_view->connection_id != 0) {
+                AWS_LOGUF(
+                    log_handle,
+                    level,
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: aws_secure_tunnel_message_view connection_id set to %d",
+                    (void *)message_view,
+                    (int)message_view->connection_id);
+            }
+
+            break;
+
+        case AWS_SECURE_TUNNEL_MT_SERVICE_IDS:
+            if (message_view->service_id != NULL) {
+                AWS_LOGUF(
+                    log_handle,
+                    level,
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: aws_secure_tunnel_message_view service_id 1 set to '" PRInSTR "'",
+                    (void *)message_view,
+                    AWS_BYTE_CURSOR_PRI(*message_view->service_id));
+            }
+            if (message_view->service_id_2 != NULL) {
+                AWS_LOGUF(
+                    log_handle,
+                    level,
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: aws_secure_tunnel_message_view service_id 2 set to '" PRInSTR "'",
+                    (void *)message_view,
+                    AWS_BYTE_CURSOR_PRI(*message_view->service_id_2));
+            }
+            if (message_view->service_id_3 != NULL) {
+                AWS_LOGUF(
+                    log_handle,
+                    level,
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: aws_secure_tunnel_message_view service_id 3 set to '" PRInSTR "'",
+                    (void *)message_view,
+                    AWS_BYTE_CURSOR_PRI(*message_view->service_id_3));
+            }
+            break;
+        case AWS_SECURE_TUNNEL_MT_SESSION_RESET:
+        case AWS_SECURE_TUNNEL_MT_UNKNOWN:
+        default:
+            break;
     }
-
-    AWS_LOGUF(
-        log_handle,
-        level,
-        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        "id=%p: aws_secure_tunnel_message_view stream_id set to %d",
-        (void *)message_view,
-        (int)message_view->stream_id);
-
-    AWS_LOGUF(
-        log_handle,
-        level,
-        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        "id=%p: aws_secure_tunnel_message_view connection_id set to %d",
-        (void *)message_view,
-        (int)message_view->connection_id);
 
     if (message_view->payload != NULL) {
         AWS_LOGUF(
@@ -254,9 +345,9 @@ void aws_secure_tunnel_message_storage_clean_up(struct aws_secure_tunnel_message
     aws_byte_buf_clean_up(&message_storage->storage);
 }
 
-// Steve TODO assign connection id here. We will use the one that's been provided by the SendMessage() function
-// but if it's missing we will default to 1.
-/* Sets the stream id on outbound message based on the service id (or lack of for V1) to the current one being used. */
+/*
+ * Retreives and assigns the stream id on an outbound message based on the service id (or lack of one for V1).
+ */
 static int s_aws_secure_tunnel_operation_message_assign_stream_id(
     struct aws_secure_tunnel_operation *operation,
     struct aws_secure_tunnel *secure_tunnel) {
@@ -266,36 +357,47 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
 
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
-    if (message_view->service_id != NULL) {
+    if (message_view->service_id == NULL || message_view->service_id->len == 0) {
+        stream_id = secure_tunnel->config->stream_id;
+    } else {
         struct aws_hash_element *elem = NULL;
         aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
         if (elem == NULL) {
             AWS_LOGF_WARN(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: invalid service_id:'" PRInSTR "' attempted to be used with an outbound message",
+                "id=%p: invalid service id '" PRInSTR "' attempted to be assigned a stream id on an outbound message",
                 (void *)message_view,
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id));
-            stream_id = INVALID_STREAM_ID;
-        } else {
-            // Steve TODO check against hash table of currently active connection ids
-            // to see if the user set connection id is active. If it isn't, log a warning and fail
-            // the message being attempted.
-            struct aws_service_id_element *service_id_elem = elem->value;
-            stream_id = service_id_elem->stream_id;
+            goto error;
         }
-    } else {
-        // Steve TODO check against hash table of currently active connection ids
-        // to see if the user set connection id is active. If it isn't, log a warning and fail
-        // the message being attempted.
-        stream_id = secure_tunnel->config->stream_id;
+        struct aws_service_id_element *service_id_elem = elem->value;
+        stream_id = service_id_elem->stream_id;
     }
 
     if (stream_id == INVALID_STREAM_ID) {
-        return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM);
+        goto error;
     }
 
     message_op->options_storage.storage_view.stream_id = stream_id;
     return AWS_OP_SUCCESS;
+
+error:
+    if (message_view->service_id == NULL || message_view->service_id->len == 0) {
+        AWS_LOGF_DEBUG(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: No active stream to assign outbound %s message a stream id",
+            (void *)secure_tunnel,
+            aws_secure_tunnel_message_type_to_c_string(message_view->type));
+    } else {
+        AWS_LOGF_DEBUG(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: No active stream with service id '" PRInSTR "' to assign outbound %s message a stream id",
+            (void *)secure_tunnel,
+            AWS_BYTE_CURSOR_PRI(*message_view->service_id),
+            aws_secure_tunnel_message_type_to_c_string(message_view->type));
+    }
+
+    return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID);
 }
 
 /*
@@ -311,7 +413,28 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
 
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
-    if (message_view->service_id != NULL && message_view->service_id->len > 0) {
+    if (message_view->service_id == NULL || message_view->service_id->len == 0) {
+        stream_id = secure_tunnel->config->stream_id + 1;
+        secure_tunnel->config->stream_id = stream_id;
+
+        aws_hash_table_clear(&secure_tunnel->config->connection_ids);
+        struct aws_connection_id_element *connection_id_elem = NULL;
+        if (message_view->connection_id > 0) {
+            connection_id_elem = aws_connection_id_element_new(secure_tunnel->allocator, message_view->connection_id);
+        } else {
+            connection_id_elem = aws_connection_id_element_new(secure_tunnel->allocator, 1);
+        }
+
+        aws_hash_table_put(
+            &secure_tunnel->config->connection_ids, &connection_id_elem->connection_id, connection_id_elem, NULL);
+
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Secure tunnel set to stream id (%d) with connection id (%d)",
+            (void *)secure_tunnel,
+            stream_id,
+            connection_id_elem->connection_id);
+    } else {
         struct aws_hash_element *elem = NULL;
         aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
         if (elem == NULL) {
@@ -328,30 +451,32 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
 
             struct aws_service_id_element *replacement_elem =
                 aws_service_id_element_new(secure_tunnel->allocator, message_view->service_id, stream_id);
+
+            struct aws_connection_id_element *connection_id_elem = NULL;
+            if (message_view->connection_id > 0) {
+                connection_id_elem =
+                    aws_connection_id_element_new(secure_tunnel->allocator, message_view->connection_id);
+            } else {
+                connection_id_elem = aws_connection_id_element_new(secure_tunnel->allocator, 1);
+            }
+
+            aws_hash_table_put(
+                &replacement_elem->connection_ids, &connection_id_elem->connection_id, connection_id_elem, NULL);
             aws_hash_table_put(
                 &secure_tunnel->config->service_ids, &replacement_elem->service_id_cur, replacement_elem, NULL);
 
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Secure tunnel service_id '" PRInSTR "' stream_id set to %d",
+                "id=%p: Secure tunnel service id '" PRInSTR "' set to stream id (%d) with connection id (%d)",
                 (void *)secure_tunnel,
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id),
-                stream_id);
+                stream_id,
+                connection_id_elem->connection_id);
         }
-    } else {
-        stream_id = secure_tunnel->config->stream_id + 1;
-        secure_tunnel->config->stream_id = stream_id;
-
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure tunnel stream_id set to %d",
-            (void *)secure_tunnel,
-            AWS_BYTE_CURSOR_PRI(*message_view->service_id),
-            stream_id);
     }
 
     if (stream_id == INVALID_STREAM_ID) {
-        return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM);
+        return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID);
     }
 
     message_op->options_storage.storage_view.stream_id = stream_id;
@@ -579,6 +704,7 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
     aws_string_destroy(storage->access_token);
     aws_string_destroy(storage->client_token);
     aws_hash_table_clean_up(&storage->service_ids);
+    aws_hash_table_clean_up(&storage->connection_ids);
     aws_mem_release(storage->allocator, storage);
 }
 
@@ -665,6 +791,16 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
             (aws_hash_callback_eq_fn *)aws_byte_cursor_eq,
             NULL,
             s_destroy_service_id)) {
+        goto error;
+    }
+    if (aws_hash_table_init(
+            &storage->connection_ids,
+            allocator,
+            1,
+            aws_secure_tunnel_hash_connection_id,
+            aws_secure_tunnel_connection_id_eq,
+            NULL,
+            s_destroy_connection_id)) {
         goto error;
     }
 

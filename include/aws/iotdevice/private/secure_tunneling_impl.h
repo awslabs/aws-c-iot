@@ -120,10 +120,12 @@ struct aws_secure_tunnel_options_storage {
 
     struct aws_string *endpoint_host;
 
+    uint8_t protocol_version;
+
     /* Stream related info */
     int32_t stream_id;
     struct aws_hash_table service_ids;
-    // Steve TODO Add an aws_hash_table for connection id with no service id
+    struct aws_hash_table connection_ids;
 
     /* Callbacks */
     aws_secure_tunnel_message_received_fn *on_message_received;
