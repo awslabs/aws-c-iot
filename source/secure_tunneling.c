@@ -158,7 +158,7 @@ static uint8_t s_aws_secure_tunnel_message_min_protocol_check(const struct aws_s
     return version;
 }
 
-static bool s_aws_secure_tunnel_protocol_version_check(
+static bool s_aws_secure_tunnel_protocol_version_match_check(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message) {
     uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message);
@@ -302,7 +302,7 @@ static int s_aws_secure_tunnel_set_stream(
     if (elem == NULL) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Incomming STREAM START request for unsupported service_id: " PRInSTR,
+            "id=%p: Incomming stream set request for unsupported service_id: " PRInSTR,
             (void *)secure_tunnel,
             AWS_BYTE_CURSOR_PRI(*service_id));
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_BAD_SERVICE_ID;
@@ -345,7 +345,7 @@ static void s_aws_secure_tunnel_on_stream_start_received(
             secure_tunnel->config->protocol_version);
     }
 
-    if (s_aws_secure_tunnel_protocol_version_check(secure_tunnel, message_view)) {
+    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure Tunnel will be reset due to Protocol version switching by Source device",
@@ -374,7 +374,7 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
     int result = AWS_OP_SUCCESS;
-    if (s_aws_secure_tunnel_protocol_version_check(secure_tunnel, message_view)) {
+    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure Tunnel will be reset due to Protocol version switching by Source device",
