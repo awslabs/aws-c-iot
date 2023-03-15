@@ -14,7 +14,6 @@
 #include <inttypes.h>
 
 #define INVALID_STREAM_ID 0
-#define DEFAULT_CONNECTION_ID 1
 
 static const uint32_t s_bit_scrambling_magic = 0x45d9f3bU;
 static const uint32_t s_bit_shift_magic = 16U;
