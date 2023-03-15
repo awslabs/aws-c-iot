@@ -1517,30 +1517,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
             case AWS_STOT_STREAM_RESET:
 
                 if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
-                        current_operation, secure_tunnel)) {
-
-                    error_code = aws_last_error();
-
-                    if (current_operation->message_view->service_id == NULL ||
-                        current_operation->message_view->service_id->len == 0) {
-                        AWS_LOGF_DEBUG(
-                            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                            "id=%p: failed to assign outbound V1 STREAM RESET message a stream id with error "
-                            "%d(%s)",
-                            (void *)secure_tunnel,
-                            error_code,
-                            aws_error_debug_str(error_code));
-                    } else {
-                        AWS_LOGF_DEBUG(
-                            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                            "id=%p: failed to assign outbound STREAM RESET message with service id '" PRInSTR
-                            "' a stream id with error %d(%s)",
-                            (void *)secure_tunnel,
-                            AWS_BYTE_CURSOR_PRI(*current_operation->message_view->service_id),
-                            error_code,
-                            aws_error_debug_str(error_code));
-                    }
-                } else {
+                        current_operation, secure_tunnel) == AWS_OP_SUCCESS) {
                     /* Send the Stream Reset message through the WebSocket */
                     if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
                         error_code = aws_last_error();
