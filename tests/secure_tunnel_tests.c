@@ -581,11 +581,14 @@ int aws_secure_tunnel_mock_test_fixture_init(
     test_fixture->socket_options = socket_options;
 
     test_fixture->secure_tunnel_elg = aws_event_loop_group_new_default(allocator, 4, NULL);
+    ASSERT_NOT_NULL(test_fixture->secure_tunnel_elg);
+
     struct aws_host_resolver_default_options resolver_options = {
         .el_group = test_fixture->secure_tunnel_elg,
         .max_entries = 1,
     };
     test_fixture->host_resolver = aws_host_resolver_new_default(allocator, &resolver_options);
+    ASSERT_NOT_NULL(test_fixture->host_resolver);
 
     struct aws_client_bootstrap_options bootstrap_options = {
         .event_loop_group = test_fixture->secure_tunnel_elg,
@@ -594,6 +597,7 @@ int aws_secure_tunnel_mock_test_fixture_init(
     };
 
     test_fixture->secure_tunnel_bootstrap = aws_client_bootstrap_new(allocator, &bootstrap_options);
+    ASSERT_NOT_NULL(test_fixture->secure_tunnel_bootstrap);
 
     uint64_t timestamp = 0;
     ASSERT_SUCCESS(aws_sys_clock_get_ticks(&timestamp));
@@ -625,6 +629,7 @@ int aws_secure_tunnel_mock_test_fixture_init(
     options->secure_tunnel_options->secure_tunnel_on_termination_user_data = test_fixture;
 
     test_fixture->secure_tunnel = aws_secure_tunnel_new(allocator, options->secure_tunnel_options);
+    ASSERT_NOT_NULL(test_fixture->secure_tunnel);
 
     /* Replace Secure Tunnel's vtable functions */
     test_fixture->secure_tunnel_vtable = *aws_secure_tunnel_get_default_vtable();
