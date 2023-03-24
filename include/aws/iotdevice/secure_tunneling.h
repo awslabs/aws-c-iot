@@ -120,6 +120,10 @@ typedef void(aws_secure_tunneling_on_connection_complete_fn)(
     void *user_data);
 typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(int error_code, void *user_data);
 typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
+typedef void(aws_secure_tunneling_on_message_completion_fn(
+    const struct aws_secure_tunnel_message_view *message,
+    int error_code,
+    void *user_data));
 typedef void(aws_secure_tunneling_on_stream_start_fn)(
     const struct aws_secure_tunnel_message_view *message,
     int error_code,
@@ -188,6 +192,7 @@ struct aws_secure_tunnel_options {
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
+    aws_secure_tunneling_on_message_completion_fn *on_message_completion;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_connection_start_fn *on_connection_start;
@@ -299,6 +304,17 @@ AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_reset(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
+
+//***********************************************************************************************************************
+/* THIS API SHOULD NOT BE USED BY THE CUSTOMER AND IS FOR TESTING PURPOSES ONLY */
+//***********************************************************************************************************************
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_connection_reset(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options);
+
+// STEVE TODO REMOVE AFTER TESTING
+AWS_IOTDEVICE_API int reset_secure_tunnel_connection(struct aws_secure_tunnel *secure_tunnel);
 
 AWS_EXTERN_C_END
 

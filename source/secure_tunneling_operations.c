@@ -32,7 +32,7 @@ bool aws_secure_tunnel_connection_id_eq(const void *a, const void *b) {
     return *(const uint32_t *)a == *(const uint32_t *)b;
 }
 
-static void s_destroy_connection_id(void *data) {
+void aws_destroy_connection_id(void *data) {
     struct aws_connection_id_element *elem = data;
     aws_mem_release(elem->allocator, elem);
 }
@@ -80,7 +80,7 @@ struct aws_service_id_element *aws_service_id_element_new(
             aws_secure_tunnel_hash_connection_id,
             aws_secure_tunnel_connection_id_eq,
             NULL,
-            s_destroy_connection_id)) {
+            aws_destroy_connection_id)) {
         goto error;
     }
 
@@ -137,6 +137,7 @@ static struct aws_secure_tunnel_operation_vtable s_empty_operation_vtable = {
     .aws_secure_tunnel_operation_completion_fn = NULL,
     .aws_secure_tunnel_operation_assign_stream_id_fn = NULL,
     .aws_secure_tunnel_operation_set_next_stream_id_fn = NULL,
+    .aws_secure_tunnel_operation_set_connection_start_id = NULL,
 };
 
 /*********************************************************************************************************************
@@ -483,9 +484,83 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
     return AWS_OP_SUCCESS;
 }
 
+static int s_aws_secure_tunnel_operation_set_connection_start_id(
+    struct aws_secure_tunnel_operation *operation,
+    struct aws_secure_tunnel *secure_tunnel) {
+
+    struct aws_secure_tunnel_operation_message *message_op = operation->impl;
+    struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
+
+    /*
+     * Get the appropriate connection id hash table to add the new connection id to
+     */
+    struct aws_hash_table *table_to_put_in = NULL;
+    if (message_view->service_id == NULL || message_view->service_id->len == 0) {
+        table_to_put_in = &secure_tunnel->config->connection_ids;
+    } else {
+        struct aws_hash_element *elem = NULL;
+        aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
+        if (elem == NULL) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: invalid service_id:'" PRInSTR
+                "' attempted to be used to start a stream using a connection id (%d)",
+                (void *)message_view,
+                AWS_BYTE_CURSOR_PRI(*message_view->service_id),
+                message_view->connection_id);
+            aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
+        } else {
+            struct aws_service_id_element *service_id_elem = elem->value;
+            table_to_put_in = &service_id_elem->connection_ids;
+        }
+    }
+
+    if (message_view->connection_id != 0) {
+        struct aws_connection_id_element *connection_id_elem = NULL;
+        connection_id_elem = aws_connection_id_element_new(secure_tunnel->allocator, message_view->connection_id);
+        struct aws_hash_element *connection_elem = NULL;
+
+        aws_hash_table_find(table_to_put_in, &connection_id_elem->connection_id, &connection_elem);
+        /*
+         * If the connection id is already stored, it does not need to be put into the hash table. The CONNECTION START
+         * will still be sent but if there is already an active stream on this connection id on the Destination, they
+         * will send a CONNECTION RESET to close it.
+         */
+        if (connection_elem == NULL) {
+            aws_hash_table_put(table_to_put_in, &connection_id_elem->connection_id, connection_id_elem, NULL);
+        } else {
+            aws_destroy_connection_id(connection_id_elem);
+        }
+
+        if (message_view->service_id == NULL || message_view->service_id->len == 0) {
+            AWS_LOGF_INFO(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Stream started using connection id (%d)",
+                (void *)message_view,
+                message_view->connection_id);
+        } else {
+            AWS_LOGF_INFO(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Stream started on service_id:'" PRInSTR "' using connection id (%d)",
+                (void *)message_view,
+                AWS_BYTE_CURSOR_PRI(*message_view->service_id),
+                message_view->connection_id);
+        }
+    } else {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Connection Id can not be set to 0 on a CONNECTION START",
+            (void *)message_view);
+        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
+    }
+
+    return AWS_OP_SUCCESS;
+}
+
 static struct aws_secure_tunnel_operation_vtable s_message_operation_vtable = {
     .aws_secure_tunnel_operation_assign_stream_id_fn = s_aws_secure_tunnel_operation_message_assign_stream_id,
     .aws_secure_tunnel_operation_set_next_stream_id_fn = s_aws_secure_tunnel_operation_message_set_next_stream_id,
+    .aws_secure_tunnel_operation_set_connection_start_id = s_aws_secure_tunnel_operation_set_connection_start_id,
 };
 
 static void s_destroy_operation_message(void *object) {
@@ -697,6 +772,10 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
         return;
     }
 
+    if (storage->restore_stream_message_view != NULL) {
+        aws_secure_tunnel_message_storage_clean_up(&storage->restore_stream_message);
+        storage->restore_stream_message_view = NULL;
+    }
     aws_client_bootstrap_release(storage->bootstrap);
     aws_http_proxy_config_destroy(storage->http_proxy_config);
     aws_string_destroy(storage->endpoint_host);
@@ -799,7 +878,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
             aws_secure_tunnel_hash_connection_id,
             aws_secure_tunnel_connection_id_eq,
             NULL,
-            s_destroy_connection_id)) {
+            aws_destroy_connection_id)) {
         goto error;
     }
 
@@ -810,6 +889,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->on_connection_complete = options->on_connection_complete;
     storage->on_connection_shutdown = options->on_connection_shutdown;
     storage->on_send_data_complete = options->on_send_data_complete;
+    storage->on_message_completion = options->on_message_completion;
     storage->on_stream_start = options->on_stream_start;
     storage->on_stream_reset = options->on_stream_reset;
     storage->on_connection_start = options->on_connection_start;
@@ -880,6 +960,10 @@ const char *aws_secure_tunnel_operation_type_to_c_string(enum aws_secure_tunnel_
             return "STREAM RESET";
         case AWS_STOT_STREAM_START:
             return "STREAM START";
+        case AWS_STOT_CONNECTION_START:
+            return "CONNECTION START";
+        case AWS_STOT_CONNECTION_RESET:
+            return "CONNECTION RESET";
         default:
             return "UNKNOWN";
     }

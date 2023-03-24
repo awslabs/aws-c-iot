@@ -103,6 +103,16 @@ struct data_tunnel_pair {
     bool length_prefix_written;
 };
 
+struct aws_secure_tunnel_message_storage {
+    struct aws_allocator *allocator;
+    struct aws_secure_tunnel_message_view storage_view;
+
+    struct aws_byte_cursor service_id;
+    struct aws_byte_cursor payload;
+
+    struct aws_byte_buf storage;
+};
+
 /*
  * Secure tunnel configuration
  */
@@ -126,6 +136,8 @@ struct aws_secure_tunnel_options_storage {
     int32_t stream_id;
     struct aws_hash_table service_ids;
     struct aws_hash_table connection_ids;
+    struct aws_secure_tunnel_message_storage *restore_stream_message_view;
+    struct aws_secure_tunnel_message_storage restore_stream_message;
 
     /* Callbacks */
     aws_secure_tunnel_message_received_fn *on_message_received;
@@ -137,6 +149,7 @@ struct aws_secure_tunnel_options_storage {
     aws_secure_tunneling_on_connection_reset_fn *on_connection_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
     aws_secure_tunneling_on_stopped_fn *on_stopped;
+    aws_secure_tunneling_on_message_completion_fn *on_message_completion;
 
     aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
