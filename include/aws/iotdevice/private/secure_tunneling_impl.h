@@ -99,6 +99,7 @@ struct data_tunnel_pair {
     struct aws_allocator *allocator;
     struct aws_byte_buf buf;
     struct aws_byte_cursor cur;
+    enum aws_secure_tunnel_message_type type;
     const struct aws_secure_tunnel *secure_tunnel;
     bool length_prefix_written;
 };
@@ -133,9 +134,12 @@ struct aws_secure_tunnel_options_storage {
     uint8_t protocol_version;
 
     /* Stream related info */
+    /* Used for streams not using multiplexing (service ids) */
     int32_t stream_id;
-    struct aws_hash_table service_ids;
     struct aws_hash_table connection_ids;
+    /* Table containing streams using multiplexing (service ids) */
+    struct aws_hash_table service_ids;
+    /* Message used for initializing a stream upon a reconnect due to a protocol version missmatch */
     struct aws_secure_tunnel_message_storage *restore_stream_message_view;
     struct aws_secure_tunnel_message_storage restore_stream_message;
 
@@ -149,9 +153,8 @@ struct aws_secure_tunnel_options_storage {
     aws_secure_tunneling_on_connection_reset_fn *on_connection_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
     aws_secure_tunneling_on_stopped_fn *on_stopped;
-    aws_secure_tunneling_on_message_completion_fn *on_message_completion;
+    aws_secure_tunneling_on_send_message_complete_fn *on_send_message_complete;
 
-    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
     void *secure_tunnel_on_termination_user_data;
 

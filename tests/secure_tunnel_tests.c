@@ -177,7 +177,11 @@ static void s_on_test_secure_tunnel_message_received(
     aws_condition_variable_notify_all(&test_fixture->signal);
 }
 
-static void s_on_test_secure_tunnel_send_data_complete(int error_code, void *user_data) {
+static void s_on_test_secure_tunnel_send_message_complete(
+    enum aws_secure_tunnel_message_type type,
+    int error_code,
+    void *user_data) {
+    (void)type;
     (void)error_code;
     (void)user_data;
 }
@@ -610,7 +614,7 @@ int aws_secure_tunnel_mock_test_fixture_init(
     options->secure_tunnel_options->on_connection_complete = s_on_test_secure_tunnel_connection_complete;
     options->secure_tunnel_options->on_connection_shutdown = s_on_test_secure_tunnel_connection_shutdown;
     options->secure_tunnel_options->on_message_received = s_on_test_secure_tunnel_message_received;
-    options->secure_tunnel_options->on_send_data_complete = s_on_test_secure_tunnel_send_data_complete;
+    options->secure_tunnel_options->on_send_message_complete = s_on_test_secure_tunnel_send_message_complete;
     options->secure_tunnel_options->on_session_reset = s_on_test_secure_tunnel_on_session_reset;
     options->secure_tunnel_options->on_stopped = s_on_test_secure_tunnel_on_stopped;
     options->secure_tunnel_options->on_stream_reset = s_on_test_secure_tunnel_on_stream_reset;

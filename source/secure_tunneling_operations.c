@@ -15,6 +15,10 @@
 
 #define INVALID_STREAM_ID 0
 
+/*********************************************************************************************************************
+ * SERVICE AND CONNECTION ID HASH TABLE
+ ********************************************************************************************************************/
+
 static const uint32_t s_bit_scrambling_magic = 0x45d9f3bU;
 static const uint32_t s_bit_shift_magic = 16U;
 
@@ -92,7 +96,7 @@ error:
 }
 
 /*********************************************************************************************************************
- * Operation base
+ * OPERATION BASE
  ********************************************************************************************************************/
 
 struct aws_secure_tunnel_operation *aws_secure_tunnel_operation_acquire(struct aws_secure_tunnel_operation *operation) {
@@ -141,7 +145,7 @@ static struct aws_secure_tunnel_operation_vtable s_empty_operation_vtable = {
 };
 
 /*********************************************************************************************************************
- * Message
+ * MESSAGE
  ********************************************************************************************************************/
 
 int aws_secure_tunnel_message_view_validate(const struct aws_secure_tunnel_message_view *message_view) {
@@ -888,8 +892,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->local_proxy_mode = options->local_proxy_mode;
     storage->on_connection_complete = options->on_connection_complete;
     storage->on_connection_shutdown = options->on_connection_shutdown;
-    storage->on_send_data_complete = options->on_send_data_complete;
-    storage->on_message_completion = options->on_message_completion;
+    storage->on_send_message_complete = options->on_send_message_complete;
     storage->on_stream_start = options->on_stream_start;
     storage->on_stream_reset = options->on_stream_reset;
     storage->on_connection_start = options->on_connection_start;
@@ -932,6 +935,7 @@ struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
     struct data_tunnel_pair *pair = aws_mem_calloc(allocator, 1, sizeof(struct data_tunnel_pair));
     pair->allocator = allocator;
     pair->secure_tunnel = secure_tunnel;
+    pair->type = message_view->type;
     pair->length_prefix_written = false;
     if (aws_iot_st_msg_serialize_from_view(&pair->buf, allocator, message_view)) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
