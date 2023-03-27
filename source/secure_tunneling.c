@@ -679,6 +679,7 @@ static void s_aws_secure_tunnel_on_connection_start_received(
             "Protocol Version and Protocol Version used by incoming CONNECTION START message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
+        return;
     }
 
     /*
@@ -723,6 +724,7 @@ static void s_aws_secure_tunnel_on_connection_reset_received(
             "Protocol Version and Protocol Version used by incoming CONNECTION RESET message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
+        return;
     }
 
     /*
