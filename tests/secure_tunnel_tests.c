@@ -151,8 +151,8 @@ static void s_on_test_secure_tunnel_connection_complete(
     } else {
         test_fixture->secure_tunnel_connection_failed = true;
     }
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_connection_shutdown(int error_code, void *user_data) {
@@ -162,8 +162,8 @@ static void s_on_test_secure_tunnel_connection_shutdown(int error_code, void *us
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_connection_shutdown = true;
     test_fixture->secure_tunnel_connected = false;
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_message_received(
@@ -179,8 +179,8 @@ static void s_on_test_secure_tunnel_message_received(
         .len = message->payload->len,
     };
     aws_byte_buf_write_from_whole_cursor(&test_fixture->last_message_payload_buf, payload_cur);
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_send_message_complete(
@@ -197,8 +197,8 @@ static void s_on_test_secure_tunnel_on_session_reset(void *user_data) {
 
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_session_reset_received = true;
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_on_stopped(void *user_data) {
@@ -210,8 +210,8 @@ static void s_on_test_secure_tunnel_termination(void *user_data) {
 
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_terminated = true;
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_on_stream_reset(
@@ -225,8 +225,8 @@ static void s_on_test_secure_tunnel_on_stream_reset(
 
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_stream_reset_received = true;
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_on_stream_start(
@@ -244,8 +244,8 @@ static void s_on_test_secure_tunnel_on_stream_start(
     } else {
         test_fixture->secure_tunnel_bad_stream_request = true;
     }
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_on_connection_start(
@@ -263,8 +263,8 @@ static void s_on_test_secure_tunnel_on_connection_start(
     } else {
         test_fixture->secure_tunnel_bad_connection_request = true;
     }
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_on_connection_reset(
@@ -278,8 +278,8 @@ static void s_on_test_secure_tunnel_on_connection_reset(
 
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_connection_reset_received = true;
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 /*****************************************************************************************************************
@@ -544,8 +544,8 @@ void aws_secure_tunnel_test_on_message_received(
         default:
             break;
     }
-    aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 int aws_websocket_send_frame_mock_fn(
