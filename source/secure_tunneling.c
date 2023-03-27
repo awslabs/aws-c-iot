@@ -471,6 +471,7 @@ static void s_aws_secure_tunnel_on_data_received(
             "Protocol Version and Protocol Version used by incoming STREAM START message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
+        return;
     }
 
     /*
