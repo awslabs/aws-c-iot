@@ -145,6 +145,7 @@ static void s_on_test_secure_tunnel_connection_complete(
 
     aws_mutex_lock(&test_fixture->lock);
     if (error_code == 0 && test_fixture->secure_tunnel_connected == false) {
+        test_fixture->secure_tunnel_connection_shutdown = false;
         test_fixture->secure_tunnel_connected_succesfully = true;
         test_fixture->secure_tunnel_connected = true;
         test_fixture->secure_tunnel_connected_succesfully_count++;
@@ -162,6 +163,7 @@ static void s_on_test_secure_tunnel_connection_shutdown(int error_code, void *us
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_connection_shutdown = true;
     test_fixture->secure_tunnel_connected = false;
+    test_fixture->secure_tunnel_stream_started = false;
     aws_condition_variable_notify_all(&test_fixture->signal);
     aws_mutex_unlock(&test_fixture->lock);
 }
@@ -1460,9 +1462,10 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
         .stream_id = 1,
     };
 
-    test_fixture.secure_tunnel_stream_started = false;
-
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
+
+    s_wait_for_connection_shutdown(&test_fixture);
+
     s_wait_for_stream_started(&test_fixture);
 
     /* Create and send a data message from the server to the destination client */
@@ -1516,9 +1519,10 @@ static int s_secure_tunneling_v1_to_v3_stream_start_test_fn(struct aws_allocator
         .connection_id = 3,
     };
 
-    test_fixture.secure_tunnel_stream_started = false;
-
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
+
+    s_wait_for_connection_shutdown(&test_fixture);
+
     s_wait_for_stream_started(&test_fixture);
 
     /* Create and send a data message from the server to the destination client */
@@ -1566,8 +1570,6 @@ static int s_secure_tunneling_v2_to_v1_stream_start_test_fn(struct aws_allocator
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-
-    test_fixture.secure_tunnel_stream_started = false;
 
     /* check that service id stream has been set properly */
     struct aws_hash_element *elem = NULL;
@@ -1630,7 +1632,6 @@ static int s_secure_tunneling_v3_to_v1_stream_start_test_fn(struct aws_allocator
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-    test_fixture.secure_tunnel_stream_started = false;
 
     /* check that service id stream has been set properly */
     struct aws_hash_element *elem = NULL;
