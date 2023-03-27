@@ -1279,6 +1279,7 @@ static int s_secure_tunneling_receive_connection_start_test_fn(struct aws_alloca
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
         .service_id = &service_1,
         .stream_id = 1,
+        .connection_id = 1,
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
 
