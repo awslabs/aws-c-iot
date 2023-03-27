@@ -1155,7 +1155,6 @@ static int s_secure_tunneling_serializer_data_message_test_fn(struct aws_allocat
         .service_id = &service_1,
         .stream_id = 1,
         .payload = &payload_cur,
-        .connection_id = 1,
     };
 
     aws_secure_tunnel_send_mock_message(&test_fixture, &data_message_view);
