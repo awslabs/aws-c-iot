@@ -127,6 +127,8 @@ struct aws_secure_tunnel_mock_test_fixture {
     int secure_tunnel_message_sent_count_target;
     int secure_tunnel_message_sent_connection_reset_count;
     int secure_tunnel_message_sent_data_count;
+    int secure_tunnel_connected_succesfully_count;
+    int secure_tunnel_connected_succesfully_count_target;
 };
 
 /*****************************************************************************************************************
@@ -143,6 +145,7 @@ static void s_on_test_secure_tunnel_connection_complete(
     aws_mutex_lock(&test_fixture->lock);
     if (error_code == 0) {
         test_fixture->secure_tunnel_connected_succesfully = true;
+        test_fixture->secure_tunnel_connected_succesfully_count++;
     } else {
         test_fixture->secure_tunnel_connection_failed = true;
     }
@@ -301,6 +304,19 @@ static void s_wait_for_connected_successfully(struct aws_secure_tunnel_mock_test
     aws_mutex_lock(&test_fixture->lock);
     aws_condition_variable_wait_pred(
         &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_connected_succesfully, test_fixture);
+    aws_mutex_unlock(&test_fixture->lock);
+}
+
+static bool s_has_secure_tunnel_connected_succesfully_n_times(void *arg) {
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
+    return test_fixture->secure_tunnel_connected_succesfully_count ==
+           test_fixture->secure_tunnel_connected_succesfully_count_target;
+}
+
+static void s_wait_for_connected_successfully_n_times(struct aws_secure_tunnel_mock_test_fixture *test_fixture) {
+    aws_mutex_lock(&test_fixture->lock);
+    aws_condition_variable_wait_pred(
+        &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_connected_succesfully_n_times, test_fixture);
     aws_mutex_unlock(&test_fixture->lock);
 }
 
@@ -1535,7 +1551,6 @@ static int s_secure_tunneling_v2_to_v1_stream_start_test_fn(struct aws_allocator
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
-    test_fixture.secure_tunnel_connected_succesfully = false;
 
     /* Create and send a v2 stream start message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
@@ -1564,7 +1579,8 @@ static int s_secure_tunneling_v2_to_v1_stream_start_test_fn(struct aws_allocator
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
 
-    s_wait_for_connected_successfully(&test_fixture);
+    test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
+    s_wait_for_connected_successfully_n_times(&test_fixture);
 
     /* Check that the established stream is cleared */
     elem = NULL;
@@ -1596,7 +1612,6 @@ static int s_secure_tunneling_v3_to_v1_stream_start_test_fn(struct aws_allocator
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
-    test_fixture.secure_tunnel_connected_succesfully = false;
 
     /* Create and send a v2 stream start message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
@@ -1626,7 +1641,8 @@ static int s_secure_tunneling_v3_to_v1_stream_start_test_fn(struct aws_allocator
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
 
-    s_wait_for_connected_successfully(&test_fixture);
+    test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
+    s_wait_for_connected_successfully_n_times(&test_fixture);
 
     /* Check that the established stream is cleared */
     elem = NULL;
@@ -1658,7 +1674,6 @@ static int s_secure_tunneling_v1_stream_start_v3_message_reset_test_fn(struct aw
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
-    test_fixture.secure_tunnel_connected_succesfully = false;
 
     /* Create and send a stream start message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
@@ -1684,7 +1699,8 @@ static int s_secure_tunneling_v1_stream_start_v3_message_reset_test_fn(struct aw
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &data_message_view);
 
-    s_wait_for_connected_successfully(&test_fixture);
+    test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
+    s_wait_for_connected_successfully_n_times(&test_fixture);
 
     /* Check that the established stream is cleared */
     ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&secure_tunnel->config->connection_ids), 0);
@@ -1712,7 +1728,6 @@ static int s_secure_tunneling_v2_stream_start_connection_start_reset_test_fn(
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
-    test_fixture.secure_tunnel_connected_succesfully = false;
 
     /* Create and send a stream start message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
@@ -1741,7 +1756,8 @@ static int s_secure_tunneling_v2_stream_start_connection_start_reset_test_fn(
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &connection_start_message_view);
 
-    s_wait_for_connected_successfully(&test_fixture);
+    test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
+    s_wait_for_connected_successfully_n_times(&test_fixture);
 
     /* Check that the established stream is cleared */
     elem = NULL;
@@ -1821,7 +1837,6 @@ static int s_secure_tunneling_close_stream_on_connection_reset_test_fn(struct aw
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
-    test_fixture.secure_tunnel_connected_succesfully = false;
 
     /* Create and send a v3 stream start message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
@@ -1892,7 +1907,6 @@ static int s_secure_tunneling_existing_connection_start_send_reset_test_fn(struc
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
-    test_fixture.secure_tunnel_connected_succesfully = false;
 
     /* Create and send a v3 stream start message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
@@ -1920,8 +1934,6 @@ static int s_secure_tunneling_existing_connection_start_send_reset_test_fn(struc
     s_wait_for_bad_connection_started(&test_fixture);
 
     s_wait_for_connection_reset_message_sent(&test_fixture);
-
-    // aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
 
     /* check that stream with connection id has been closed properly */
     struct aws_hash_element *elem = NULL;
