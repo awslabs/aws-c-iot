@@ -26,6 +26,7 @@ add_net_test_case(secure_tunneling_store_service_ids_test)
 add_net_test_case(secure_tunneling_receive_stream_start_test)
 add_net_test_case(secure_tunneling_rejected_service_id_stream_start_test)
 add_net_test_case(secure_tunneling_close_stream_on_stream_reset_test)
+<<<<<<< HEAD
 add_net_test_case(secure_tunneling_ignore_stream_reset_for_inactive_stream_test)
 add_net_test_case(secure_tunneling_session_reset_test)
 add_net_test_case(secure_tunneling_serializer_data_message_test)
@@ -43,6 +44,10 @@ add_net_test_case(secure_tunneling_v2_stream_start_connection_start_reset_test)
 add_net_test_case(secure_tunneling_ignore_outbound_inactive_connection_id_message_sending_test)
 add_net_test_case(secure_tunneling_close_stream_on_connection_reset_test)
 add_net_test_case(secure_tunneling_existing_connection_start_send_reset_test)
+=======
+add_net_test_case(secure_tunneling_session_reset_test)
+add_net_test_case(secure_tunneling_serializer_data_message_test)
+>>>>>>> main
 
 generate_test_driver(${PROJECT_NAME}-tests)
 
