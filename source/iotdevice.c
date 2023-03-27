@@ -85,6 +85,9 @@ static struct aws_error_info s_errors[] = {
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP,
         "Secure Tunnel connection interrupted by user request."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH,
+        "Secure Tunnel connection interrupted due to a protocol version missmatch."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_TERMINATED,
         "Secure Tunnel terminated by user request."),
         AWS_DEFINE_ERROR_INFO_IOTDEVICE(

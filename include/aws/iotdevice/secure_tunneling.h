@@ -67,7 +67,7 @@ enum aws_secure_tunnel_message_type {
 
     /**
      * ConnectionReset messages convey that the connection has ended, either in error, or closed intentionally for the
-     * tunnel peer.
+     * tunnel peer. These should not be manually sent from either Destination or Source clients.
      */
     AWS_SECURE_TUNNEL_MT_CONNECTION_RESET = 7
 };
@@ -114,30 +114,63 @@ struct aws_secure_tunnel_connection_view {
  */
 typedef void(
     aws_secure_tunnel_message_received_fn)(const struct aws_secure_tunnel_message_view *message, void *user_data);
+/**
+ * Signature of callback to invoke on fully established connection to Secure Tunnel Service
+ */
 typedef void(aws_secure_tunneling_on_connection_complete_fn)(
     const struct aws_secure_tunnel_connection_view *connection_view,
     int error_code,
     void *user_data);
+/**
+ * Signature of callback to invoke on shutdown of connection to Secure Tunnel Service
+ */
 typedef void(aws_secure_tunneling_on_connection_shutdown_fn)(int error_code, void *user_data);
-typedef void(aws_secure_tunneling_on_send_data_complete_fn)(int error_code, void *user_data);
+/**
+ * Signature of callback to invoke on completion of an outbound message
+ */
+typedef void(aws_secure_tunneling_on_send_message_complete_fn(
+    enum aws_secure_tunnel_message_type type,
+    int error_code,
+    void *user_data));
+/**
+ * Signature of callback to invoke on the start of a stream
+ */
 typedef void(aws_secure_tunneling_on_stream_start_fn)(
     const struct aws_secure_tunnel_message_view *message,
     int error_code,
     void *user_data);
+/**
+ * Signature of callback to invoke on a stream being reset
+ */
 typedef void(aws_secure_tunneling_on_stream_reset_fn)(
     const struct aws_secure_tunnel_message_view *message,
     int error_code,
     void *user_data);
+/**
+ * Signature of callback to invoke on start of a connection id stream
+ */
 typedef void(aws_secure_tunneling_on_connection_start_fn)(
     const struct aws_secure_tunnel_message_view *message,
     int error_code,
     void *user_data);
+/**
+ * Signature of callback to invoke on a connection id stream being reset
+ */
 typedef void(aws_secure_tunneling_on_connection_reset_fn)(
     const struct aws_secure_tunnel_message_view *message,
     int error_code,
     void *user_data);
+/**
+ * Signature of callback to invoke on session reset recieved from the Secure Tunnel Service
+ */
 typedef void(aws_secure_tunneling_on_session_reset_fn)(void *user_data);
+/**
+ * Signature of callback to invoke on Secure Tunnel reaching a STOPPED state
+ */
 typedef void(aws_secure_tunneling_on_stopped_fn)(void *user_data);
+/**
+ * Signature of callback to invoke on termination completion of the Native Secure Tunnel Client
+ */
 typedef void(aws_secure_tunneling_on_termination_complete_fn)(void *user_data);
 
 /**
@@ -187,7 +220,7 @@ struct aws_secure_tunnel_options {
 
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
-    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
+    aws_secure_tunneling_on_send_message_complete_fn *on_send_message_complete;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
     aws_secure_tunneling_on_connection_start_fn *on_connection_start;
@@ -200,19 +233,6 @@ struct aws_secure_tunnel_options {
      */
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
     void *secure_tunnel_on_termination_user_data;
-};
-
-/**
- * Signature of callback to invoke when secure tunnel enters a fully disconnected state
- */
-typedef void(aws_secure_tunnel_disconnect_completion_fn)(int error_code, void *complete_ctx);
-
-/**
- * Public completion callback options for the DISCONNECT operation
- */
-struct aws_secure_tunnel_disconnect_completion_options {
-    aws_secure_tunnel_disconnect_completion_fn *completion_callback;
-    void *completion_user_data;
 };
 
 AWS_EXTERN_C_BEGIN
@@ -293,10 +313,18 @@ int aws_secure_tunnel_connection_start(
     const struct aws_secure_tunnel_message_view *message_options);
 
 //***********************************************************************************************************************
-/* THIS API SHOULD NOT BE USED BY THE CUSTOMER AND SHOULD BE DEPRECATED */
+/* THIS API SHOULD NOT BE USED BY THE CUSTOMER AND IS DEPRECATED */
 //***********************************************************************************************************************
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_reset(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options);
+
+//***********************************************************************************************************************
+/* THIS API SHOULD NOT BE USED BY THE CUSTOMER AND IS FOR TESTING PURPOSES ONLY */
+//***********************************************************************************************************************
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_connection_reset(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 

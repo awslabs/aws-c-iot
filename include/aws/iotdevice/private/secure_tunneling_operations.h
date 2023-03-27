@@ -41,19 +41,6 @@ struct aws_connection_id_element {
     uint32_t connection_id;
 };
 
-struct aws_secure_tunnel_message_storage {
-    struct aws_allocator *allocator;
-    struct aws_secure_tunnel_message_view storage_view;
-
-    bool ignorable;
-    int32_t stream_id;
-    uint32_t connection_id;
-    struct aws_byte_cursor service_id;
-    struct aws_byte_cursor payload;
-
-    struct aws_byte_buf storage;
-};
-
 /* Basic vtable for all secure tunnel operations.  Implementations are per-message type */
 struct aws_secure_tunnel_operation_vtable {
     void (*aws_secure_tunnel_operation_completion_fn)(
@@ -66,8 +53,13 @@ struct aws_secure_tunnel_operation_vtable {
         struct aws_secure_tunnel_operation *operation,
         struct aws_secure_tunnel *secure_tunnel);
 
-    /* Set the stream id of outgoing st_msg to +1 of the currently set stream id */
+    /* Set the stream id of outgoing STREAM START message to +1 of the currently set stream id */
     int (*aws_secure_tunnel_operation_set_next_stream_id_fn)(
+        struct aws_secure_tunnel_operation *operation,
+        struct aws_secure_tunnel *secure_tunnel);
+
+    /* Set the connection id of outbound CONNECTION START as active for the Source device */
+    int (*aws_secure_tunnel_operation_set_connection_start_id)(
         struct aws_secure_tunnel_operation *operation,
         struct aws_secure_tunnel *secure_tunnel);
 };
@@ -205,6 +197,9 @@ struct aws_service_id_element *aws_service_id_element_new(
     struct aws_allocator *allocator,
     const struct aws_byte_cursor *service_id,
     int32_t stream_id);
+
+AWS_IOTDEVICE_API
+void aws_destroy_connection_id(void *data);
 
 AWS_IOTDEVICE_API
 struct aws_connection_id_element *aws_connection_id_element_new(
