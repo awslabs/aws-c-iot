@@ -103,6 +103,7 @@ struct aws_secure_tunnel_mock_test_fixture {
     struct aws_mutex lock;
     struct aws_condition_variable signal;
     bool listener_destroyed;
+    bool secure_tunnel_connected;
     bool secure_tunnel_terminated;
     bool secure_tunnel_connected_succesfully;
     bool secure_tunnel_connection_shutdown;
@@ -143,8 +144,9 @@ static void s_on_test_secure_tunnel_connection_complete(
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = user_data;
 
     aws_mutex_lock(&test_fixture->lock);
-    if (error_code == 0) {
+    if (error_code == 0 && test_fixture->secure_tunnel_connected == false) {
         test_fixture->secure_tunnel_connected_succesfully = true;
+        test_fixture->secure_tunnel_connected = true;
         test_fixture->secure_tunnel_connected_succesfully_count++;
     } else {
         test_fixture->secure_tunnel_connection_failed = true;
@@ -159,6 +161,7 @@ static void s_on_test_secure_tunnel_connection_shutdown(int error_code, void *us
 
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_connection_shutdown = true;
+    test_fixture->secure_tunnel_connected = false;
     aws_mutex_unlock(&test_fixture->lock);
     aws_condition_variable_notify_all(&test_fixture->signal);
 }
@@ -523,7 +526,7 @@ int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_conne
     return AWS_OP_SUCCESS;
 }
 
-void aws_secure_tunnel_test__on_message_received(
+void aws_secure_tunnel_test_on_message_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
     (void)message_view;
@@ -553,7 +556,7 @@ int aws_websocket_send_frame_mock_fn(
 
     struct data_tunnel_pair *pair = options->user_data;
     aws_secure_tunnel_deserialize_message_from_cursor(
-        test_fixture->secure_tunnel, &pair->cur, &aws_secure_tunnel_test__on_message_received);
+        test_fixture->secure_tunnel, &pair->cur, &aws_secure_tunnel_test_on_message_received);
 
     options->on_complete(websocket, AWS_OP_SUCCESS, options->user_data);
 
@@ -1579,10 +1582,12 @@ static int s_secure_tunneling_v2_to_v1_stream_start_test_fn(struct aws_allocator
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
 
+    /* Client should disconnect, reconnect, and start a stream */
+
     test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
     s_wait_for_connected_successfully_n_times(&test_fixture);
 
-    /* Check that the established stream is cleared */
+    /* Check that the established stream on previous service id is cleared */
     elem = NULL;
     aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
     service_id_elem = elem->value;
@@ -1640,6 +1645,8 @@ static int s_secure_tunneling_v3_to_v1_stream_start_test_fn(struct aws_allocator
         .stream_id = 2,
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
+
+    /* Client should disconnect, clear previous V3 connection and stream, reconnect, and start a V1 stream */
 
     test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
     s_wait_for_connected_successfully_n_times(&test_fixture);
@@ -1699,6 +1706,8 @@ static int s_secure_tunneling_v1_stream_start_v3_message_reset_test_fn(struct aw
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &data_message_view);
 
+    /* Client should disconnect and clear the V1 stream */
+
     test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
     s_wait_for_connected_successfully_n_times(&test_fixture);
 
@@ -1755,6 +1764,8 @@ static int s_secure_tunneling_v2_stream_start_connection_start_reset_test_fn(
         .connection_id = 3,
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &connection_start_message_view);
+
+    /* Client should disconnect and reconnect with no active streams on receiving a wrong version connection start */
 
     test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
     s_wait_for_connected_successfully_n_times(&test_fixture);
