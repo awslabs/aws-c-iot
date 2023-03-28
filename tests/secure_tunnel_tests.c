@@ -1747,7 +1747,8 @@ static int s_secure_tunneling_v2_stream_start_connection_start_reset_test_fn(
     s_wait_for_connection_shutdown(&test_fixture);
     s_wait_for_connected_successfully(&test_fixture);
 
-    s_wait_for_stream_started(&test_fixture);
+    /* pause to process a new connection */
+    aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
 
     /* Check that the established stream is cleared */
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 0));
