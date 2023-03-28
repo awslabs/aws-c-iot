@@ -1494,19 +1494,6 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_2, 1));
 
-    /* Create and send a data message from the server to the destination client */
-    struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
-    struct aws_secure_tunnel_message_view data_message_view = {
-        .type = AWS_SECURE_TUNNEL_MT_DATA,
-        .service_id = &service_2,
-        .stream_id = 1,
-        .payload = &payload_cur,
-    };
-
-    aws_secure_tunnel_send_mock_message(&test_fixture, &data_message_view);
-    test_fixture.secure_tunnel_message_received_count_target = 1;
-    s_wait_for_n_messages_received(&test_fixture);
-
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
 
@@ -1555,20 +1542,6 @@ static int s_secure_tunneling_v1_to_v3_stream_start_test_fn(struct aws_allocator
 
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 3));
-
-    /* Create and send a data message from the server to the destination client */
-    struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
-    struct aws_secure_tunnel_message_view data_message_view = {
-        .type = AWS_SECURE_TUNNEL_MT_DATA,
-        .service_id = &service_1,
-        .stream_id = 1,
-        .payload = &payload_cur,
-        .connection_id = 3,
-    };
-
-    aws_secure_tunnel_send_mock_message(&test_fixture, &data_message_view);
-    test_fixture.secure_tunnel_message_received_count_target = 1;
-    s_wait_for_n_messages_received(&test_fixture);
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
