@@ -1491,6 +1491,9 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
     s_wait_for_connection_shutdown(&test_fixture);
     s_wait_for_connected_successfully(&test_fixture);
 
+    /* Check that the established stream is cleared */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 0));
+
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_2, 1));
 
@@ -1539,6 +1542,9 @@ static int s_secure_tunneling_v1_to_v3_stream_start_test_fn(struct aws_allocator
 
     s_wait_for_connection_shutdown(&test_fixture);
     s_wait_for_connected_successfully(&test_fixture);
+
+    /* Check that the established stream is cleared */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 0));
 
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 3));
