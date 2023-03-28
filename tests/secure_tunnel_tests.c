@@ -590,6 +590,11 @@ void aws_secure_tunnel_test_on_message_received(
 int aws_websocket_send_frame_mock_fn(
     struct aws_websocket *websocket,
     const struct aws_websocket_send_frame_options *options) {
+
+    if (options->opcode == AWS_WEBSOCKET_OPCODE_PING) {
+        return AWS_OP_SUCCESS;
+    }
+
     void *pointer = websocket;
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = pointer;
 
