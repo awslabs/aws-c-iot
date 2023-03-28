@@ -542,17 +542,19 @@ static void s_aws_secure_tunnel_on_stream_start_received(
         return;
     }
 
+    uint32_t connection_id = message_view->connection_id;
+
     /*
      * An absent connection ID will result in connection id being set to 1. The connection is considered a V1
      * connection at this point and the future existance of an unexpected connection ID will result in a full reset
      * of the client as mixed protocol versions is not supported.
      */
     if (message_view->connection_id == 0) {
-        message_view->connection_id = 1;
+        connection_id = 1;
     }
 
-    int result = s_aws_secure_tunnel_set_stream(
-        secure_tunnel, message_view->service_id, message_view->stream_id, message_view->connection_id);
+    int result =
+        s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, message_view->stream_id, connection_id);
 
     if (secure_tunnel->config->on_stream_start) {
         secure_tunnel->config->on_stream_start(message_view, result, secure_tunnel->config->user_data);
