@@ -1467,7 +1467,7 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
     s_wait_for_connected_successfully(&test_fixture);
 
     /* Create and send a stream start message from the server to the destination client */
-    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_byte_cursor service_2 = aws_byte_cursor_from_string(s_service_id_2);
     struct aws_secure_tunnel_message_view stream_start_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
         .stream_id = 1,
@@ -1480,7 +1480,7 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
 
     struct aws_secure_tunnel_message_view stream_start_message_view_2 = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
-        .service_id = &service_1,
+        .service_id = &service_2,
         .stream_id = 1,
     };
 
@@ -1489,15 +1489,16 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
     /* Client should disconnect, clear previous V1 connection and stream, reconnect, and start a V2 stream */
 
     s_wait_for_connection_shutdown(&test_fixture);
+    s_wait_for_connected_successfully(&test_fixture);
 
     s_wait_for_stream_started(&test_fixture);
-    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_2, 1));
 
     /* Create and send a data message from the server to the destination client */
     struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
-        .service_id = &service_1,
+        .service_id = &service_2,
         .stream_id = 1,
         .payload = &payload_cur,
     };
