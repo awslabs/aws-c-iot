@@ -212,6 +212,7 @@ static void s_on_test_secure_tunnel_connection_shutdown(int error_code, void *us
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_connection_shutdown = true;
     test_fixture->secure_tunnel_connected = false;
+    test_fixture->secure_tunnel_connected_succesfully = false;
     test_fixture->secure_tunnel_stream_started = false;
     aws_condition_variable_notify_all(&test_fixture->signal);
     aws_mutex_unlock(&test_fixture->lock);
