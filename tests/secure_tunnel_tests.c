@@ -128,9 +128,59 @@ struct aws_secure_tunnel_mock_test_fixture {
     int secure_tunnel_message_sent_count_target;
     int secure_tunnel_message_sent_connection_reset_count;
     int secure_tunnel_message_sent_data_count;
-    int secure_tunnel_connected_succesfully_count;
-    int secure_tunnel_connected_succesfully_count_target;
 };
+
+static bool s_secure_tunnel_check_active_stream_id(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_byte_cursor *service_id,
+    int32_t stream_id) {
+    if (service_id == NULL) {
+        return secure_tunnel->config->stream_id == stream_id;
+    }
+
+    struct aws_hash_element *elem = NULL;
+    aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+    if (elem == NULL) {
+        return false;
+    }
+
+    struct aws_service_id_element *service_id_elem = elem->value;
+    if (service_id_elem->stream_id != stream_id) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool s_secure_tunnel_check_active_connection_id(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_byte_cursor *service_id,
+    int32_t stream_id,
+    uint32_t connection_id) {
+    struct aws_hash_table *table_to_check = NULL;
+    if (service_id) {
+        struct aws_hash_element *elem = NULL;
+        aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+        if (elem == NULL) {
+            return false;
+        }
+        struct aws_service_id_element *service_id_elem = elem->value;
+        table_to_check = &service_id_elem->connection_ids;
+    } else {
+        if (secure_tunnel->config->stream_id != stream_id) {
+            return false;
+        }
+        table_to_check = &secure_tunnel->config->connection_ids;
+    }
+
+    struct aws_hash_element *connection_elem = NULL;
+    aws_hash_table_find(table_to_check, &connection_id, &connection_elem);
+    if (connection_elem == NULL) {
+        return false;
+    }
+
+    return true;
+}
 
 /*****************************************************************************************************************
  *                                    SECURE TUNNEL CALLBACKS
@@ -148,7 +198,6 @@ static void s_on_test_secure_tunnel_connection_complete(
         test_fixture->secure_tunnel_connection_shutdown = false;
         test_fixture->secure_tunnel_connected_succesfully = true;
         test_fixture->secure_tunnel_connected = true;
-        test_fixture->secure_tunnel_connected_succesfully_count++;
     } else {
         test_fixture->secure_tunnel_connection_failed = true;
     }
@@ -309,19 +358,6 @@ static void s_wait_for_connected_successfully(struct aws_secure_tunnel_mock_test
     aws_mutex_lock(&test_fixture->lock);
     aws_condition_variable_wait_pred(
         &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_connected_succesfully, test_fixture);
-    aws_mutex_unlock(&test_fixture->lock);
-}
-
-static bool s_has_secure_tunnel_connected_succesfully_n_times(void *arg) {
-    struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
-    return test_fixture->secure_tunnel_connected_succesfully_count ==
-           test_fixture->secure_tunnel_connected_succesfully_count_target;
-}
-
-static void s_wait_for_connected_successfully_n_times(struct aws_secure_tunnel_mock_test_fixture *test_fixture) {
-    aws_mutex_lock(&test_fixture->lock);
-    aws_condition_variable_wait_pred(
-        &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_connected_succesfully_n_times, test_fixture);
     aws_mutex_unlock(&test_fixture->lock);
 }
 
@@ -915,11 +951,8 @@ static int s_secure_tunneling_receive_stream_start_test_fn(struct aws_allocator 
     s_wait_for_stream_started(&test_fixture);
 
     /* check that service id stream has been set properly */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(
+        secure_tunnel, stream_start_message_view.service_id, stream_start_message_view.stream_id));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -987,6 +1020,9 @@ static int s_secure_tunneling_close_stream_on_stream_reset_test_fn(struct aws_al
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
 
+    /* Check that stream is active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
     /* Send a stream reset message from the server to the destination client */
     stream_start_message_view.type = AWS_SECURE_TUNNEL_MT_STREAM_RESET;
 
@@ -995,12 +1031,8 @@ static int s_secure_tunneling_close_stream_on_stream_reset_test_fn(struct aws_al
     /* Wait for a stream reset to have been received */
     s_wait_for_stream_reset_received(&test_fixture);
 
-    /* check that service id stream has been reset */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == 0);
+    /* Check that stream id has been reset */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 0));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -1038,19 +1070,24 @@ static int s_secure_tunneling_ignore_stream_reset_for_inactive_stream_test_fn(
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
 
-    /* Send a stream reset message for a different stream id from the server to the destination client */
-    stream_start_message_view.type = AWS_SECURE_TUNNEL_MT_STREAM_RESET;
-    stream_start_message_view.stream_id = 2;
+    /* Check that stream is active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
-    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+    /* Send a stream reset message for a different stream id from the server to the destination client */
+    struct aws_secure_tunnel_message_view stream_reset_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_RESET,
+        .service_id = &service_1,
+        .stream_id = 2,
+    };
+
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_reset_message_view);
+
+    /* Stream reset is ignored by client on an inactive stream id. Wait for client to process the message that should be
+     * ignored. */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
 
-    /* check that service id stream has been reset */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == 1);
+    /* Check that stream is still active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -1083,6 +1120,7 @@ static int s_secure_tunneling_session_reset_test_fn(struct aws_allocator *alloca
         .service_id = &service_1,
         .stream_id = 1,
     };
+
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
     stream_start_message_view.service_id = &service_2;
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
@@ -1093,24 +1131,9 @@ static int s_secure_tunneling_session_reset_test_fn(struct aws_allocator *alloca
     s_wait_for_n_stream_started(&test_fixture);
 
     /* check that stream ids have been set */
-    struct aws_hash_element *elem = NULL;
-    struct aws_byte_cursor service_id_1_cur = aws_byte_cursor_from_string(s_service_id_1);
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_1_cur, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
-    elem = NULL;
-    struct aws_byte_cursor service_id_2_cur = aws_byte_cursor_from_string(s_service_id_2);
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_2_cur, &elem);
-    ASSERT_NOT_NULL(elem);
-    service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
-    elem = NULL;
-    struct aws_byte_cursor service_id_3_cur = aws_byte_cursor_from_string(s_service_id_3);
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_3_cur, &elem);
-    ASSERT_NOT_NULL(elem);
-    service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_2, 1));
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_3, 1));
 
     /* Create and send a session reset message from the server to the destination client */
     struct aws_secure_tunnel_message_view reset_message_view = {
@@ -1121,21 +1144,9 @@ static int s_secure_tunneling_session_reset_test_fn(struct aws_allocator *alloca
     s_wait_for_session_reset_received(&test_fixture);
 
     /* Check that stream ids have been reset */
-    elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_1_cur, &elem);
-    ASSERT_NOT_NULL(elem);
-    service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == 0);
-    elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_2_cur, &elem);
-    ASSERT_NOT_NULL(elem);
-    service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == 0);
-    elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_3_cur, &elem);
-    ASSERT_NOT_NULL(elem);
-    service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == 0);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 0));
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_2, 0));
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_3, 0));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -1168,6 +1179,7 @@ static int s_secure_tunneling_serializer_data_message_test_fn(struct aws_allocat
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
     /* Create and send a data message from the server to the destination client */
     struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
@@ -1219,6 +1231,7 @@ static int s_secure_tunneling_max_payload_test_fn(struct aws_allocator *allocato
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
@@ -1261,6 +1274,7 @@ static int s_secure_tunneling_max_payload_exceed_test_fn(struct aws_allocator *a
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
@@ -1306,13 +1320,7 @@ static int s_secure_tunneling_receive_connection_start_test_fn(struct aws_alloca
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-
-    /* check that service id stream has been set properly */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 1));
 
     struct aws_secure_tunnel_message_view connection_start_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_CONNECTION_START,
@@ -1324,6 +1332,7 @@ static int s_secure_tunneling_receive_connection_start_test_fn(struct aws_alloca
 
     /* Wait and confirm that a connection has been started */
     s_wait_for_connection_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -1356,6 +1365,7 @@ static int s_secure_tunneling_ignore_inactive_stream_message_test_fn(struct aws_
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
+    s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1);
 
     /* Create and send a data message on a different stream id from the server to the destination client */
     struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
@@ -1368,6 +1378,8 @@ static int s_secure_tunneling_ignore_inactive_stream_message_test_fn(struct aws_
 
     aws_secure_tunnel_send_mock_message(&test_fixture, &data_message_view);
 
+    /* Messages on inactive streams are ignored and no callback is emitted. Wait for client to process and ignore
+     * message */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_received_count, 0);
 
@@ -1407,6 +1419,7 @@ static int s_secure_tunneling_ignore_inactive_connection_id_message_test_fn(
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
 
     /* Create and send a data message on a different stream id from the server to the destination client */
     struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
@@ -1420,6 +1433,8 @@ static int s_secure_tunneling_ignore_inactive_connection_id_message_test_fn(
 
     aws_secure_tunnel_send_mock_message(&test_fixture, &data_message_view);
 
+    /* Messages on inactive streams are ignored and no callback is emitted. Wait for client to process and ignore
+     * message */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_received_count, 0);
 
@@ -1455,6 +1470,7 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
 
     struct aws_secure_tunnel_message_view stream_start_message_view_2 = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
@@ -1464,9 +1480,12 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
 
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
 
+    /* Client should disconnect, clear previous V1 connection and stream, reconnect, and start a V2 stream */
+
     s_wait_for_connection_shutdown(&test_fixture);
 
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
     /* Create and send a data message from the server to the destination client */
     struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
@@ -1511,6 +1530,7 @@ static int s_secure_tunneling_v1_to_v3_stream_start_test_fn(struct aws_allocator
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
 
     struct aws_secure_tunnel_message_view stream_start_message_view_2 = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
@@ -1521,9 +1541,13 @@ static int s_secure_tunneling_v1_to_v3_stream_start_test_fn(struct aws_allocator
 
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
 
+    /* Client should disconnect, clear previous V1 connection and stream, reconnect, and start a V3 stream */
+
     s_wait_for_connection_shutdown(&test_fixture);
+    s_wait_for_connected_successfully(&test_fixture);
 
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 3));
 
     /* Create and send a data message from the server to the destination client */
     struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
@@ -1570,13 +1594,7 @@ static int s_secure_tunneling_v2_to_v1_stream_start_test_fn(struct aws_allocator
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-
-    /* check that service id stream has been set properly */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
     struct aws_secure_tunnel_message_view stream_start_message_view_2 = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
@@ -1584,21 +1602,17 @@ static int s_secure_tunneling_v2_to_v1_stream_start_test_fn(struct aws_allocator
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view_2);
 
-    /* Client should disconnect, reconnect, and start a stream */
+    /* Client should disconnect, clear previous V2 connection and stream, reconnect, and start a V1 stream */
 
-    test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
-    s_wait_for_connected_successfully_n_times(&test_fixture);
+    s_wait_for_connection_shutdown(&test_fixture);
+    s_wait_for_connected_successfully(&test_fixture);
 
-    /* Check that the established stream on previous service id is cleared */
-    elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    service_id_elem = elem->value;
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&service_id_elem->connection_ids), 0);
+    /* Confirm that previous stream has been closed */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 0));
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-    /* Check that V1 Stream is established */
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&secure_tunnel->config->connection_ids), 1);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 2));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -1632,14 +1646,7 @@ static int s_secure_tunneling_v3_to_v1_stream_start_test_fn(struct aws_allocator
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-
-    /* check that service id stream has been set properly */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&service_id_elem->connection_ids), 1);
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
 
     struct aws_secure_tunnel_message_view stream_start_message_view_2 = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
@@ -1649,19 +1656,16 @@ static int s_secure_tunneling_v3_to_v1_stream_start_test_fn(struct aws_allocator
 
     /* Client should disconnect, clear previous V3 connection and stream, reconnect, and start a V1 stream */
 
-    test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
-    s_wait_for_connected_successfully_n_times(&test_fixture);
+    s_wait_for_connection_shutdown(&test_fixture);
+    s_wait_for_connected_successfully(&test_fixture);
 
     /* Check that the established stream is cleared */
-    elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    service_id_elem = elem->value;
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&service_id_elem->connection_ids), 0);
+    ASSERT_FALSE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
     /* Check that V1 Stream is established */
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&secure_tunnel->config->connection_ids), 1);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 2));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -1693,9 +1697,7 @@ static int s_secure_tunneling_v1_stream_start_v3_message_reset_test_fn(struct aw
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-
-    /* Check that a stream has been established */
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&secure_tunnel->config->connection_ids), 1);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
 
     struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
     struct aws_secure_tunnel_message_view data_message_view = {
@@ -1707,13 +1709,13 @@ static int s_secure_tunneling_v1_stream_start_v3_message_reset_test_fn(struct aw
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &data_message_view);
 
-    /* Client should disconnect and clear the V1 stream */
+    /* On receipt of an unexpected protocol version message, Client should disconnect/reconnect and clear all streams */
 
-    test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
-    s_wait_for_connected_successfully_n_times(&test_fixture);
+    s_wait_for_connection_shutdown(&test_fixture);
+    s_wait_for_connected_successfully(&test_fixture);
 
     /* Check that the established stream is cleared */
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&secure_tunnel->config->connection_ids), 0);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 0));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -1750,13 +1752,7 @@ static int s_secure_tunneling_v2_stream_start_connection_start_reset_test_fn(
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-
-    /* check that service id stream has been set properly */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
     struct aws_secure_tunnel_message_view connection_start_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_CONNECTION_START,
@@ -1768,14 +1764,11 @@ static int s_secure_tunneling_v2_stream_start_connection_start_reset_test_fn(
 
     /* Client should disconnect and reconnect with no active streams on receiving a wrong version connection start */
 
-    test_fixture.secure_tunnel_connected_succesfully_count_target = 2;
-    s_wait_for_connected_successfully_n_times(&test_fixture);
+    s_wait_for_connection_shutdown(&test_fixture);
+    s_wait_for_connected_successfully(&test_fixture);
 
     /* Check that the established stream is cleared */
-    elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    service_id_elem = elem->value;
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&service_id_elem->connection_ids), 0);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 0));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
@@ -1813,6 +1806,7 @@ static int s_secure_tunneling_ignore_outbound_inactive_connection_id_message_sen
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
 
     /* Create and send a data message from the server to the destination client to an inactive connection id */
     struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
@@ -1862,14 +1856,7 @@ static int s_secure_tunneling_close_stream_on_connection_reset_test_fn(struct aw
 
     /* Wait and confirm that a stream has been started */
     s_wait_for_stream_started(&test_fixture);
-
-    /* check that stream with connection id has been set properly */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
-    ASSERT_NOT_NULL(elem);
-    struct aws_service_id_element *service_id_elem = elem->value;
-    ASSERT_TRUE(service_id_elem->stream_id == stream_start_message_view.stream_id);
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&service_id_elem->connection_ids), 1);
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
 
     /* Send a connection start */
     struct aws_secure_tunnel_message_view connection_start_message_view = {
@@ -1881,8 +1868,8 @@ static int s_secure_tunneling_close_stream_on_connection_reset_test_fn(struct aw
     aws_secure_tunnel_send_mock_message(&test_fixture, &connection_start_message_view);
 
     s_wait_for_connection_started(&test_fixture);
-    /* Check that two connections are active on the service id */
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&service_id_elem->connection_ids), 2);
+    /* Check that connections has been started */
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 3));
 
     /* Send a connection reset */
     struct aws_secure_tunnel_message_view connection_reset_message_view = {
@@ -1895,8 +1882,8 @@ static int s_secure_tunneling_close_stream_on_connection_reset_test_fn(struct aw
 
     s_wait_for_connection_reset_received(&test_fixture);
 
-    /* Check that only one connections is active on the service id */
-    ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&service_id_elem->connection_ids), 1);
+    /* Check that connection has been closed */
+    ASSERT_FALSE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 3));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
