@@ -608,6 +608,14 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
 
+    if (secure_tunnel->config->protocol_version != 0) {
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Secure Tunnel will ignore a second SERVICE IDS message.",
+            (void *)secure_tunnel);
+        return;
+    }
+
     aws_hash_table_clear(&secure_tunnel->config->service_ids);
 
     if (message_view->service_id != NULL) {
