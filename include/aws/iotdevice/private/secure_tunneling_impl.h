@@ -263,6 +263,7 @@ struct aws_secure_tunnel {
      * send additional ones/
      */
     bool pending_write_completion;
+    bool pending_read_completion;
 
     /*
      * When should the next PINGREQ be sent?

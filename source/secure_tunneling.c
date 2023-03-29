@@ -610,14 +610,6 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
 
-    if (secure_tunnel->config->protocol_version != 0) {
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will ignore a second SERVICE IDS message.",
-            (void *)secure_tunnel);
-        return;
-    }
-
     aws_hash_table_clear(&secure_tunnel->config->service_ids);
 
     if (message_view->service_id != NULL) {
@@ -807,30 +799,34 @@ static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
      * we don't want to move `cursor`.
      */
     struct aws_byte_cursor tmp_cursor = cursor;
-    while (aws_byte_cursor_read_be16(&tmp_cursor, &data_length) && tmp_cursor.len >= data_length) {
-        cursor = tmp_cursor;
+    if (!secure_tunnel->pending_read_completion) {
+        secure_tunnel->pending_read_completion = true;
+        while (aws_byte_cursor_read_be16(&tmp_cursor, &data_length) && tmp_cursor.len >= data_length) {
+            cursor = tmp_cursor;
 
-        struct aws_byte_cursor st_frame = {.len = data_length, .ptr = cursor.ptr};
-        aws_byte_cursor_advance(&cursor, data_length);
-        tmp_cursor = cursor;
+            struct aws_byte_cursor st_frame = {.len = data_length, .ptr = cursor.ptr};
+            aws_byte_cursor_advance(&cursor, data_length);
+            tmp_cursor = cursor;
 
-        if (aws_secure_tunnel_deserialize_message_from_cursor(
-                secure_tunnel, &st_frame, &s_aws_secure_tunnel_connected_on_message_received)) {
-            int error_code = aws_last_error();
-            AWS_LOGF_ERROR(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: failed to deserialize message with error %d(%s)",
-                (void *)secure_tunnel,
-                error_code,
-                aws_error_debug_str(error_code));
-            return error_code;
+            if (aws_secure_tunnel_deserialize_message_from_cursor(
+                    secure_tunnel, &st_frame, &s_aws_secure_tunnel_connected_on_message_received)) {
+                int error_code = aws_last_error();
+                AWS_LOGF_ERROR(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: failed to deserialize message with error %d(%s)",
+                    (void *)secure_tunnel,
+                    error_code,
+                    aws_error_debug_str(error_code));
+                return error_code;
+            }
         }
-    }
 
-    if (cursor.ptr != received_data->buffer) {
-        /* Move unprocessed data to the beginning */
-        received_data->len = 0;
-        aws_byte_buf_append(received_data, &cursor);
+        if (cursor.ptr != received_data->buffer) {
+            /* Move unprocessed data to the beginning */
+            received_data->len = 0;
+            aws_byte_buf_append(received_data, &cursor);
+        }
+        secure_tunnel->pending_read_completion = false;
     }
 
     return AWS_OP_SUCCESS;
