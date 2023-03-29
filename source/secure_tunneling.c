@@ -112,6 +112,7 @@ static void s_secure_tunnel_final_destroy(struct aws_secure_tunnel *secure_tunne
     aws_secure_tunnel_options_storage_destroy(secure_tunnel->config);
     aws_http_message_release(secure_tunnel->handshake_request);
     aws_byte_buf_clean_up(&secure_tunnel->received_data);
+    aws_mutex_clean_up(&secure_tunnel->received_data_lock);
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
     aws_mem_release(secure_tunnel->allocator, secure_tunnel);
@@ -791,6 +792,8 @@ static void s_aws_secure_tunnel_connected_on_message_received(
 }
 
 static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
+
+    aws_mutex_lock(&secure_tunnel->received_data_lock);
     struct aws_byte_buf *received_data = &secure_tunnel->received_data;
     struct aws_byte_cursor cursor = aws_byte_cursor_from_buf(received_data);
     uint16_t data_length = 0;
@@ -799,36 +802,33 @@ static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
      * we don't want to move `cursor`.
      */
     struct aws_byte_cursor tmp_cursor = cursor;
-    if (!secure_tunnel->pending_read_completion) {
-        secure_tunnel->pending_read_completion = true;
-        while (aws_byte_cursor_read_be16(&tmp_cursor, &data_length) && tmp_cursor.len >= data_length) {
-            cursor = tmp_cursor;
+    while (aws_byte_cursor_read_be16(&tmp_cursor, &data_length) && tmp_cursor.len >= data_length) {
+        cursor = tmp_cursor;
 
-            struct aws_byte_cursor st_frame = {.len = data_length, .ptr = cursor.ptr};
-            aws_byte_cursor_advance(&cursor, data_length);
-            tmp_cursor = cursor;
+        struct aws_byte_cursor st_frame = {.len = data_length, .ptr = cursor.ptr};
+        aws_byte_cursor_advance(&cursor, data_length);
+        tmp_cursor = cursor;
 
-            if (aws_secure_tunnel_deserialize_message_from_cursor(
-                    secure_tunnel, &st_frame, &s_aws_secure_tunnel_connected_on_message_received)) {
-                int error_code = aws_last_error();
-                AWS_LOGF_ERROR(
-                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                    "id=%p: failed to deserialize message with error %d(%s)",
-                    (void *)secure_tunnel,
-                    error_code,
-                    aws_error_debug_str(error_code));
-                return error_code;
-            }
+        if (aws_secure_tunnel_deserialize_message_from_cursor(
+                secure_tunnel, &st_frame, &s_aws_secure_tunnel_connected_on_message_received)) {
+            int error_code = aws_last_error();
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: failed to deserialize message with error %d(%s)",
+                (void *)secure_tunnel,
+                error_code,
+                aws_error_debug_str(error_code));
+            return error_code;
         }
-
-        if (cursor.ptr != received_data->buffer) {
-            /* Move unprocessed data to the beginning */
-            received_data->len = 0;
-            aws_byte_buf_append(received_data, &cursor);
-        }
-        secure_tunnel->pending_read_completion = false;
     }
 
+    if (cursor.ptr != received_data->buffer) {
+        /* Move unprocessed data to the beginning */
+        received_data->len = 0;
+        aws_byte_buf_append(received_data, &cursor);
+    }
+
+    aws_mutex_unlock(&secure_tunnel->received_data_lock);
     return AWS_OP_SUCCESS;
 }
 
@@ -942,7 +942,9 @@ static bool s_on_websocket_incoming_frame_payload(
 
     if (data.len > 0) {
         struct aws_secure_tunnel *secure_tunnel = user_data;
+        aws_mutex_lock(&secure_tunnel->received_data_lock);
         aws_byte_buf_append(&secure_tunnel->received_data, &data);
+        aws_mutex_unlock(&secure_tunnel->received_data_lock);
         if (s_process_received_data(secure_tunnel)) {
             return false;
         }
@@ -2382,6 +2384,7 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->websocket = NULL;
 
     aws_byte_buf_init(&secure_tunnel->received_data, allocator, MAX_WEBSOCKET_PAYLOAD);
+    aws_mutex_init(&secure_tunnel->received_data_lock);
 
     aws_secure_tunnel_options_storage_log(secure_tunnel->config, AWS_LL_DEBUG);
 

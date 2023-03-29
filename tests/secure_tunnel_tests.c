@@ -503,7 +503,6 @@ static void s_wait_for_n_messages_received(struct aws_secure_tunnel_mock_test_fi
 void aws_secure_tunnel_send_mock_message(
     struct aws_secure_tunnel_mock_test_fixture *test_fixture,
     const struct aws_secure_tunnel_message_view *message_view) {
-    aws_thread_current_sleep(aws_timestamp_convert(500, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
     struct aws_byte_buf data_buf;
     struct aws_byte_cursor data_cur;
     struct aws_byte_buf out_buf;

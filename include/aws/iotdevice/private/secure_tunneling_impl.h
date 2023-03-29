@@ -243,6 +243,7 @@ struct aws_secure_tunnel {
 
     /* Stores what has been received but not processed */
     struct aws_byte_buf received_data;
+    struct aws_mutex received_data_lock;
 
     /*
      * When should the secure tunnel next attempt to reconnect?  Only used by PENDING_RECONNECT state.
@@ -263,7 +264,6 @@ struct aws_secure_tunnel {
      * send additional ones/
      */
     bool pending_write_completion;
-    bool pending_read_completion;
 
     /*
      * When should the next PINGREQ be sent?
