@@ -199,7 +199,7 @@ struct aws_service_id_element *aws_service_id_element_new(
     int32_t stream_id);
 
 AWS_IOTDEVICE_API
-void aws_destroy_connection_id(void *data);
+void aws_connection_id_destroy(void *data);
 
 AWS_IOTDEVICE_API
 struct aws_connection_id_element *aws_connection_id_element_new(

@@ -131,6 +131,12 @@ static void s_on_secure_tunnel_zero_ref_count(void *user_data) {
  *                                    STREAM HANDLING
  *****************************************************************************************************************/
 
+static void s_set_absent_connection_id_to_one(struct aws_secure_tunnel_message_view *message, uint32_t *connection_id) {
+    if (message->connection_id == 0) {
+        *connection_id = 1;
+    }
+}
+
 static int s_reset_service_id(void *context, struct aws_hash_element *p_element) {
     (void)context;
     struct aws_service_id_element *service_id_elem = p_element->value;
@@ -243,8 +249,8 @@ static bool s_aws_secure_tunnel_active_stream_check(
     }
 
     /*
-     * V2 connection id will always be 1. V3 can be any number > 0. Either way, connection id will be checked against
-     * stored connection_ids for the service id to confirm the stream is active
+     * V1 and V2 connection id will always be 1. V3 can be any number > 0. Either way, connection id will be checked
+     * against stored connection_ids for the service id to confirm the stream is active
      */
     struct aws_hash_element *connection_id_elem = NULL;
     aws_hash_table_find(&service_id_elem->connection_ids, &message_view->connection_id, &connection_id_elem);
@@ -367,8 +373,7 @@ static int s_aws_secure_tunnel_set_connection_id(
              * If the connection id is already stored something is wrong and this connection id must be removed and a
              * connection reset must be sent for this connection id
              */
-            aws_destroy_connection_id(connection_id_elem);
-
+            aws_connection_id_destroy(connection_id_elem);
             if (service_id == NULL || service_id->len == 0) {
                 AWS_LOGF_INFO(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -478,9 +483,7 @@ static void s_aws_secure_tunnel_on_data_received(
     /*
      * An absent connection ID will result in connection id being set to 1.
      */
-    if (message_view->connection_id == 0) {
-        message_view->connection_id = 1;
-    }
+    s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
     if (s_aws_secure_tunnel_active_stream_check(secure_tunnel, message_view)) {
         if (secure_tunnel->config->on_message_received) {
@@ -550,9 +553,7 @@ static void s_aws_secure_tunnel_on_stream_start_received(
      * connection at this point and the future existance of an unexpected connection ID will result in a full reset
      * of the client as mixed protocol versions is not supported.
      */
-    if (message_view->connection_id == 0) {
-        connection_id = 1;
-    }
+    s_set_absent_connection_id_to_one(message_view, &connection_id);
 
     int result =
         s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, message_view->stream_id, connection_id);
@@ -689,9 +690,7 @@ static void s_aws_secure_tunnel_on_connection_start_received(
     /*
      * An absent connection ID will result in connection id being set to 1.
      */
-    if (message_view->connection_id == 0) {
-        message_view->connection_id = 1;
-    }
+    s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
     if (s_aws_secure_tunnel_stream_id_match_check(secure_tunnel, message_view->service_id, message_view->stream_id)) {
         int result =
@@ -734,9 +733,7 @@ static void s_aws_secure_tunnel_on_connection_reset_received(
     /*
      * An absent connection ID will result in connection id being set to 1.
      */
-    if (message_view->connection_id == 0) {
-        message_view->connection_id = 1;
-    }
+    s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
     int result = s_aws_secure_tunnel_remove_connection_id(secure_tunnel, message_view);
 
@@ -818,6 +815,7 @@ static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
                 (void *)secure_tunnel,
                 error_code,
                 aws_error_debug_str(error_code));
+            aws_mutex_unlock(&secure_tunnel->received_data_lock);
             return error_code;
         }
     }

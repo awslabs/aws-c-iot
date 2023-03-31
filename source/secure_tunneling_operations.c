@@ -36,7 +36,7 @@ bool aws_secure_tunnel_connection_id_eq(const void *a, const void *b) {
     return *(const uint32_t *)a == *(const uint32_t *)b;
 }
 
-void aws_destroy_connection_id(void *data) {
+void aws_connection_id_destroy(void *data) {
     struct aws_connection_id_element *elem = data;
     aws_mem_release(elem->allocator, elem);
 }
@@ -84,7 +84,7 @@ struct aws_service_id_element *aws_service_id_element_new(
             aws_secure_tunnel_hash_connection_id,
             aws_secure_tunnel_connection_id_eq,
             NULL,
-            aws_destroy_connection_id)) {
+            aws_connection_id_destroy)) {
         goto error;
     }
 
@@ -533,7 +533,7 @@ static int s_aws_secure_tunnel_operation_set_connection_start_id(
         if (connection_elem == NULL) {
             aws_hash_table_put(table_to_put_in, &connection_id_elem->connection_id, connection_id_elem, NULL);
         } else {
-            aws_destroy_connection_id(connection_id_elem);
+            aws_connection_id_destroy(connection_id_elem);
         }
 
         if (message_view->service_id == NULL || message_view->service_id->len == 0) {
@@ -882,7 +882,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
             aws_secure_tunnel_hash_connection_id,
             aws_secure_tunnel_connection_id_eq,
             NULL,
-            aws_destroy_connection_id)) {
+            aws_connection_id_destroy)) {
         goto error;
     }
 
