@@ -482,9 +482,11 @@ static void s_aws_secure_tunnel_on_data_received(
     }
 
     /*
-     * An absent connection ID will result in connection id being set to 1.
+     * An absent connection ID in DESTINATION MODE will result in connection id being set to 1.
      */
-    s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
+    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
+        s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
+    }
 
     if (s_aws_secure_tunnel_active_stream_check(secure_tunnel, message_view)) {
         if (secure_tunnel->config->on_message_received) {
@@ -2430,6 +2432,10 @@ int aws_secure_tunnel_send_message(
         return aws_last_error();
     }
 
+    /*
+     * If message is being sent from DESTINATION MODE, it might be expected that a V2 or V1 connection has established a
+     * default connection id of 1. This default connection id must be stripped before sending a V1 or V2 message out.
+     */
     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE &&
         secure_tunnel->config->protocol_version < 3 && message_options->connection_id == 1) {
         message_op->options_storage.storage_view.connection_id = 0;
