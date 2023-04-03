@@ -567,6 +567,7 @@ static void s_aws_secure_tunnel_on_stream_start_received(
 static void s_aws_secure_tunnel_on_stream_reset_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
+
     if (secure_tunnel->config->protocol_version != 0 &&
         !s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         AWS_LOGF_INFO(
@@ -2429,16 +2430,9 @@ int aws_secure_tunnel_send_message(
         return aws_last_error();
     }
 
-    uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message_options);
-    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_options)) {
-        AWS_LOGF_WARN(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Message not sent due to protocol version missmatch between Secure Tunnel Client Protocol Version "
-            "(%d) and message Protocl Version (%d).",
-            (void *)secure_tunnel,
-            secure_tunnel->config->protocol_version,
-            message_protocol_version);
-        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH;
+    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE &&
+        secure_tunnel->config->protocol_version == 1 && message_options->connection_id == 1) {
+        message_op->options_storage.storage_view.connection_id = 0;
     }
 
     AWS_LOGF_DEBUG(
@@ -2455,7 +2449,7 @@ int aws_secure_tunnel_send_message(
 
 error:
     aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
+    return aws_last_error();
 }
 
 int aws_secure_tunnel_stream_start(
