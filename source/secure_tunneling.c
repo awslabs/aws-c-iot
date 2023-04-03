@@ -220,12 +220,17 @@ static bool s_aws_secure_tunnel_active_stream_check(
             return false;
         }
 
+        uint32_t connection_id = message_view->connection_id;
+        if (connection_id == 0) {
+            connection_id = 1;
+        }
+
         /*
-         * V1 and V2 connection id will always be 1. V3 can be any number > 0. Either way, connection id will be checked
-         * against stored connection_ids to confirm the stream is active.
+         * V1 and V2 connection id has been stored as 1. V3 can be any number > 0. Either way, connection id will be
+         * checked against stored connection_ids to confirm the stream is active.
          */
         struct aws_hash_element *connection_id_elem = NULL;
-        aws_hash_table_find(&secure_tunnel->config->connection_ids, &message_view->connection_id, &connection_id_elem);
+        aws_hash_table_find(&secure_tunnel->config->connection_ids, &connection_id, &connection_id_elem);
         if (connection_id_elem == NULL) {
             aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
             return false;
