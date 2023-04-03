@@ -248,16 +248,17 @@ static bool s_aws_secure_tunnel_active_stream_check(
         return false;
     }
 
-    /*
-     * V1 and V2 connection id will always be 1. V3 can be any number > 0. Either way, connection id will be checked
-     * against stored connection_ids for the service id to confirm the stream is active
-     */
-    struct aws_hash_element *connection_id_elem = NULL;
-    aws_hash_table_find(&service_id_elem->connection_ids, &message_view->connection_id, &connection_id_elem);
-    if (connection_id_elem == NULL) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
-        return false;
+    /* V1 and V2 will be considered active at this point with a matching stream id but V3 streams will need to have
+     * their connection id checked */
+    if (secure_tunnel->config->protocol_version == 3) {
+        struct aws_hash_element *connection_id_elem = NULL;
+        aws_hash_table_find(&service_id_elem->connection_ids, &message_view->connection_id, &connection_id_elem);
+        if (connection_id_elem == NULL) {
+            aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
+            return false;
+        }
     }
+
     return true;
 }
 
