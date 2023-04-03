@@ -1780,8 +1780,6 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                         error_code,
                         aws_error_debug_str(error_code));
                 } else {
-                    // Steve TODO set the protocol version based on stream starts.
-
                     if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
                         error_code = aws_last_error();
                     }
