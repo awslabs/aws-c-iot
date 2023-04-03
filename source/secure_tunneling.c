@@ -2431,7 +2431,7 @@ int aws_secure_tunnel_send_message(
     }
 
     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE &&
-        secure_tunnel->config->protocol_version == 1 && message_options->connection_id == 1) {
+        secure_tunnel->config->protocol_version < 3 && message_options->connection_id == 1) {
         message_op->options_storage.storage_view.connection_id = 0;
     }
 
