@@ -1780,10 +1780,8 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                         error_code,
                         aws_error_debug_str(error_code));
                 } else {
-                    /*
-                     * Protocol version will always be V3 as a Source Device.
-                     * Send the Stream Start message through the WebSocket.
-                     */
+                    // Steve TODO set the protocol version based on stream starts.
+
                     if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
                         error_code = aws_last_error();
                     }
@@ -2432,12 +2430,16 @@ int aws_secure_tunnel_send_message(
         return aws_last_error();
     }
 
-    /*
-     * We apply V3 protocol to all outbound messages to prevent disconnection by the secure tunnel service due to
-     * protocol switching
-     */
-    if (message_op->options_storage.storage_view.connection_id == 0) {
-        message_op->options_storage.storage_view.connection_id = 1;
+    uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message_options);
+    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_options)) {
+        AWS_LOGF_WARN(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Message not sent due to protocol version missmatch between Secure Tunnel Client Protocol Version "
+            "(%d) and message Protocl Version (%d).",
+            (void *)secure_tunnel,
+            secure_tunnel->config->protocol_version,
+            message_protocol_version);
+        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH;
     }
 
     AWS_LOGF_DEBUG(
@@ -2468,19 +2470,37 @@ int aws_secure_tunnel_stream_start(
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
     }
 
+    uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message_options);
+    if (secure_tunnel->config->protocol_version != 0 &&
+        message_protocol_version != secure_tunnel->config->protocol_version) {
+        /*
+         * Protocol missmatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
+         * sending the STREAM START request that caused the missmatch.
+         */
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
+            "Protocol Version (%d) and Protocol Version used by outbound STREAM START message (%d).",
+            (void *)secure_tunnel,
+            secure_tunnel->config->protocol_version,
+            message_protocol_version);
+        reset_secure_tunnel_connection(secure_tunnel);
+    }
+
+    if (secure_tunnel->config->protocol_version == 0) {
+        secure_tunnel->config->protocol_version = message_protocol_version;
+        AWS_LOGF_INFO(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Secure tunnel client Protocol set to V%d based on outbound STREAM START",
+            (void *)secure_tunnel,
+            secure_tunnel->config->protocol_version);
+    }
+
     struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
         secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_STREAM_START);
 
     if (message_op == NULL) {
         return AWS_OP_ERR;
-    }
-
-    /*
-     * We apply V3 protocol to all outbound messages to prevent disconnection by the secure tunnel service due to
-     * protocol switching
-     */
-    if (message_op->options_storage.storage_view.connection_id == 0) {
-        message_op->options_storage.storage_view.connection_id = 1;
     }
 
     AWS_LOGF_DEBUG(
@@ -2511,8 +2531,14 @@ int aws_secure_tunnel_connection_start(
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
     }
 
+    if (secure_tunnel->config->protocol_version != 3) {
+        AWS_LOGF_WARN(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start may only be used with a Protocol V3 stream.");
+        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH;
+    }
+
     if (message_options->connection_id == 0) {
-        AWS_LOGF_WARN(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start must include a connection id");
+        AWS_LOGF_WARN(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start must include a connection id.");
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID;
     }
 

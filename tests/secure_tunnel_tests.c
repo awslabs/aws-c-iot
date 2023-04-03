@@ -1242,7 +1242,6 @@ static int s_secure_tunneling_max_payload_test_fn(struct aws_allocator *allocato
         .type = AWS_SECURE_TUNNEL_MT_DATA,
         .stream_id = 0,
         .service_id = &service_1,
-        .connection_id = 1,
         .payload = &s_payload_cursor_max_size,
     };
 
