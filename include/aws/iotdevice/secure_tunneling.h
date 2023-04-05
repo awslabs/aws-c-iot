@@ -299,6 +299,15 @@ int aws_secure_tunnel_send_message(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 
+/**
+ * Get the const char description of a message type
+ *
+ * @param message_type message type used by a secure tunnel message
+ * @return const char translation of the message type
+ */
+AWS_IOTDEVICE_API
+const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type);
+
 //***********************************************************************************************************************
 /* THIS API SHOULD ONLY BE USED FROM SOURCE MODE */
 //***********************************************************************************************************************

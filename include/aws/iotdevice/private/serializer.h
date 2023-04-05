@@ -56,9 +56,6 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_byte_cursor *cursor,
     aws_secure_tunnel_on_message_received_fn *on_message_received);
 
-AWS_IOTDEVICE_API
-const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type);
-
 AWS_EXTERN_C_END
 
 #endif

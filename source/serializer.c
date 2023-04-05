@@ -490,34 +490,3 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
 error:
     return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE;
 }
-
-const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type) {
-    switch (message_type) {
-        case AWS_SECURE_TUNNEL_MT_UNKNOWN:
-            return "ST_MT_UNKNOWN";
-
-        case AWS_SECURE_TUNNEL_MT_DATA:
-            return "DATA";
-
-        case AWS_SECURE_TUNNEL_MT_STREAM_START:
-            return "STREAM START";
-
-        case AWS_SECURE_TUNNEL_MT_STREAM_RESET:
-            return "STREAM RESET";
-
-        case AWS_SECURE_TUNNEL_MT_SESSION_RESET:
-            return "SESSION RESET";
-
-        case AWS_SECURE_TUNNEL_MT_SERVICE_IDS:
-            return "SERVICE IDS";
-
-        case AWS_SECURE_TUNNEL_MT_CONNECTION_START:
-            return "CONNECTION START";
-
-        case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
-            return "CONNECTION RESET";
-
-        default:
-            return "UNKNOWN";
-    }
-}
