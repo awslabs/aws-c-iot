@@ -287,6 +287,14 @@ AWS_IOTDEVICE_API void aws_secure_tunnel_set_vtable(
  */
 AWS_IOTDEVICE_API const struct aws_secure_tunnel_vtable *aws_secure_tunnel_get_default_vtable(void);
 
+/*
+ * For testing purposes. This message type should only be sent due to internal logic.
+ */
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_connection_reset(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options);
+
 AWS_EXTERN_C_END
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_IMPL_H */

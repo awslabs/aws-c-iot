@@ -517,6 +517,9 @@ void aws_secure_tunnel_send_mock_message(
 
     aws_byte_buf_clean_up(&out_buf);
     aws_byte_buf_clean_up(&data_buf);
+    /* The actual WebSocket is assigned the same event loop as the secure tunnel but the mock websocket for tests
+     * requires a short sleep to insure there aren't race conditions related to the incoming websocket data being
+     * processed. */
     aws_thread_current_sleep(aws_timestamp_convert(250, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
 }
 
