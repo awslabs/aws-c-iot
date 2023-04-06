@@ -517,6 +517,7 @@ void aws_secure_tunnel_send_mock_message(
 
     aws_byte_buf_clean_up(&out_buf);
     aws_byte_buf_clean_up(&data_buf);
+    aws_thread_current_sleep(aws_timestamp_convert(250, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
 }
 
 int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_connection_options *options) {

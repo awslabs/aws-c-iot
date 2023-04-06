@@ -143,7 +143,6 @@ static void s_secure_tunnel_final_destroy(struct aws_secure_tunnel *secure_tunne
     aws_secure_tunnel_options_storage_destroy(secure_tunnel->config);
     aws_http_message_release(secure_tunnel->handshake_request);
     aws_byte_buf_clean_up(&secure_tunnel->received_data);
-    aws_mutex_clean_up(&secure_tunnel->received_data_lock);
     aws_tls_connection_options_clean_up(&secure_tunnel->tls_con_opt);
     aws_tls_ctx_release(secure_tunnel->tls_ctx);
     aws_mem_release(secure_tunnel->allocator, secure_tunnel);
@@ -212,7 +211,7 @@ static bool s_aws_secure_tunnel_protocol_version_match_check(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure Tunnel is currently using Protocol V%d and received a message using Protocol V%d",
             (void *)secure_tunnel,
-            secure_tunnel->config->protocol_version,
+            (int)secure_tunnel->config->protocol_version,
             message_protocol_version);
         return false;
     }
@@ -830,7 +829,6 @@ static void s_aws_secure_tunnel_connected_on_message_received(
 
 static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
 
-    aws_mutex_lock(&secure_tunnel->received_data_lock);
     struct aws_byte_buf *received_data = &secure_tunnel->received_data;
     struct aws_byte_cursor cursor = aws_byte_cursor_from_buf(received_data);
     uint16_t data_length = 0;
@@ -855,7 +853,6 @@ static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
                 (void *)secure_tunnel,
                 error_code,
                 aws_error_debug_str(error_code));
-            aws_mutex_unlock(&secure_tunnel->received_data_lock);
             return error_code;
         }
     }
@@ -866,7 +863,6 @@ static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
         aws_byte_buf_append(received_data, &cursor);
     }
 
-    aws_mutex_unlock(&secure_tunnel->received_data_lock);
     return AWS_OP_SUCCESS;
 }
 
@@ -980,9 +976,7 @@ static bool s_on_websocket_incoming_frame_payload(
 
     if (data.len > 0) {
         struct aws_secure_tunnel *secure_tunnel = user_data;
-        aws_mutex_lock(&secure_tunnel->received_data_lock);
         aws_byte_buf_append(&secure_tunnel->received_data, &data);
-        aws_mutex_unlock(&secure_tunnel->received_data_lock);
         if (s_process_received_data(secure_tunnel)) {
             return false;
         }
@@ -2418,7 +2412,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     secure_tunnel->websocket = NULL;
 
     aws_byte_buf_init(&secure_tunnel->received_data, allocator, MAX_WEBSOCKET_PAYLOAD);
-    aws_mutex_init(&secure_tunnel->received_data_lock);
 
     aws_secure_tunnel_options_storage_log(secure_tunnel->config, AWS_LL_DEBUG);
 

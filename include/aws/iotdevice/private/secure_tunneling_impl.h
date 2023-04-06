@@ -243,7 +243,6 @@ struct aws_secure_tunnel {
 
     /* Stores what has been received but not processed */
     struct aws_byte_buf received_data;
-    struct aws_mutex received_data_lock;
 
     /*
      * When should the secure tunnel next attempt to reconnect?  Only used by PENDING_RECONNECT state.
