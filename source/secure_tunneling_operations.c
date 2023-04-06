@@ -362,10 +362,10 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
-        stream_id = secure_tunnel->config->stream_id;
+        stream_id = secure_tunnel->connections->stream_id;
     } else {
         struct aws_hash_element *elem = NULL;
-        aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
+        aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
         if (elem == NULL) {
             AWS_LOGF_WARN(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -418,10 +418,10 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
-        stream_id = secure_tunnel->config->stream_id + 1;
-        secure_tunnel->config->stream_id = stream_id;
+        stream_id = secure_tunnel->connections->stream_id + 1;
+        secure_tunnel->connections->stream_id = stream_id;
 
-        aws_hash_table_clear(&secure_tunnel->config->connection_ids);
+        aws_hash_table_clear(&secure_tunnel->connections->connection_ids);
         struct aws_connection_id_element *connection_id_elem = NULL;
         if (message_view->connection_id > 0) {
             connection_id_elem = aws_connection_id_element_new(secure_tunnel->allocator, message_view->connection_id);
@@ -430,7 +430,7 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
         }
 
         aws_hash_table_put(
-            &secure_tunnel->config->connection_ids, &connection_id_elem->connection_id, connection_id_elem, NULL);
+            &secure_tunnel->connections->connection_ids, &connection_id_elem->connection_id, connection_id_elem, NULL);
 
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -440,7 +440,7 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
             connection_id_elem->connection_id);
     } else {
         struct aws_hash_element *elem = NULL;
-        aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
+        aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
         if (elem == NULL) {
             AWS_LOGF_WARN(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -467,7 +467,7 @@ static int s_aws_secure_tunnel_operation_message_set_next_stream_id(
             aws_hash_table_put(
                 &replacement_elem->connection_ids, &connection_id_elem->connection_id, connection_id_elem, NULL);
             aws_hash_table_put(
-                &secure_tunnel->config->service_ids, &replacement_elem->service_id_cur, replacement_elem, NULL);
+                &secure_tunnel->connections->service_ids, &replacement_elem->service_id_cur, replacement_elem, NULL);
 
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -500,10 +500,10 @@ static int s_aws_secure_tunnel_operation_set_connection_start_id(
      */
     struct aws_hash_table *table_to_put_in = NULL;
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
-        table_to_put_in = &secure_tunnel->config->connection_ids;
+        table_to_put_in = &secure_tunnel->connections->connection_ids;
     } else {
         struct aws_hash_element *elem = NULL;
-        aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
+        aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
         if (elem == NULL) {
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -776,17 +776,11 @@ void aws_secure_tunnel_options_storage_destroy(struct aws_secure_tunnel_options_
         return;
     }
 
-    if (storage->restore_stream_message_view != NULL) {
-        aws_secure_tunnel_message_storage_clean_up(&storage->restore_stream_message);
-        storage->restore_stream_message_view = NULL;
-    }
     aws_client_bootstrap_release(storage->bootstrap);
     aws_http_proxy_config_destroy(storage->http_proxy_config);
     aws_string_destroy(storage->endpoint_host);
     aws_string_destroy(storage->access_token);
     aws_string_destroy(storage->client_token);
-    aws_hash_table_clean_up(&storage->service_ids);
-    aws_hash_table_clean_up(&storage->connection_ids);
     aws_mem_release(storage->allocator, storage);
 }
 
@@ -865,27 +859,6 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
         aws_http_proxy_options_init_from_config(&storage->http_proxy_options, storage->http_proxy_config);
     }
 
-    if (aws_hash_table_init(
-            &storage->service_ids,
-            allocator,
-            3,
-            aws_hash_byte_cursor_ptr,
-            (aws_hash_callback_eq_fn *)aws_byte_cursor_eq,
-            NULL,
-            s_destroy_service_id)) {
-        goto error;
-    }
-    if (aws_hash_table_init(
-            &storage->connection_ids,
-            allocator,
-            1,
-            aws_secure_tunnel_hash_connection_id,
-            aws_secure_tunnel_connection_id_eq,
-            NULL,
-            aws_connection_id_destroy)) {
-        goto error;
-    }
-
     storage->on_message_received = options->on_message_received;
     storage->user_data = options->user_data;
 
@@ -906,6 +879,56 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
 
 error:
     aws_secure_tunnel_options_storage_destroy(storage);
+    return NULL;
+}
+
+void aws_secure_tunnel_connections_destroy(struct aws_secure_tunnel_connections *connections) {
+    if (connections == NULL) {
+        return;
+    }
+
+    if (connections->restore_stream_message_view != NULL) {
+        aws_secure_tunnel_message_storage_clean_up(&connections->restore_stream_message);
+        connections->restore_stream_message_view = NULL;
+    }
+    aws_hash_table_clean_up(&connections->service_ids);
+    aws_hash_table_clean_up(&connections->connection_ids);
+
+    aws_mem_release(connections->allocator, connections);
+}
+
+struct aws_secure_tunnel_connections *aws_secure_tunnel_connections_new(struct aws_allocator *allocator) {
+    AWS_PRECONDITION(allocator != NULL);
+
+    struct aws_secure_tunnel_connections *connections =
+        aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_connections));
+
+    connections->allocator = allocator;
+
+    if (aws_hash_table_init(
+            &connections->service_ids,
+            allocator,
+            3,
+            aws_hash_byte_cursor_ptr,
+            (aws_hash_callback_eq_fn *)aws_byte_cursor_eq,
+            NULL,
+            s_destroy_service_id)) {
+        goto error;
+    }
+    if (aws_hash_table_init(
+            &connections->connection_ids,
+            allocator,
+            1,
+            aws_secure_tunnel_hash_connection_id,
+            aws_secure_tunnel_connection_id_eq,
+            NULL,
+            aws_connection_id_destroy)) {
+        goto error;
+    }
+    return connections;
+
+error:
+    aws_secure_tunnel_connections_destroy(connections);
     return NULL;
 }
 

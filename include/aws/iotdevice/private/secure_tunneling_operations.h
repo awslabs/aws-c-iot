@@ -174,6 +174,12 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     const struct aws_secure_tunnel_options *options);
 
 AWS_IOTDEVICE_API
+void aws_secure_tunnel_connections_destroy(struct aws_secure_tunnel_connections *storage);
+
+AWS_IOTDEVICE_API
+struct aws_secure_tunnel_connections *aws_secure_tunnel_connections_new(struct aws_allocator *allocator);
+
+AWS_IOTDEVICE_API
 void aws_secure_tunnel_options_storage_log(
     const struct aws_secure_tunnel_options_storage *options_storage,
     enum aws_log_level level);

@@ -135,11 +135,11 @@ static bool s_secure_tunnel_check_active_stream_id(
     struct aws_byte_cursor *service_id,
     int32_t stream_id) {
     if (service_id == NULL) {
-        return secure_tunnel->config->stream_id == stream_id;
+        return secure_tunnel->connections->stream_id == stream_id;
     }
 
     struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, service_id, &elem);
     if (elem == NULL) {
         return false;
     }
@@ -160,17 +160,17 @@ static bool s_secure_tunnel_check_active_connection_id(
     struct aws_hash_table *table_to_check = NULL;
     if (service_id) {
         struct aws_hash_element *elem = NULL;
-        aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+        aws_hash_table_find(&secure_tunnel->connections->service_ids, service_id, &elem);
         if (elem == NULL) {
             return false;
         }
         struct aws_service_id_element *service_id_elem = elem->value;
         table_to_check = &service_id_elem->connection_ids;
     } else {
-        if (secure_tunnel->config->stream_id != stream_id) {
+        if (secure_tunnel->connections->stream_id != stream_id) {
             return false;
         }
-        table_to_check = &secure_tunnel->config->connection_ids;
+        table_to_check = &secure_tunnel->connections->connection_ids;
     }
 
     struct aws_hash_element *connection_elem = NULL;
@@ -920,15 +920,15 @@ static int s_secure_tunneling_store_service_ids_test_fn(struct aws_allocator *al
     /* check that service ids have been stored */
     struct aws_hash_element *elem = NULL;
     struct aws_byte_cursor service_id_1_cur = aws_byte_cursor_from_string(s_service_id_1);
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_1_cur, &elem);
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, &service_id_1_cur, &elem);
     ASSERT_NOT_NULL(elem);
     elem = NULL;
     struct aws_byte_cursor service_id_2_cur = aws_byte_cursor_from_string(s_service_id_2);
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_2_cur, &elem);
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, &service_id_2_cur, &elem);
     ASSERT_NOT_NULL(elem);
     elem = NULL;
     struct aws_byte_cursor service_id_3_cur = aws_byte_cursor_from_string(s_service_id_3);
-    aws_hash_table_find(&secure_tunnel->config->service_ids, &service_id_3_cur, &elem);
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, &service_id_3_cur, &elem);
     ASSERT_NOT_NULL(elem);
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
@@ -1931,7 +1931,7 @@ static int s_secure_tunneling_existing_connection_start_send_reset_test_fn(struc
 
     /* check that stream with connection id has been closed properly */
     struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, stream_start_message_view.service_id, &elem);
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, stream_start_message_view.service_id, &elem);
     ASSERT_NOT_NULL(elem);
     struct aws_service_id_element *service_id_elem = elem->value;
     ASSERT_INT_EQUALS((int)aws_hash_table_get_entry_count(&service_id_elem->connection_ids), 0);

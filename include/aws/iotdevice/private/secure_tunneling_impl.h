@@ -131,18 +131,6 @@ struct aws_secure_tunnel_options_storage {
 
     struct aws_string *endpoint_host;
 
-    uint8_t protocol_version;
-
-    /* Stream related info */
-    /* Used for streams not using multiplexing (service ids) */
-    int32_t stream_id;
-    struct aws_hash_table connection_ids;
-    /* Table containing streams using multiplexing (service ids) */
-    struct aws_hash_table service_ids;
-    /* Message used for initializing a stream upon a reconnect due to a protocol version missmatch */
-    struct aws_secure_tunnel_message_storage *restore_stream_message_view;
-    struct aws_secure_tunnel_message_storage restore_stream_message;
-
     /* Callbacks */
     aws_secure_tunnel_message_received_fn *on_message_received;
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
@@ -160,6 +148,23 @@ struct aws_secure_tunnel_options_storage {
 
     void *user_data;
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
+};
+
+struct aws_secure_tunnel_connections {
+    struct aws_allocator *allocator;
+
+    uint8_t protocol_version;
+
+    /* Used for streams not using multiplexing (service ids) */
+    int32_t stream_id;
+    struct aws_hash_table connection_ids;
+
+    /* Table containing streams using multiplexing (service ids) */
+    struct aws_hash_table service_ids;
+
+    /* Message used for initializing a stream upon a reconnect due to a protocol version missmatch */
+    struct aws_secure_tunnel_message_storage *restore_stream_message_view;
+    struct aws_secure_tunnel_message_storage restore_stream_message;
 };
 
 struct aws_secure_tunnel_vtable {
@@ -194,6 +199,11 @@ struct aws_secure_tunnel {
      * Secure tunnel configuration
      */
     struct aws_secure_tunnel_options_storage *config;
+
+    /*
+     * Stores connection related information
+     */
+    struct aws_secure_tunnel_connections *connections;
 
     struct aws_tls_ctx *tls_ctx;
     struct aws_tls_connection_options tls_con_opt;

@@ -140,6 +140,7 @@ static void s_secure_tunnel_final_destroy(struct aws_secure_tunnel *secure_tunne
     aws_secure_tunnel_operational_state_clean_up(secure_tunnel);
 
     /* Clean up all memory */
+    aws_secure_tunnel_connections_destroy(secure_tunnel->connections);
     aws_secure_tunnel_options_storage_destroy(secure_tunnel->config);
     aws_http_message_release(secure_tunnel->handshake_request);
     aws_byte_buf_clean_up(&secure_tunnel->received_data);
@@ -181,10 +182,10 @@ static int s_reset_service_id(void *context, struct aws_hash_element *p_element)
 static void s_reset_secure_tunnel_streams(struct aws_secure_tunnel *secure_tunnel) {
     AWS_LOGF_INFO(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: Secure tunnel session reset.", (void *)secure_tunnel);
 
-    secure_tunnel->config->protocol_version = 0;
-    secure_tunnel->config->stream_id = INVALID_STREAM_ID;
-    aws_hash_table_clear(&secure_tunnel->config->connection_ids);
-    aws_hash_table_foreach(&secure_tunnel->config->service_ids, s_reset_service_id, NULL);
+    secure_tunnel->connections->protocol_version = 0;
+    secure_tunnel->connections->stream_id = INVALID_STREAM_ID;
+    aws_hash_table_clear(&secure_tunnel->connections->connection_ids);
+    aws_hash_table_foreach(&secure_tunnel->connections->service_ids, s_reset_service_id, NULL);
     secure_tunnel->received_data.len = 0; /* Drop any incomplete secure tunnel frame */
 }
 
@@ -206,12 +207,12 @@ static bool s_aws_secure_tunnel_protocol_version_match_check(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message) {
     uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message);
-    if (secure_tunnel->config->protocol_version != message_protocol_version) {
+    if (secure_tunnel->connections->protocol_version != message_protocol_version) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure Tunnel is currently using Protocol V%d and received a message using Protocol V%d",
             (void *)secure_tunnel,
-            (int)secure_tunnel->config->protocol_version,
+            (int)secure_tunnel->connections->protocol_version,
             message_protocol_version);
         return false;
     }
@@ -226,11 +227,11 @@ static bool s_aws_secure_tunnel_stream_id_match_check(
      * No service id means either V1 protocol is being used or V3 protocol is being used on a tunnel without service ids
      */
     if (service_id == NULL || service_id->len == 0) {
-        return (secure_tunnel->config->stream_id == stream_id);
+        return (secure_tunnel->connections->stream_id == stream_id);
     }
 
     struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, service_id, &elem);
     if (elem == NULL) {
         return false;
     }
@@ -246,7 +247,7 @@ static bool s_aws_secure_tunnel_active_stream_check(
      * No service id means either V1 protocol is being used or V3 protocol is being used on a tunnel without service ids
      */
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
-        if (secure_tunnel->config->stream_id != message_view->stream_id) {
+        if (secure_tunnel->connections->stream_id != message_view->stream_id) {
             return false;
         }
 
@@ -260,7 +261,7 @@ static bool s_aws_secure_tunnel_active_stream_check(
          * checked against stored connection_ids to confirm the stream is active.
          */
         struct aws_hash_element *connection_id_elem = NULL;
-        aws_hash_table_find(&secure_tunnel->config->connection_ids, &connection_id, &connection_id_elem);
+        aws_hash_table_find(&secure_tunnel->connections->connection_ids, &connection_id, &connection_id_elem);
         if (connection_id_elem == NULL) {
             aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
             return false;
@@ -270,7 +271,7 @@ static bool s_aws_secure_tunnel_active_stream_check(
 
     /* Check if service id is being used by the secure tunnel */
     struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
     if (elem == NULL) {
         aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
         return false;
@@ -285,7 +286,7 @@ static bool s_aws_secure_tunnel_active_stream_check(
 
     /* V1 and V2 will be considered active at this point with a matching stream id but V3 streams will need to have
      * their connection id checked */
-    if (secure_tunnel->config->protocol_version == 3) {
+    if (secure_tunnel->connections->protocol_version == 3) {
         struct aws_hash_element *connection_id_elem = NULL;
         aws_hash_table_find(&service_id_elem->connection_ids, &message_view->connection_id, &connection_id_elem);
         if (connection_id_elem == NULL) {
@@ -304,13 +305,16 @@ static int s_aws_secure_tunnel_set_stream(
     uint32_t connection_id) {
     /* No service id means V1 protocol is being used */
     if (service_id == NULL || service_id->len == 0) {
-        secure_tunnel->config->stream_id = stream_id;
-        aws_hash_table_clear(&secure_tunnel->config->connection_ids);
+        secure_tunnel->connections->stream_id = stream_id;
+        aws_hash_table_clear(&secure_tunnel->connections->connection_ids);
         if (connection_id > 0) {
             struct aws_connection_id_element *connection_id_elem =
                 aws_connection_id_element_new(secure_tunnel->allocator, connection_id);
             aws_hash_table_put(
-                &secure_tunnel->config->connection_ids, &connection_id_elem->connection_id, connection_id_elem, NULL);
+                &secure_tunnel->connections->connection_ids,
+                &connection_id_elem->connection_id,
+                connection_id_elem,
+                NULL);
         }
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -322,7 +326,7 @@ static int s_aws_secure_tunnel_set_stream(
     }
 
     struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, service_id, &elem);
     if (elem == NULL) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -341,7 +345,8 @@ static int s_aws_secure_tunnel_set_stream(
         aws_hash_table_put(
             &replacement_elem->connection_ids, &connection_id_elem->connection_id, connection_id_elem, NULL);
     }
-    aws_hash_table_put(&secure_tunnel->config->service_ids, &replacement_elem->service_id_cur, replacement_elem, NULL);
+    aws_hash_table_put(
+        &secure_tunnel->connections->service_ids, &replacement_elem->service_id_cur, replacement_elem, NULL);
 
     AWS_LOGF_INFO(
         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -360,10 +365,10 @@ static int s_aws_secure_tunnel_set_connection_id(
     uint32_t connection_id) {
     struct aws_hash_table *table_to_put_in = NULL;
     if (service_id == NULL || service_id->len == 0) {
-        table_to_put_in = &secure_tunnel->config->connection_ids;
+        table_to_put_in = &secure_tunnel->connections->connection_ids;
     } else {
         struct aws_hash_element *elem = NULL;
-        aws_hash_table_find(&secure_tunnel->config->service_ids, service_id, &elem);
+        aws_hash_table_find(&secure_tunnel->connections->service_ids, service_id, &elem);
         if (elem == NULL) {
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -463,10 +468,10 @@ static int s_aws_secure_tunnel_remove_connection_id(
         struct aws_hash_table *table_to_remove_from = NULL;
 
         if (message_view->service_id == NULL || message_view->service_id->len == 0) {
-            table_to_remove_from = &secure_tunnel->config->connection_ids;
+            table_to_remove_from = &secure_tunnel->connections->connection_ids;
         } else {
             struct aws_hash_element *elem = NULL;
-            aws_hash_table_find(&secure_tunnel->config->service_ids, message_view->service_id, &elem);
+            aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
             struct aws_service_id_element *service_id_elem = elem->value;
             table_to_remove_from = &service_id_elem->connection_ids;
         }
@@ -555,15 +560,15 @@ static void s_aws_secure_tunnel_on_stream_start_received(
      * If a protocol version hasn't been established yet, the first STREAM START determines the protocol version
      * being used this session
      */
-    if (secure_tunnel->config->protocol_version == 0) {
+    if (secure_tunnel->connections->protocol_version == 0) {
 
         uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message_view);
-        secure_tunnel->config->protocol_version = message_protocol_version;
+        secure_tunnel->connections->protocol_version = message_protocol_version;
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure tunnel client Protocol set to V%d based on received STREAM START",
             (void *)secure_tunnel,
-            secure_tunnel->config->protocol_version);
+            secure_tunnel->connections->protocol_version);
     } else if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         /*
          * Protocol missmatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
@@ -576,11 +581,11 @@ static void s_aws_secure_tunnel_on_stream_start_received(
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
         aws_secure_tunnel_message_storage_init(
-            &secure_tunnel->config->restore_stream_message,
+            &secure_tunnel->connections->restore_stream_message,
             secure_tunnel->allocator,
             message_view,
             AWS_STOT_STREAM_START);
-        secure_tunnel->config->restore_stream_message_view = &secure_tunnel->config->restore_stream_message;
+        secure_tunnel->connections->restore_stream_message_view = &secure_tunnel->connections->restore_stream_message;
         return;
     }
 
@@ -605,7 +610,7 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
 
-    if (secure_tunnel->config->protocol_version != 0 &&
+    if (secure_tunnel->connections->protocol_version != 0 &&
         !s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -651,13 +656,13 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
 
-    aws_hash_table_clear(&secure_tunnel->config->service_ids);
+    aws_hash_table_clear(&secure_tunnel->connections->service_ids);
 
     if (message_view->service_id != NULL) {
         struct aws_service_id_element *service_id_1_elem =
             aws_service_id_element_new(secure_tunnel->allocator, message_view->service_id, INVALID_STREAM_ID);
         aws_hash_table_put(
-            &secure_tunnel->config->service_ids, &service_id_1_elem->service_id_cur, service_id_1_elem, NULL);
+            &secure_tunnel->connections->service_ids, &service_id_1_elem->service_id_cur, service_id_1_elem, NULL);
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: secure tunnel service id 1 set to: " PRInSTR,
@@ -667,7 +672,7 @@ static void s_aws_secure_tunnel_on_service_ids_received(
             struct aws_service_id_element *service_id_2_elem =
                 aws_service_id_element_new(secure_tunnel->allocator, message_view->service_id_2, INVALID_STREAM_ID);
             aws_hash_table_put(
-                &secure_tunnel->config->service_ids, &service_id_2_elem->service_id_cur, service_id_2_elem, NULL);
+                &secure_tunnel->connections->service_ids, &service_id_2_elem->service_id_cur, service_id_2_elem, NULL);
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: secure tunnel service id 2 set to: " PRInSTR,
@@ -677,7 +682,10 @@ static void s_aws_secure_tunnel_on_service_ids_received(
                 struct aws_service_id_element *service_id_3_elem =
                     aws_service_id_element_new(secure_tunnel->allocator, message_view->service_id_3, INVALID_STREAM_ID);
                 aws_hash_table_put(
-                    &secure_tunnel->config->service_ids, &service_id_3_elem->service_id_cur, service_id_3_elem, NULL);
+                    &secure_tunnel->connections->service_ids,
+                    &service_id_3_elem->service_id_cur,
+                    service_id_3_elem,
+                    NULL);
                 AWS_LOGF_INFO(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                     "id=%p: secure tunnel service id 3 set to: " PRInSTR,
@@ -700,23 +708,23 @@ static void s_aws_secure_tunnel_on_service_ids_received(
     }
 
     /* Initialize stream if one is set to be started upon a reconnect */
-    if (secure_tunnel->config->restore_stream_message_view != NULL) {
+    if (secure_tunnel->connections->restore_stream_message_view != NULL) {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure Tunnel will process the STREAM START that caused reconnection due to changing protocol by "
             "Source Device.",
             (void *)secure_tunnel);
         s_aws_secure_tunnel_connected_on_message_received(
-            secure_tunnel, &secure_tunnel->config->restore_stream_message_view->storage_view);
-        aws_secure_tunnel_message_storage_clean_up(&secure_tunnel->config->restore_stream_message);
-        secure_tunnel->config->restore_stream_message_view = NULL;
+            secure_tunnel, &secure_tunnel->connections->restore_stream_message_view->storage_view);
+        aws_secure_tunnel_message_storage_clean_up(&secure_tunnel->connections->restore_stream_message);
+        secure_tunnel->connections->restore_stream_message_view = NULL;
     }
 }
 
 static void s_aws_secure_tunnel_on_connection_start_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
-    if (secure_tunnel->config->protocol_version != 3) {
+    if (secure_tunnel->connections->protocol_version != 3) {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
@@ -759,7 +767,7 @@ static void s_aws_secure_tunnel_on_connection_start_received(
 static void s_aws_secure_tunnel_on_connection_reset_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
-    if (secure_tunnel->config->protocol_version != 3) {
+    if (secure_tunnel->connections->protocol_version != 3) {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
@@ -2369,6 +2377,11 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
         goto error;
     }
 
+    secure_tunnel->connections = aws_secure_tunnel_connections_new(allocator);
+    if (secure_tunnel->connections == NULL) {
+        goto error;
+    }
+
     /* all secure tunnel activity will take place on this event loop */
     secure_tunnel->loop = aws_event_loop_group_get_next_loop(secure_tunnel->config->bootstrap->event_loop_group);
     if (secure_tunnel->loop == NULL) {
@@ -2404,9 +2417,9 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     aws_tls_ctx_options_clean_up(&tls_ctx_opt);
 
     /* Connection reset */
-    secure_tunnel->config->stream_id = INVALID_STREAM_ID;
+    secure_tunnel->connections->stream_id = INVALID_STREAM_ID;
 
-    aws_hash_table_foreach(&secure_tunnel->config->service_ids, s_reset_service_id, NULL);
+    aws_hash_table_foreach(&secure_tunnel->connections->service_ids, s_reset_service_id, NULL);
 
     secure_tunnel->handshake_request = NULL;
     secure_tunnel->websocket = NULL;
@@ -2466,7 +2479,7 @@ int aws_secure_tunnel_send_message(
      * default connection id of 1. This default connection id must be stripped before sending a V1 or V2 message out.
      */
     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE &&
-        secure_tunnel->config->protocol_version < 3 && message_options->connection_id == 1) {
+        secure_tunnel->connections->protocol_version < 3 && message_options->connection_id == 1) {
         message_op->options_storage.storage_view.connection_id = 0;
     }
 
@@ -2499,8 +2512,8 @@ int aws_secure_tunnel_stream_start(
     }
 
     uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message_options);
-    if (secure_tunnel->config->protocol_version != 0 &&
-        message_protocol_version != secure_tunnel->config->protocol_version) {
+    if (secure_tunnel->connections->protocol_version != 0 &&
+        message_protocol_version != secure_tunnel->connections->protocol_version) {
         /*
          * Protocol missmatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
          * sending the STREAM START request that caused the missmatch.
@@ -2510,18 +2523,18 @@ int aws_secure_tunnel_stream_start(
             "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
             "Protocol Version (%d) and Protocol Version used by outbound STREAM START message (%d).",
             (void *)secure_tunnel,
-            secure_tunnel->config->protocol_version,
-            message_protocol_version);
+            (int)secure_tunnel->connections->protocol_version,
+            (int)message_protocol_version);
         reset_secure_tunnel_connection(secure_tunnel);
     }
 
-    if (secure_tunnel->config->protocol_version == 0) {
-        secure_tunnel->config->protocol_version = message_protocol_version;
+    if (secure_tunnel->connections->protocol_version == 0) {
+        secure_tunnel->connections->protocol_version = message_protocol_version;
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure tunnel client Protocol set to V%d based on outbound STREAM START",
             (void *)secure_tunnel,
-            secure_tunnel->config->protocol_version);
+            (int)secure_tunnel->connections->protocol_version);
     }
 
     struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
@@ -2559,7 +2572,7 @@ int aws_secure_tunnel_connection_start(
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
     }
 
-    if (secure_tunnel->config->protocol_version != 3) {
+    if (secure_tunnel->connections->protocol_version != 3) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start may only be used with a Protocol V3 stream.");
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH;
