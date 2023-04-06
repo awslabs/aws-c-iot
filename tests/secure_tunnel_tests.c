@@ -503,6 +503,10 @@ static void s_wait_for_n_messages_received(struct aws_secure_tunnel_mock_test_fi
 void aws_secure_tunnel_send_mock_message(
     struct aws_secure_tunnel_mock_test_fixture *test_fixture,
     const struct aws_secure_tunnel_message_view *message_view) {
+    /* The actual WebSocket is assigned the same event loop as the secure tunnel but the mock websocket for tests
+     * requires a short sleep to insure there aren't race conditions related to the incoming websocket data being
+     * processed. */
+    aws_thread_current_sleep(aws_timestamp_convert(350, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
     struct aws_byte_buf data_buf;
     struct aws_byte_cursor data_cur;
     struct aws_byte_buf out_buf;
@@ -520,7 +524,7 @@ void aws_secure_tunnel_send_mock_message(
     /* The actual WebSocket is assigned the same event loop as the secure tunnel but the mock websocket for tests
      * requires a short sleep to insure there aren't race conditions related to the incoming websocket data being
      * processed. */
-    aws_thread_current_sleep(aws_timestamp_convert(250, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
+    aws_thread_current_sleep(aws_timestamp_convert(350, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
 }
 
 int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_connection_options *options) {
