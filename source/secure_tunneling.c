@@ -2371,6 +2371,11 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     aws_linked_list_init(&secure_tunnel->queued_operations);
     secure_tunnel->current_operation = NULL;
 
+    /* tls setup */
+    struct aws_tls_ctx_options tls_ctx_opt;
+    AWS_ZERO_STRUCT(tls_ctx_opt);
+    aws_tls_ctx_options_init_default_client(&tls_ctx_opt, secure_tunnel->allocator);
+
     /* store options */
     secure_tunnel->config = aws_secure_tunnel_options_storage_new(allocator, options);
     if (secure_tunnel->config == NULL) {
@@ -2390,11 +2395,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
 
     secure_tunnel->desired_state = AWS_STS_STOPPED;
     secure_tunnel->current_state = AWS_STS_STOPPED;
-
-    /* tls setup */
-    struct aws_tls_ctx_options tls_ctx_opt;
-    AWS_ZERO_STRUCT(tls_ctx_opt);
-    aws_tls_ctx_options_init_default_client(&tls_ctx_opt, secure_tunnel->allocator);
 
     if (options->root_ca != NULL) {
         if (aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, options->root_ca)) {
