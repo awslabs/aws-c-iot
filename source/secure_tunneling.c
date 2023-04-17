@@ -1426,25 +1426,6 @@ static void s_update_reconnect_delay_for_pending_reconnect(struct aws_secure_tun
         (void *)secure_tunnel,
         delay_ms);
     secure_tunnel->reconnect_count++;
-    /*
-        uint64_t delay_ms = MIN_RECONNECT_DELAY_MS;
-        delay_ms = delay_ms << (int)secure_tunnel->reconnect_count;
-
-        delay_ms = aws_min_u64(delay_ms, MAX_RECONNECT_DELAY_MS);
-        uint64_t now = (*secure_tunnel->vtable->get_current_time_fn)();
-
-        secure_tunnel->next_reconnect_time_ns =
-            aws_add_u64_saturating(now, aws_timestamp_convert(delay_ms, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS,
-       NULL));
-
-        AWS_LOGF_DEBUG(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: next connection attempt in %" PRIu64 " milliseconds",
-            (void *)secure_tunnel,
-            delay_ms);
-
-        secure_tunnel->reconnect_count++;
-        */
 }
 
 static void s_change_current_state_to_pending_reconnect(struct aws_secure_tunnel *secure_tunnel) {
