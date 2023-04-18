@@ -7,6 +7,7 @@
 #include <aws/iotdevice/private/secure_tunneling_operations.h>
 
 #include <aws/common/clock.h>
+#include <aws/common/device_random.h>
 #include <aws/common/string.h>
 #include <aws/http/proxy.h>
 #include <aws/http/request_response.h>
@@ -1198,10 +1199,9 @@ static int s_handshake_add_header(
     }
     AWS_LOGF_TRACE(
         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-        "id=%p: Added header " PRInSTR " " PRInSTR " to websocket request",
+        "id=%p: Added header " PRInSTR " to websocket request",
         (void *)secure_tunnel,
-        AWS_BYTE_CURSOR_PRI(header.name),
-        AWS_BYTE_CURSOR_PRI(header.value));
+        AWS_BYTE_CURSOR_PRI(header.name));
     return AWS_OP_SUCCESS;
 }
 
@@ -1378,23 +1378,53 @@ static void s_change_current_state_to_websocket_shutdown(struct aws_secure_tunne
     }
 }
 
+static uint64_t s_aws_secure_tunnel_compute_reconnect_backoff_no_jitter(struct aws_secure_tunnel *secure_tunnel) {
+    uint64_t retry_count = aws_min_u64(secure_tunnel->reconnect_count, 63);
+    return aws_mul_u64_saturating((uint64_t)1 << retry_count, MIN_RECONNECT_DELAY_MS);
+}
+
+uint64_t aws_secure_tunnel_random_in_range(uint64_t from, uint64_t to) {
+    uint64_t max = aws_max_u64(from, to);
+    uint64_t min = aws_min_u64(from, to);
+
+    /* Note: this contains several changes to the corresponding function in aws-c-io.  Don't throw them away.
+     *
+     * 1. random range is now inclusive/closed: [from, to] rather than half-open [from, to)
+     * 2. as a corollary, diff == 0 => return min, not 0
+     */
+    uint64_t diff = max - min;
+    if (!diff) {
+        return min;
+    }
+
+    uint64_t random_value = 0;
+    if (aws_device_random_u64(&random_value)) {
+        return min;
+    }
+
+    if (diff == UINT64_MAX) {
+        return random_value;
+    }
+
+    return min + random_value % (diff + 1); /* + 1 is safe due to previous check */
+}
+
+static uint64_t s_aws_secure_tunnel_compute_reconnect_backoff_full_jitter(struct aws_secure_tunnel *secure_tunnel) {
+    uint64_t non_jittered = s_aws_secure_tunnel_compute_reconnect_backoff_no_jitter(secure_tunnel);
+    return aws_secure_tunnel_random_in_range(0, non_jittered);
+}
+
 static void s_update_reconnect_delay_for_pending_reconnect(struct aws_secure_tunnel *secure_tunnel) {
-
-    uint64_t delay_ms = MIN_RECONNECT_DELAY_MS;
-    delay_ms = delay_ms << (int)secure_tunnel->reconnect_count;
-
+    uint64_t delay_ms = s_aws_secure_tunnel_compute_reconnect_backoff_full_jitter(secure_tunnel);
     delay_ms = aws_min_u64(delay_ms, MAX_RECONNECT_DELAY_MS);
     uint64_t now = (*secure_tunnel->vtable->get_current_time_fn)();
-
     secure_tunnel->next_reconnect_time_ns =
         aws_add_u64_saturating(now, aws_timestamp_convert(delay_ms, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
-
     AWS_LOGF_DEBUG(
         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
         "id=%p: next connection attempt in %" PRIu64 " milliseconds",
         (void *)secure_tunnel,
         delay_ms);
-
     secure_tunnel->reconnect_count++;
 }
 
