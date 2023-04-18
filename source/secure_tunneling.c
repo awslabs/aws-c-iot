@@ -1153,6 +1153,8 @@ void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, en
             .on_incoming_frame_begin = s_on_websocket_incoming_frame_begin,
             .on_incoming_frame_payload = s_on_websocket_incoming_frame_payload,
             .on_incoming_frame_complete = s_on_websocket_incoming_frame_complete,
+
+            .host_resolution_config = &secure_tunnel->host_resolution_config,
         };
 
         if (secure_tunnel->config->http_proxy_config != NULL) {
@@ -2401,11 +2403,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     aws_linked_list_init(&secure_tunnel->queued_operations);
     secure_tunnel->current_operation = NULL;
 
-    /* tls setup */
-    struct aws_tls_ctx_options tls_ctx_opt;
-    AWS_ZERO_STRUCT(tls_ctx_opt);
-    aws_tls_ctx_options_init_default_client(&tls_ctx_opt, secure_tunnel->allocator);
-
     /* store options */
     secure_tunnel->config = aws_secure_tunnel_options_storage_new(allocator, options);
     if (secure_tunnel->config == NULL) {
@@ -2423,28 +2420,60 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
         goto error;
     }
 
+    secure_tunnel->host_resolution_config = aws_host_resolver_init_default_resolution_config();
+    secure_tunnel->host_resolution_config.resolve_frequency_ns =
+        aws_timestamp_convert(MAX_RECONNECT_DELAY_MS, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL);
+
     secure_tunnel->desired_state = AWS_STS_STOPPED;
     secure_tunnel->current_state = AWS_STS_STOPPED;
 
-    if (options->root_ca != NULL) {
-        if (aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, options->root_ca)) {
+    /* tls setup */
+    if (options->tls_options) {
+        if (aws_tls_connection_options_copy(&secure_tunnel->tls_con_opt, options->tls_options)) {
+            goto error;
+        }
+    } else {
+        struct aws_tls_ctx_options tls_ctx_opt;
+        AWS_ZERO_STRUCT(tls_ctx_opt);
+
+        aws_tls_ctx_options_init_default_client(&tls_ctx_opt, secure_tunnel->allocator);
+
+        if (options->root_ca != NULL) {
+            if (aws_tls_ctx_options_override_default_trust_store_from_path(&tls_ctx_opt, NULL, options->root_ca)) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "Failed to load %s with error %s",
+                    options->root_ca,
+                    aws_error_debug_str(aws_last_error()));
+                aws_tls_ctx_options_clean_up(&tls_ctx_opt);
+                goto error;
+            }
+        }
+
+        secure_tunnel->tls_ctx = aws_tls_client_ctx_new(allocator, &tls_ctx_opt);
+        if (secure_tunnel->tls_ctx == NULL) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "Failed to initialize TLS context with error %s.",
+                aws_error_debug_str(aws_last_error()));
+            aws_tls_ctx_options_clean_up(&tls_ctx_opt);
+            goto error;
+        }
+
+        aws_tls_connection_options_init_from_ctx(&secure_tunnel->tls_con_opt, secure_tunnel->tls_ctx);
+        aws_tls_ctx_options_clean_up(&tls_ctx_opt);
+    }
+
+    if (!secure_tunnel->tls_con_opt.server_name) {
+        if (aws_tls_connection_options_set_server_name(
+                &secure_tunnel->tls_con_opt, secure_tunnel->allocator, &options->endpoint_host)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "Failed to set endpoint host name with error %s.",
+                aws_error_debug_str(aws_last_error()));
             goto error;
         }
     }
-
-    secure_tunnel->tls_ctx = aws_tls_client_ctx_new(allocator, &tls_ctx_opt);
-    if (secure_tunnel->tls_ctx == NULL) {
-        goto error;
-    }
-
-    /* tls_connection_options */
-    aws_tls_connection_options_init_from_ctx(&secure_tunnel->tls_con_opt, secure_tunnel->tls_ctx);
-    if (aws_tls_connection_options_set_server_name(
-            &secure_tunnel->tls_con_opt, allocator, (struct aws_byte_cursor *)&options->endpoint_host)) {
-        goto error;
-    }
-
-    aws_tls_ctx_options_clean_up(&tls_ctx_opt);
 
     /* Connection reset */
     secure_tunnel->connections->stream_id = INVALID_STREAM_ID;
@@ -2461,7 +2490,6 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     return secure_tunnel;
 
 error:
-    aws_tls_ctx_options_clean_up(&tls_ctx_opt);
     aws_secure_tunnel_release(secure_tunnel);
     return NULL;
 }

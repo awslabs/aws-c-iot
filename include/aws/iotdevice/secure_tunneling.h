@@ -195,6 +195,11 @@ struct aws_secure_tunnel_options {
     const struct aws_socket_options *socket_options;
 
     /**
+     * (Optional) Tls options to use whenever this Secure Tunnel Client establishes a connection
+     */
+    const struct aws_tls_connection_options *tls_options;
+
+    /**
      * (Optional) Http proxy options to use whenever this Secure Tunnel establishes a connection
      */
     const struct aws_http_proxy_options *http_proxy_options;

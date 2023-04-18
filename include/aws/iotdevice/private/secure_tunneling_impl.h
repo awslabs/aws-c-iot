@@ -13,6 +13,7 @@
 #include <aws/common/task_scheduler.h>
 #include <aws/http/proxy.h>
 #include <aws/http/websocket.h>
+#include <aws/io/host_resolver.h>
 #include <aws/io/socket.h>
 #include <aws/io/tls_channel_handler.h>
 
@@ -207,6 +208,8 @@ struct aws_secure_tunnel {
 
     struct aws_tls_ctx *tls_ctx;
     struct aws_tls_connection_options tls_con_opt;
+
+    struct aws_host_resolution_config host_resolution_config;
 
     /*
      * The recurrent task that runs all secure tunnel logic outside of external event callbacks.  Bound to the secure
