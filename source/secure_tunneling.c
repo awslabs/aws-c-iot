@@ -1153,6 +1153,8 @@ void s_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, en
             .on_incoming_frame_begin = s_on_websocket_incoming_frame_begin,
             .on_incoming_frame_payload = s_on_websocket_incoming_frame_payload,
             .on_incoming_frame_complete = s_on_websocket_incoming_frame_complete,
+
+            .host_resolution_config = &secure_tunnel->host_resolution_config,
         };
 
         if (secure_tunnel->config->http_proxy_config != NULL) {
@@ -2417,6 +2419,10 @@ struct aws_secure_tunnel *aws_secure_tunnel_new(
     if (secure_tunnel->loop == NULL) {
         goto error;
     }
+
+    secure_tunnel->host_resolution_config = aws_host_resolver_init_default_resolution_config();
+    secure_tunnel->host_resolution_config.resolve_frequency_ns =
+        aws_timestamp_convert(MAX_RECONNECT_DELAY_MS, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL);
 
     secure_tunnel->desired_state = AWS_STS_STOPPED;
     secure_tunnel->current_state = AWS_STS_STOPPED;
