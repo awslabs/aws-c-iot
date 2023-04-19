@@ -40,8 +40,14 @@ static struct aws_error_info s_errors[] = {
         "Device defender task was invoked with an unknown task status."),
 
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
-        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID,
         "Secure Tunnel invalid stream id."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID,
+        "Secure Tunnel invalid connection id."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID,
+        "Secure Tunnel invalid service id."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE,
         "Secure Tunnel stream cannot be started while in Destination Mode."),
@@ -78,6 +84,9 @@ static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP,
         "Secure Tunnel connection interrupted by user request."),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH,
+        "Secure Tunnel connection interrupted due to a protocol version missmatch."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_TERMINATED,
         "Secure Tunnel terminated by user request."),

@@ -17,7 +17,7 @@
 #define AWS_IOT_ST_MAXIMUM_1_BYTE_VARINT_VALUE 128
 #define AWS_IOT_ST_MAXIMUM_2_BYTE_VARINT_VALUE 16384
 #define AWS_IOT_ST_MAXIMUM_3_BYTE_VARINT_VALUE 2097152
-#define AWS_IOT_ST_MAX_MESSAGE_SIZE (64 * 1024)
+#define AWS_IOT_ST_MAX_PAYLOAD_SIZE (63 * 1024)
 
 enum aws_secure_tunnel_field_number {
     AWS_SECURE_TUNNEL_FN_TYPE = 1,
@@ -55,9 +55,6 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_byte_cursor *cursor,
     aws_secure_tunnel_on_message_received_fn *on_message_received);
-
-AWS_IOTDEVICE_API
-const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type);
 
 AWS_EXTERN_C_END
 

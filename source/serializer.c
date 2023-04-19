@@ -92,6 +92,10 @@ static int s_iot_st_encode_stream_id(int32_t data, struct aws_byte_buf *buffer) 
     return s_iot_st_encode_varint(AWS_SECURE_TUNNEL_FN_STREAM_ID, AWS_SECURE_TUNNEL_PBWT_VARINT, data, buffer);
 }
 
+static int s_iot_st_encode_connection_id(uint32_t data, struct aws_byte_buf *buffer) {
+    return s_iot_st_encode_varint(AWS_SECURE_TUNNEL_FN_CONNECTION_ID, AWS_SECURE_TUNNEL_PBWT_VARINT, data, buffer);
+}
+
 static int s_iot_st_encode_ignorable(int32_t data, struct aws_byte_buf *buffer) {
     return s_iot_st_encode_varint(AWS_SECURE_TUNNEL_FN_IGNORABLE, AWS_SECURE_TUNNEL_PBWT_VARINT, data, buffer);
 }
@@ -156,6 +160,21 @@ static int s_iot_st_compute_message_length(
         }
 
         local_length += (1 + stream_id_length);
+    }
+
+    if (message->connection_id != 0) {
+        /*
+         * 1 byte connection_id key
+         * 1-4 byte connection_id varint
+         */
+
+        size_t connection_id_length = 0;
+
+        if (s_iot_st_get_varint_size(message->connection_id, &connection_id_length)) {
+            return AWS_OP_ERR;
+        }
+
+        local_length += (1 + connection_id_length);
     }
 
     if (message->ignorable != 0) {
@@ -256,6 +275,12 @@ int aws_iot_st_msg_serialize_from_view(
         }
     }
 
+    if (message_view->connection_id != 0) {
+        if (s_iot_st_encode_connection_id(message_view->connection_id, buffer)) {
+            goto cleanup;
+        }
+    }
+
     if (message_view->ignorable != 0) {
         if (s_iot_st_encode_ignorable(message_view->ignorable, buffer)) {
             goto cleanup;
@@ -288,11 +313,6 @@ int aws_iot_st_msg_serialize_from_view(
         if (s_iot_st_encode_service_id(message_view->service_id, buffer)) {
             goto cleanup;
         }
-    }
-
-    if (buffer->capacity > AWS_IOT_ST_MAX_MESSAGE_SIZE) {
-        aws_raise_error(AWS_ERROR_INVALID_BUFFER_SIZE);
-        goto cleanup;
     }
 
     return AWS_OP_SUCCESS;
@@ -349,6 +369,9 @@ int aws_secure_tunnel_deserialize_varint_from_cursor_to_message(
         case AWS_SECURE_TUNNEL_FN_IGNORABLE:
             message->ignorable = result;
             break;
+        case AWS_SECURE_TUNNEL_FN_CONNECTION_ID:
+            message->connection_id = result;
+            break;
         default:
             AWS_LOGF_WARN(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -372,7 +395,6 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
         (void *)secure_tunnel,
         cursor->len);
 
-    AWS_RETURN_ERROR_IF2(cursor->len < AWS_IOT_ST_MAX_MESSAGE_SIZE, AWS_ERROR_INVALID_BUFFER_SIZE);
     uint8_t wire_type;
     uint8_t field_number;
     struct aws_secure_tunnel_message_view message_view;
@@ -467,35 +489,4 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
 
 error:
     return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE;
-}
-
-const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_message_type message_type) {
-    switch (message_type) {
-        case AWS_SECURE_TUNNEL_MT_UNKNOWN:
-            return "ST_MT_UNKNOWN";
-
-        case AWS_SECURE_TUNNEL_MT_DATA:
-            return "DATA";
-
-        case AWS_SECURE_TUNNEL_MT_STREAM_START:
-            return "STREAM START";
-
-        case AWS_SECURE_TUNNEL_MT_STREAM_RESET:
-            return "STREAM RESET";
-
-        case AWS_SECURE_TUNNEL_MT_SESSION_RESET:
-            return "SESSION RESET";
-
-        case AWS_SECURE_TUNNEL_MT_SERVICE_IDS:
-            return "SERVICE IDS";
-
-        case AWS_SECURE_TUNNEL_MT_CONNECTION_START:
-            return "CONNECTION START";
-
-        case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
-            return "CONNECTION RESET";
-
-        default:
-            return "UNKNOWN";
-    }
 }

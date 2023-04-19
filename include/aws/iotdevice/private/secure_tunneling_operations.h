@@ -23,7 +23,9 @@ enum aws_secure_tunnel_operation_type {
     AWS_STOT_PING,
     AWS_STOT_MESSAGE,
     AWS_STOT_STREAM_RESET,
-    AWS_STOT_STREAM_START
+    AWS_STOT_STREAM_START,
+    AWS_STOT_CONNECTION_START,
+    AWS_STOT_CONNECTION_RESET,
 };
 
 struct aws_service_id_element {
@@ -31,18 +33,12 @@ struct aws_service_id_element {
     struct aws_byte_cursor service_id_cur;
     struct aws_string *service_id_string;
     int32_t stream_id;
+    struct aws_hash_table connection_ids;
 };
 
-struct aws_secure_tunnel_message_storage {
+struct aws_connection_id_element {
     struct aws_allocator *allocator;
-    struct aws_secure_tunnel_message_view storage_view;
-
-    bool ignorable;
-    int32_t stream_id;
-    struct aws_byte_cursor service_id;
-    struct aws_byte_cursor payload;
-
-    struct aws_byte_buf storage;
+    uint32_t connection_id;
 };
 
 /* Basic vtable for all secure tunnel operations.  Implementations are per-message type */
@@ -57,8 +53,13 @@ struct aws_secure_tunnel_operation_vtable {
         struct aws_secure_tunnel_operation *operation,
         struct aws_secure_tunnel *secure_tunnel);
 
-    /* Set the stream id of outgoing st_msg to +1 of the currently set stream id */
+    /* Set the stream id of outgoing STREAM START message to +1 of the currently set stream id */
     int (*aws_secure_tunnel_operation_set_next_stream_id_fn)(
+        struct aws_secure_tunnel_operation *operation,
+        struct aws_secure_tunnel *secure_tunnel);
+
+    /* Set the connection id of outbound CONNECTION START as active for the Source device */
+    int (*aws_secure_tunnel_operation_set_connection_start_id)(
         struct aws_secure_tunnel_operation *operation,
         struct aws_secure_tunnel *secure_tunnel);
 };
@@ -173,6 +174,12 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     const struct aws_secure_tunnel_options *options);
 
 AWS_IOTDEVICE_API
+void aws_secure_tunnel_connections_destroy(struct aws_secure_tunnel_connections *storage);
+
+AWS_IOTDEVICE_API
+struct aws_secure_tunnel_connections *aws_secure_tunnel_connections_new(struct aws_allocator *allocator);
+
+AWS_IOTDEVICE_API
 void aws_secure_tunnel_options_storage_log(
     const struct aws_secure_tunnel_options_storage *options_storage,
     enum aws_log_level level);
@@ -196,6 +203,14 @@ struct aws_service_id_element *aws_service_id_element_new(
     struct aws_allocator *allocator,
     const struct aws_byte_cursor *service_id,
     int32_t stream_id);
+
+AWS_IOTDEVICE_API
+void aws_connection_id_destroy(void *data);
+
+AWS_IOTDEVICE_API
+struct aws_connection_id_element *aws_connection_id_element_new(
+    struct aws_allocator *allocator,
+    uint32_t connection_id);
 
 AWS_EXTERN_C_END
 

@@ -13,6 +13,7 @@
 #include <aws/common/task_scheduler.h>
 #include <aws/http/proxy.h>
 #include <aws/http/websocket.h>
+#include <aws/io/host_resolver.h>
 #include <aws/io/socket.h>
 #include <aws/io/tls_channel_handler.h>
 
@@ -99,8 +100,19 @@ struct data_tunnel_pair {
     struct aws_allocator *allocator;
     struct aws_byte_buf buf;
     struct aws_byte_cursor cur;
+    enum aws_secure_tunnel_message_type type;
     const struct aws_secure_tunnel *secure_tunnel;
     bool length_prefix_written;
+};
+
+struct aws_secure_tunnel_message_storage {
+    struct aws_allocator *allocator;
+    struct aws_secure_tunnel_message_view storage_view;
+
+    struct aws_byte_cursor service_id;
+    struct aws_byte_cursor payload;
+
+    struct aws_byte_buf storage;
 };
 
 /*
@@ -120,26 +132,40 @@ struct aws_secure_tunnel_options_storage {
 
     struct aws_string *endpoint_host;
 
-    /* Stream related info */
-    int32_t stream_id;
-
-    struct aws_hash_table service_ids;
-
     /* Callbacks */
     aws_secure_tunnel_message_received_fn *on_message_received;
     aws_secure_tunneling_on_connection_complete_fn *on_connection_complete;
     aws_secure_tunneling_on_connection_shutdown_fn *on_connection_shutdown;
     aws_secure_tunneling_on_stream_start_fn *on_stream_start;
     aws_secure_tunneling_on_stream_reset_fn *on_stream_reset;
+    aws_secure_tunneling_on_connection_start_fn *on_connection_start;
+    aws_secure_tunneling_on_connection_reset_fn *on_connection_reset;
     aws_secure_tunneling_on_session_reset_fn *on_session_reset;
     aws_secure_tunneling_on_stopped_fn *on_stopped;
+    aws_secure_tunneling_on_send_message_complete_fn *on_send_message_complete;
 
-    aws_secure_tunneling_on_send_data_complete_fn *on_send_data_complete;
     aws_secure_tunneling_on_termination_complete_fn *on_termination_complete;
     void *secure_tunnel_on_termination_user_data;
 
     void *user_data;
     enum aws_secure_tunneling_local_proxy_mode local_proxy_mode;
+};
+
+struct aws_secure_tunnel_connections {
+    struct aws_allocator *allocator;
+
+    uint8_t protocol_version;
+
+    /* Used for streams not using multiplexing (service ids) */
+    int32_t stream_id;
+    struct aws_hash_table connection_ids;
+
+    /* Table containing streams using multiplexing (service ids) */
+    struct aws_hash_table service_ids;
+
+    /* Message used for initializing a stream upon a reconnect due to a protocol version missmatch */
+    struct aws_secure_tunnel_message_storage *restore_stream_message_view;
+    struct aws_secure_tunnel_message_storage restore_stream_message;
 };
 
 struct aws_secure_tunnel_vtable {
@@ -175,8 +201,15 @@ struct aws_secure_tunnel {
      */
     struct aws_secure_tunnel_options_storage *config;
 
+    /*
+     * Stores connection related information
+     */
+    struct aws_secure_tunnel_connections *connections;
+
     struct aws_tls_ctx *tls_ctx;
     struct aws_tls_connection_options tls_con_opt;
+
+    struct aws_host_resolution_config host_resolution_config;
 
     /*
      * The recurrent task that runs all secure tunnel logic outside of external event callbacks.  Bound to the secure
@@ -266,6 +299,14 @@ AWS_IOTDEVICE_API void aws_secure_tunnel_set_vtable(
  * mutate it selectively to achieve the scenario we're interested in.
  */
 AWS_IOTDEVICE_API const struct aws_secure_tunnel_vtable *aws_secure_tunnel_get_default_vtable(void);
+
+/*
+ * For testing purposes. This message type should only be sent due to internal logic.
+ */
+AWS_IOTDEVICE_API
+int aws_secure_tunnel_connection_reset(
+    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel_message_view *message_options);
 
 AWS_EXTERN_C_END
 
