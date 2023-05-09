@@ -9,6 +9,8 @@
 
 #include <aws/mqtt/mqtt.h>
 
+AWS_PUSH_SANE_WARNING_LEVEL
+
 #define AWS_C_IOTDEVICE_PACKAGE_ID 13
 
 enum aws_iotdevice_error {
@@ -66,5 +68,6 @@ AWS_IOTDEVICE_API
 void aws_iotdevice_library_clean_up(void);
 
 AWS_EXTERN_C_END
+AWS_POP_SANE_WARNING_LEVEL
 
 #endif

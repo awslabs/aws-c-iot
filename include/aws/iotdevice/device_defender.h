@@ -8,6 +8,8 @@
 
 #include <aws/iotdevice/iotdevice.h>
 
+AWS_PUSH_SANE_WARNING_LEVEL
+
 struct aws_byte_cursor;
 struct aws_array_list;
 struct aws_event_loop;
@@ -369,5 +371,6 @@ AWS_IOTDEVICE_API
 void aws_iotdevice_defender_task_clean_up(struct aws_iotdevice_defender_task *defender_task);
 
 AWS_EXTERN_C_END
+AWS_POP_SANE_WARNING_LEVEL
 
 #endif
