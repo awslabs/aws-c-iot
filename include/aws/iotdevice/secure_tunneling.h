@@ -10,6 +10,8 @@
 
 #include <aws/common/byte_buf.h>
 
+AWS_PUSH_SANE_WARNING_LEVEL
+
 #define AWS_IOT_ST_SPLIT_MESSAGE_SIZE 15000
 
 struct aws_secure_tunnel;
@@ -335,5 +337,6 @@ int aws_secure_tunnel_stream_reset(
     const struct aws_secure_tunnel_message_view *message_options);
 
 AWS_EXTERN_C_END
+AWS_POP_SANE_WARNING_LEVEL
 
 #endif /* AWS_IOTDEVICE_SECURE_TUNNELING_H */
