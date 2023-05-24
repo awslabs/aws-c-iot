@@ -93,6 +93,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
 
+aws_use_package(aws-c-http)
 aws_use_package(aws-c-mqtt)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
