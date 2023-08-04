@@ -1121,7 +1121,10 @@ struct aws_secure_tunnel_websocket_transform_complete_task {
     struct aws_http_message *handshake;
 };
 
-void s_secure_tunneling_websocket_transform_complete_task_fn(struct aws_task *task, void *arg, enum aws_task_status status) {
+void s_secure_tunneling_websocket_transform_complete_task_fn(
+    struct aws_task *task,
+    void *arg,
+    enum aws_task_status status) {
     (void)task;
 
     struct aws_secure_tunnel_websocket_transform_complete_task *websocket_transform_complete_task = arg;
@@ -1275,7 +1278,10 @@ static int s_websocket_connect(struct aws_secure_tunnel *secure_tunnel) {
         aws_mem_calloc(secure_tunnel->allocator, 1, sizeof(struct aws_secure_tunnel_websocket_transform_complete_task));
 
     aws_task_init(
-        &task->task, s_secure_tunneling_websocket_transform_complete_task_fn, (void *)task, "WebsocketHandshakeTransformComplete");
+        &task->task,
+        s_secure_tunneling_websocket_transform_complete_task_fn,
+        (void *)task,
+        "WebsocketHandshakeTransformComplete");
     task->allocator = secure_tunnel->allocator;
     task->secure_tunnel = aws_secure_tunnel_acquire(secure_tunnel);
     task->error_code = AWS_OP_SUCCESS;
