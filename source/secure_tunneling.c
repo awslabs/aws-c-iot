@@ -2547,6 +2547,16 @@ int aws_secure_tunnel_send_message(
         message_op->options_storage.storage_view.connection_id = 0;
     }
 
+    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, &message_op->options_storage.storage_view)) {
+        AWS_LOGF_WARN(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Protocol Version missmatch between previously established Protocol Version "
+            "and Protocol Version used by outgoing DATA message.",
+            (void *)secure_tunnel);
+        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+        goto error;
+    }
+
     AWS_LOGF_DEBUG(
         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
         "id=%p: Submitting MESSAGE operation (%p)",
