@@ -1970,6 +1970,7 @@ static int s_secure_tunneling_send_v2_message_on_v1_connection_fn(struct aws_all
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
 
+    /* Create and send a V2 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
@@ -1977,7 +1978,6 @@ static int s_secure_tunneling_send_v2_message_on_v1_connection_fn(struct aws_all
         .service_id = &service_1,
         .payload = &s_payload_cursor_max_size,
     };
-
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
     ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
 
@@ -2015,6 +2015,7 @@ static int s_secure_tunneling_send_v3_message_on_v1_connection_fn(struct aws_all
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
 
+    /* Create and send a V3 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
@@ -2023,7 +2024,6 @@ static int s_secure_tunneling_send_v3_message_on_v1_connection_fn(struct aws_all
         .connection_id = 3,
         .payload = &s_payload_cursor_max_size,
     };
-
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
     ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
 
@@ -2063,6 +2063,7 @@ static int s_secure_tunneling_send_v3_message_on_v2_connection_fn(struct aws_all
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
+    /* Create and send a V3 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
         .stream_id = 0,
@@ -2070,7 +2071,6 @@ static int s_secure_tunneling_send_v3_message_on_v2_connection_fn(struct aws_all
         .connection_id = 3,
         .payload = &s_payload_cursor_max_size,
     };
-
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
     ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
 
@@ -2097,7 +2097,7 @@ static int s_secure_tunneling_send_v1_message_on_v2_connection_fn(struct aws_all
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
 
-    /* Create and send a V1 StreamStart message from the server to the destination client */
+    /* Create and send a V2 StreamStart message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
     struct aws_secure_tunnel_message_view stream_start_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
@@ -2110,12 +2110,12 @@ static int s_secure_tunneling_send_v1_message_on_v2_connection_fn(struct aws_all
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
+    /* Create and send a V1 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
         .stream_id = 0,
         .payload = &s_payload_cursor_max_size,
     };
-
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
     ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
 
@@ -2142,7 +2142,7 @@ static int s_secure_tunneling_send_v1_message_on_v3_connection_fn(struct aws_all
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
 
-    /* Create and send a V1 StreamStart message from the server to the destination client */
+    /* Create and send a V3 StreamStart message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
     struct aws_secure_tunnel_message_view stream_start_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
@@ -2156,12 +2156,12 @@ static int s_secure_tunneling_send_v1_message_on_v3_connection_fn(struct aws_all
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
+    /* Create and send a V1 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
         .stream_id = 0,
         .payload = &s_payload_cursor_max_size,
     };
-
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
     ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
 
@@ -2188,7 +2188,7 @@ static int s_secure_tunneling_send_v2_message_on_v3_connection_fn(struct aws_all
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
     s_wait_for_connected_successfully(&test_fixture);
 
-    /* Create and send a V1 StreamStart message from the server to the destination client */
+    /* Create and send a V3 StreamStart message from the server to the destination client */
     struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
     struct aws_secure_tunnel_message_view stream_start_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
@@ -2202,13 +2202,13 @@ static int s_secure_tunneling_send_v2_message_on_v3_connection_fn(struct aws_all
     s_wait_for_stream_started(&test_fixture);
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
+    /* Create and send a V2 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
     struct aws_secure_tunnel_message_view data_message_view = {
         .type = AWS_SECURE_TUNNEL_MT_DATA,
         .stream_id = 0,
         .service_id = &service_1,
         .payload = &s_payload_cursor_max_size,
     };
-
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
     ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
 
