@@ -1812,7 +1812,7 @@ static int s_secure_tunneling_ignore_outbound_inactive_connection_id_message_sen
         .connection_id = 3,
     };
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
+    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
 
     /* Confirm that no messages have gone out from the client */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));

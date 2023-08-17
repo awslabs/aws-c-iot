@@ -163,6 +163,7 @@ static void s_on_secure_tunnel_zero_ref_count(void *user_data) {
  *                                    STREAM HANDLING
  *****************************************************************************************************************/
 
+/* TODO Remove the message parameter */
 static void s_set_absent_connection_id_to_one(struct aws_secure_tunnel_message_view *message, uint32_t *connection_id) {
     if (message->connection_id == 0) {
         *connection_id = 1;
@@ -300,15 +301,40 @@ static bool s_aws_secure_tunnel_active_stream_check(
     return true;
 }
 
-static bool s_aws_secure_tunnel_is_message_viable_for_connection(
+static bool s_aws_secure_tunnel_is_data_message_viable_for_connection(
     const struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_secure_tunnel_message_view *message) {
-    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message)) {
+    const struct aws_secure_tunnel_message_view *message_view) {
+
+    /* Verify that the message uses the same protocol version as the secure tunnel current connection. */
+    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
+        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
         return false;
     }
-    if (!s_aws_secure_tunnel_active_stream_check(secure_tunnel, message)) {
+
+    /* The V1 message will be assigned a stream ID that is currently in use. */
+    if (secure_tunnel->connections->protocol_version == 1) {
+        return true;
+    }
+
+    /* Check if the requested service ID is opened in the secure tunnel. */
+    struct aws_hash_element *elem = NULL;
+    aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
+    if (elem == NULL) {
+        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
         return false;
     }
+
+    /* The message uses V3 protocol. */
+    if (message_view->connection_id != 0) {
+        struct aws_service_id_element *service_id_elem = elem->value;
+        struct aws_hash_element *connection_id_elem = NULL;
+        aws_hash_table_find(&service_id_elem->connection_ids, &message_view->connection_id, &connection_id_elem);
+        if (connection_id_elem == NULL) {
+            aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -321,6 +347,7 @@ static int s_aws_secure_tunnel_set_stream(
     if (service_id == NULL || service_id->len == 0) {
         secure_tunnel->connections->stream_id = stream_id;
         aws_hash_table_clear(&secure_tunnel->connections->connection_ids);
+        /* TODO This case should be treated as error. */
         if (connection_id > 0) {
             struct aws_connection_id_element *connection_id_elem =
                 aws_connection_id_element_new(secure_tunnel->allocator, connection_id);
@@ -2560,14 +2587,13 @@ int aws_secure_tunnel_send_message(
         message_op->options_storage.storage_view.connection_id = 0;
     }
 
-    if (!s_aws_secure_tunnel_is_message_viable_for_connection(
+    if (!s_aws_secure_tunnel_is_data_message_viable_for_connection(
             secure_tunnel, &message_op->options_storage.storage_view)) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Ignore outbound DATA message due to "
             "Protocol Version and Protocol Version used by the message.",
             (void *)secure_tunnel);
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
         goto error;
     }
 
