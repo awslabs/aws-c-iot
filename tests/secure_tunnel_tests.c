@@ -2148,7 +2148,7 @@ static int s_secure_tunneling_send_v1_message_on_v3_connection_fn(struct aws_all
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
         .service_id = &service_1,
         .stream_id = 1,
-        .connection_id = 3
+        .connection_id = 3,
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
 
@@ -2194,7 +2194,7 @@ static int s_secure_tunneling_send_v2_message_on_v3_connection_fn(struct aws_all
         .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
         .service_id = &service_1,
         .stream_id = 1,
-        .connection_id = 3
+        .connection_id = 3,
     };
     aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
 

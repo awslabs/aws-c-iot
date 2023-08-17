@@ -205,7 +205,7 @@ static uint8_t s_aws_secure_tunnel_message_min_protocol_check(const struct aws_s
 }
 
 static bool s_aws_secure_tunnel_protocol_version_match_check(
-    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message) {
     uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message);
     if (secure_tunnel->connections->protocol_version != message_protocol_version) {
@@ -301,7 +301,7 @@ static bool s_aws_secure_tunnel_active_stream_check(
 }
 
 static bool s_aws_secure_tunnel_is_message_viable_for_connection(
-    struct aws_secure_tunnel *secure_tunnel,
+    const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message) {
     if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message)) {
         return false;
@@ -2560,7 +2560,8 @@ int aws_secure_tunnel_send_message(
         message_op->options_storage.storage_view.connection_id = 0;
     }
 
-    if (!s_aws_secure_tunnel_is_message_viable_for_connection(secure_tunnel, &message_op->options_storage.storage_view)) {
+    if (!s_aws_secure_tunnel_is_message_viable_for_connection(
+            secure_tunnel, &message_op->options_storage.storage_view)) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Ignore outbound DATA message due to "
