@@ -301,7 +301,7 @@ static bool s_aws_secure_tunnel_active_stream_check(
     return true;
 }
 
-static bool s_aws_secure_tunnel_is_data_message_viable_for_connection(
+static bool s_aws_secure_tunnel_is_data_message_valid_for_connection(
     const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_view) {
 
@@ -2587,7 +2587,7 @@ int aws_secure_tunnel_send_message(
         message_op->options_storage.storage_view.connection_id = 0;
     }
 
-    if (!s_aws_secure_tunnel_is_data_message_viable_for_connection(
+    if (!s_aws_secure_tunnel_is_data_message_valid_for_connection(
             secure_tunnel, &message_op->options_storage.storage_view)) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
