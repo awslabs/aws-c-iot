@@ -1926,7 +1926,7 @@ static int s_secure_tunneling_send_v2_message_on_v1_connection_fn(struct aws_all
         .payload = &s_payload_cursor_max_size,
     };
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Confirm that no messages have gone out from the client */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
@@ -1976,7 +1976,7 @@ static int s_secure_tunneling_send_v3_message_on_v1_connection_fn(struct aws_all
         .payload = &s_payload_cursor_max_size,
     };
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Confirm that no messages have gone out from the client */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
@@ -2025,7 +2025,7 @@ static int s_secure_tunneling_send_v1_message_on_v2_connection_fn(struct aws_all
         .payload = &s_payload_cursor_max_size,
     };
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Confirm that no messages have gone out from the client */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
@@ -2076,7 +2076,7 @@ static int s_secure_tunneling_send_v3_message_on_v2_connection_fn(struct aws_all
         .payload = &s_payload_cursor_max_size,
     };
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Confirm that no messages have gone out from the client */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
@@ -2126,7 +2126,7 @@ static int s_secure_tunneling_send_v1_message_on_v3_connection_fn(struct aws_all
         .payload = &s_payload_cursor_max_size,
     };
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Confirm that no messages have gone out from the client */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
@@ -2177,7 +2177,7 @@ static int s_secure_tunneling_send_v2_message_on_v3_connection_fn(struct aws_all
         .payload = &s_payload_cursor_max_size,
     };
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Confirm that no messages have gone out from the client */
     aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
@@ -2314,3 +2314,44 @@ static int s_secure_tunneling_send_v3_message_on_incorrect_v3_connection_fn(
 AWS_TEST_CASE(
     secure_tunneling_send_v3_message_on_incorrect_v3_connection,
     s_secure_tunneling_send_v3_message_on_incorrect_v3_connection_fn)
+
+static int s_secure_tunneling_send_v1_data_message_with_no_active_connection_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V1 DATA message,
+     * this should fail with INVALID CONNECTION ID error */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .payload = &s_payload_cursor_max_size,
+    };
+
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION);
+
+    /* Confirm that no messages have gone out from the client */
+    aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v1_data_message_with_no_active_connection,
+    s_secure_tunneling_send_v1_data_message_with_no_active_connection_fn)

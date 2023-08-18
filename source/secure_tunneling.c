@@ -300,13 +300,23 @@ static bool s_aws_secure_tunnel_active_stream_check(
     return true;
 }
 
-static bool s_aws_secure_tunnel_is_data_message_valid_for_connection(
+/**
+ * \internal
+ * Check if DATA message can be sent to one of active connections.
+ * \endinternal
+ */
+static bool s_aws_secure_tunnel_is_data_message_valid_for_connections(
     const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_view) {
 
+    if (secure_tunnel->connections->protocol_version == 0) {
+        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION);
+        return false;
+    }
+
     /* Verify that the message uses the same protocol version as the secure tunnel current connection. */
     if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
         return false;
     }
 
@@ -2593,7 +2603,7 @@ int aws_secure_tunnel_send_message(
         message_op->options_storage.storage_view.connection_id = 0;
     }
 
-    if (!s_aws_secure_tunnel_is_data_message_valid_for_connection(
+    if (!s_aws_secure_tunnel_is_data_message_valid_for_connections(
             secure_tunnel, &message_op->options_storage.storage_view)) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: Failed to send outbound DATA message", (void *)secure_tunnel);
