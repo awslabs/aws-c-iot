@@ -2596,9 +2596,7 @@ int aws_secure_tunnel_send_message(
     if (!s_aws_secure_tunnel_is_data_message_valid_for_connection(
             secure_tunnel, &message_op->options_storage.storage_view)) {
         AWS_LOGF_WARN(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Failed to send outbound DATA message",
-            (void *)secure_tunnel);
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: Failed to send outbound DATA message", (void *)secure_tunnel);
         goto destroy_message_op;
     }
 
