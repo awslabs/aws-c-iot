@@ -566,12 +566,12 @@ static void s_aws_secure_tunnel_on_data_received(
 
     if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         /*
-         * Protocol missmatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
-         * initializing the stream that caused the missmatch
+         * Protocol mismatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
+         * initializing the stream that caused the mismatch
          */
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
+            "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming STREAM START message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
@@ -628,12 +628,12 @@ static void s_aws_secure_tunnel_on_stream_start_received(
             secure_tunnel->connections->protocol_version);
     } else if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         /*
-         * Protocol missmatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
-         * initializing the stream that caused the missmatch
+         * Protocol mismatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
+         * initializing the stream that caused the mismatch
          */
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
+            "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming STREAM START message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
@@ -671,7 +671,7 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
         !s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
+            "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming STREAM RESET message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
@@ -784,7 +784,7 @@ static void s_aws_secure_tunnel_on_connection_start_received(
     if (secure_tunnel->connections->protocol_version != 3) {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
+            "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming CONNECTION START message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
@@ -827,7 +827,7 @@ static void s_aws_secure_tunnel_on_connection_reset_received(
     if (secure_tunnel->connections->protocol_version != 3) {
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
+            "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming CONNECTION RESET message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
@@ -2366,7 +2366,7 @@ static void s_service_state_clean_disconnect(struct aws_secure_tunnel *secure_tu
     if (aws_linked_list_empty(&secure_tunnel->queued_operations)) {
         s_reset_secure_tunnel_streams(secure_tunnel);
         s_secure_tunnel_shutdown_websocket(
-            secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH);
+            secure_tunnel, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH);
         return;
     }
 
@@ -2641,12 +2641,12 @@ int aws_secure_tunnel_stream_start(
 
     if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_options)) {
         /*
-         * Protocol missmatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
-         * sending the STREAM START request that caused the missmatch.
+         * Protocol mismatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
+         * sending the STREAM START request that caused the mismatch.
          */
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will be reset due to Protocol Version missmatch between previously established "
+            "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by outbound STREAM START message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
@@ -2699,7 +2699,7 @@ int aws_secure_tunnel_connection_start(
     if (secure_tunnel->connections->protocol_version != 3) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start may only be used with a Protocol V3 stream.");
-        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH;
+        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH;
     }
 
     if (message_options->connection_id == 0) {
