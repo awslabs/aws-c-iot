@@ -341,7 +341,6 @@ static bool s_aws_secure_tunnel_is_data_message_valid_for_connections(
 
     /* The message uses V3 protocol, check connection ID. */
     if (message_view->connection_id != 0) {
-        struct aws_service_id_element *service_id_elem = elem->value;
         struct aws_hash_element *connection_id_elem = NULL;
         aws_hash_table_find(&service_id_elem->connection_ids, &message_view->connection_id, &connection_id_elem);
         if (connection_id_elem == NULL) {
