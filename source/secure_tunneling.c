@@ -314,7 +314,6 @@ static bool s_aws_secure_tunnel_is_data_message_valid_for_connections(
         return false;
     }
 
-    /* Verify that the message uses the same protocol version as the secure tunnel current connection. */
     if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
         aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
         return false;
@@ -325,7 +324,7 @@ static bool s_aws_secure_tunnel_is_data_message_valid_for_connections(
         return true;
     }
 
-    /* Check if the requested service ID is available in the secure tunnel. */
+    /* The message is at least V2 version, check if the requested service ID is available in the secure tunnel. */
     struct aws_hash_element *elem = NULL;
     aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
     if (elem == NULL) {
