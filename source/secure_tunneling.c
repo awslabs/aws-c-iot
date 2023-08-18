@@ -316,10 +316,17 @@ static bool s_aws_secure_tunnel_is_data_message_valid_for_connection(
         return true;
     }
 
-    /* Check if the requested service ID is opened in the secure tunnel. */
+    /* Check if the requested service ID is available in the secure tunnel. */
     struct aws_hash_element *elem = NULL;
     aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
     if (elem == NULL) {
+        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
+        return false;
+    }
+
+    /* Check if the requested service ID is active. */
+    struct aws_service_id_element *service_id_elem = elem->value;
+    if (service_id_elem->stream_id == INVALID_STREAM_ID) {
         aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
         return false;
     }
@@ -2575,7 +2582,7 @@ int aws_secure_tunnel_send_message(
         secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_MESSAGE);
 
     if (message_op == NULL) {
-        return aws_last_error();
+        goto error;
     }
 
     /*
@@ -2591,10 +2598,9 @@ int aws_secure_tunnel_send_message(
             secure_tunnel, &message_op->options_storage.storage_view)) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Ignore outbound DATA message due to "
-            "Protocol Version and Protocol Version used by the message.",
+            "id=%p: Failed to send outbound DATA message",
             (void *)secure_tunnel);
-        goto error;
+        goto destroy_message_op;
     }
 
     AWS_LOGF_DEBUG(
@@ -2604,13 +2610,14 @@ int aws_secure_tunnel_send_message(
         (void *)message_op);
 
     if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
+        goto destroy_message_op;
     }
 
     return AWS_OP_SUCCESS;
 
-error:
+destroy_message_op:
     aws_secure_tunnel_operation_release(&message_op->base);
+error:
     return aws_last_error();
 }
 
