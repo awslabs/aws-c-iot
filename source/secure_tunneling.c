@@ -163,7 +163,6 @@ static void s_on_secure_tunnel_zero_ref_count(void *user_data) {
  *                                    STREAM HANDLING
  *****************************************************************************************************************/
 
-/* TODO Remove the message parameter */
 static void s_set_absent_connection_id_to_one(struct aws_secure_tunnel_message_view *message, uint32_t *connection_id) {
     if (message->connection_id == 0) {
         *connection_id = 1;
@@ -311,7 +310,7 @@ static bool s_aws_secure_tunnel_is_data_message_valid_for_connection(
         return false;
     }
 
-    /* The V1 message will be assigned a stream ID that is currently in use. */
+    /* The V1 message will be assigned a stream ID that is currently in use, so it's always valid. */
     if (secure_tunnel->connections->protocol_version == 1) {
         return true;
     }
@@ -331,7 +330,7 @@ static bool s_aws_secure_tunnel_is_data_message_valid_for_connection(
         return false;
     }
 
-    /* The message uses V3 protocol. */
+    /* The message uses V3 protocol, check connection ID. */
     if (message_view->connection_id != 0) {
         struct aws_service_id_element *service_id_elem = elem->value;
         struct aws_hash_element *connection_id_elem = NULL;
