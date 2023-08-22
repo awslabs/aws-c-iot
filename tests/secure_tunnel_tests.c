@@ -14,6 +14,7 @@
 #include <aws/common/clock.h>
 #include <aws/common/error.h>
 #include <aws/common/string.h>
+#include <aws/common/thread.h>
 #include <aws/http/websocket.h>
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/event_loop.h>
@@ -75,6 +76,15 @@ static void s_secure_tunnel_test_init_default_options(struct secure_tunnel_test_
         .endpoint_host = aws_byte_cursor_from_string(s_endpoint_host),
         .access_token = aws_byte_cursor_from_string(s_access_token),
         .local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE,
+    };
+    test_options->secure_tunnel_options = local_secure_tunnel_options;
+}
+
+static void s_secure_tunnel_test_init_default_options_source_mode(struct secure_tunnel_test_options *test_options) {
+    struct aws_secure_tunnel_options local_secure_tunnel_options = {
+        .endpoint_host = aws_byte_cursor_from_string(s_endpoint_host),
+        .access_token = aws_byte_cursor_from_string(s_access_token),
+        .local_proxy_mode = AWS_SECURE_TUNNELING_SOURCE_MODE,
     };
     test_options->secure_tunnel_options = local_secure_tunnel_options;
 }
@@ -722,7 +732,7 @@ void aws_secure_tunnel_mock_test_init(
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
-    s_secure_tunnel_test_init_default_options(test_options);
+    s_secure_tunnel_test_init_default_options_source_mode(test_options);
 
     test_options->secure_tunnel_options.client_token = aws_byte_cursor_from_string(s_client_token);
 
@@ -791,6 +801,62 @@ static int s_secure_tunneling_functionality_connect_test_fn(struct aws_allocator
 }
 
 AWS_TEST_CASE(secure_tunneling_functionality_connect_test, s_secure_tunneling_functionality_connect_test_fn)
+
+void s_event_loop_thread(void *arg) {
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
+
+    s_wait_for_connected_successfully(test_fixture);
+
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view data_message = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .service_id = &service_1,
+        .stream_id = 1,
+    };
+
+    aws_secure_tunnel_send_mock_message(test_fixture, &data_message);
+}
+
+static int s_secure_tunneling_multiple_stream_start_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    test_fixture.header_check = secure_tunneling_access_token_check;
+
+    struct aws_thread event_loop_thread;
+    aws_thread_init(&event_loop_thread, allocator);
+    struct aws_thread_options thread_options = *aws_default_thread_options();
+    thread_options.cpu_id = 0;
+    ASSERT_SUCCESS(aws_thread_launch(&event_loop_thread, s_event_loop_thread, &test_fixture, &thread_options));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a stream start message from the server to the destination client */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 1,
+    };
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stream_start(secure_tunnel, &stream_start_message_view));
+
+    aws_thread_join(&event_loop_thread);
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(secure_tunneling_multiple_stream_start_test, s_secure_tunneling_multiple_stream_start_test_fn)
 
 int secure_tunneling_client_token_check(const struct aws_http_headers *request_headers, void *user_data) {
     (void)user_data;
