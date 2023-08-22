@@ -807,14 +807,13 @@ void s_event_loop_thread(void *arg) {
 
     s_wait_for_connected_successfully(test_fixture);
 
-    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
-    struct aws_secure_tunnel_message_view data_message = {
-        .type = AWS_SECURE_TUNNEL_MT_DATA,
-        .service_id = &service_1,
-        .stream_id = 1,
+    struct aws_secure_tunnel_message_view session_reset_message = {
+        .type = AWS_SECURE_TUNNEL_MT_SESSION_RESET,
     };
+    for (int i = 0; i < 10; ++i) {
+        aws_secure_tunnel_send_mock_message(test_fixture, &session_reset_message);
+    }
 
-    aws_secure_tunnel_send_mock_message(test_fixture, &data_message);
 }
 
 static int s_secure_tunneling_multiple_stream_start_test_fn(struct aws_allocator *allocator, void *ctx) {
@@ -827,26 +826,38 @@ static int s_secure_tunneling_multiple_stream_start_test_fn(struct aws_allocator
 
     test_fixture.header_check = secure_tunneling_access_token_check;
 
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a stream start message to the server. */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        /* .stream_id = 1, */
+        .connection_id = 2,
+    };
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stream_start(secure_tunnel, &stream_start_message_view));
+
+    /* Currently that's the only way to be sure that we're in a CONNECTED state. */
+    aws_thread_current_sleep(1000000000);
+
     struct aws_thread event_loop_thread;
     aws_thread_init(&event_loop_thread, allocator);
     struct aws_thread_options thread_options = *aws_default_thread_options();
     thread_options.cpu_id = 0;
     ASSERT_SUCCESS(aws_thread_launch(&event_loop_thread, s_event_loop_thread, &test_fixture, &thread_options));
 
-    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
-    s_wait_for_connected_successfully(&test_fixture);
-
-    /* Create and send a stream start message from the server to the destination client */
-    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
-    struct aws_secure_tunnel_message_view stream_start_message_view = {
-        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
-        .service_id = &service_1,
-        .stream_id = 1,
-    };
-
-    ASSERT_SUCCESS(aws_secure_tunnel_stream_start(secure_tunnel, &stream_start_message_view));
+    aws_thread_current_sleep(2000000000);
+    /* stream_start_message_view.connection_id = 3; */
+    for (int i = 0; i < 20; ++i) {
+        ASSERT_SUCCESS(aws_secure_tunnel_stream_start(secure_tunnel, &stream_start_message_view));
+    }
 
     aws_thread_join(&event_loop_thread);
+
+    aws_thread_current_sleep(1000000000);
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
