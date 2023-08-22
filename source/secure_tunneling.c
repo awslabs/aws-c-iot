@@ -2589,7 +2589,7 @@ int aws_secure_tunnel_send_message(
         secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_MESSAGE);
 
     if (message_op == NULL) {
-        goto error;
+        return aws_last_error();
     }
 
     /*
@@ -2622,7 +2622,6 @@ int aws_secure_tunnel_send_message(
 
 destroy_message_op:
     aws_secure_tunnel_operation_release(&message_op->base);
-error:
     return aws_last_error();
 }
 
@@ -2637,7 +2636,8 @@ int aws_secure_tunnel_stream_start(
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
     }
 
-    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_options)) {
+    if (secure_tunnel->connections->protocol_version != 0 &&
+        !s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_options)) {
         /*
          * Protocol mismatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
          * sending the STREAM START request that caused the mismatch.
