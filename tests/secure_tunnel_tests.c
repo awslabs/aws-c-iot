@@ -129,11 +129,11 @@ struct aws_secure_tunnel_mock_test_fixture {
     int secure_tunnel_message_sent_connection_reset_count;
     int secure_tunnel_message_sent_data_count;
 
-    bool on_send_message_fired;
+    bool on_send_message_complete_fired;
     struct {
         enum aws_secure_tunnel_message_type type;
         int error_code;
-    } send_message_callback_result;
+    } on_send_message_complete_result;
 };
 
 static bool s_secure_tunnel_check_active_stream_id(
@@ -250,9 +250,9 @@ static void s_on_test_secure_tunnel_send_message_complete(
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = user_data;
 
     aws_mutex_lock(&test_fixture->lock);
-    test_fixture->on_send_message_fired = true;
-    test_fixture->send_message_callback_result.type = type;
-    test_fixture->send_message_callback_result.error_code = error_code;
+    test_fixture->on_send_message_complete_fired = true;
+    test_fixture->on_send_message_complete_result.type = type;
+    test_fixture->on_send_message_complete_result.error_code = error_code;
     aws_condition_variable_notify_all(&test_fixture->signal);
     aws_mutex_unlock(&test_fixture->lock);
 }
@@ -510,7 +510,7 @@ static void s_wait_for_n_messages_received(struct aws_secure_tunnel_mock_test_fi
 
 static bool s_has_secure_tunnel_on_send_message_complete_fired(void *arg) {
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
-    return test_fixture->on_send_message_fired;
+    return test_fixture->on_send_message_complete_fired;
 }
 
 static void s_wait_for_on_send_message_complete_fired(struct aws_secure_tunnel_mock_test_fixture *test_fixture) {
@@ -2065,9 +2065,9 @@ static int s_secure_tunneling_send_v3_data_message_on_v1_connection_test_fn(
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
 
     /* Confirm that on_send_message_complete callback was fired */
-    ASSERT_INT_EQUALS(test_fixture.send_message_callback_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
     ASSERT_INT_EQUALS(
-        test_fixture.send_message_callback_result.error_code,
+        test_fixture.on_send_message_complete_result.error_code,
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Ensure that the established stream was not affected by the message */
@@ -2125,9 +2125,9 @@ static int s_secure_tunneling_send_v1_data_message_on_v2_connection_test_fn(
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
 
     /* Confirm that on_send_message_complete callback was fired */
-    ASSERT_INT_EQUALS(test_fixture.send_message_callback_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
     ASSERT_INT_EQUALS(
-        test_fixture.send_message_callback_result.error_code,
+        test_fixture.on_send_message_complete_result.error_code,
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Ensure that the established stream was not affected by the message */
@@ -2187,9 +2187,9 @@ static int s_secure_tunneling_send_v3_data_message_on_v2_connection_test_fn(
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
 
     /* Confirm that on_send_message_complete callback was fired */
-    ASSERT_INT_EQUALS(test_fixture.send_message_callback_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
     ASSERT_INT_EQUALS(
-        test_fixture.send_message_callback_result.error_code,
+        test_fixture.on_send_message_complete_result.error_code,
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Ensure that the established stream was not affected by the message */
@@ -2248,9 +2248,9 @@ static int s_secure_tunneling_send_v1_data_message_on_v3_connection_test_fn(
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
 
     /* Confirm that on_send_message_complete callback was fired */
-    ASSERT_INT_EQUALS(test_fixture.send_message_callback_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
     ASSERT_INT_EQUALS(
-        test_fixture.send_message_callback_result.error_code,
+        test_fixture.on_send_message_complete_result.error_code,
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Ensure that the established stream was not affected by the message */
@@ -2310,9 +2310,9 @@ static int s_secure_tunneling_send_v2_data_message_on_v3_connection_test_fn(
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
 
     /* Confirm that on_send_message_complete callback was fired */
-    ASSERT_INT_EQUALS(test_fixture.send_message_callback_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
     ASSERT_INT_EQUALS(
-        test_fixture.send_message_callback_result.error_code,
+        test_fixture.on_send_message_complete_result.error_code,
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
 
     /* Ensure that the established stream was not affected by the message */
@@ -2376,9 +2376,10 @@ static int s_secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_te
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
 
     /* Confirm that on_send_message_complete callback was fired */
-    ASSERT_INT_EQUALS(test_fixture.send_message_callback_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
     ASSERT_INT_EQUALS(
-        test_fixture.send_message_callback_result.error_code, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID);
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID);
 
     /* Ensure that the established stream was not affected by the message */
     ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
@@ -2442,9 +2443,9 @@ static int s_secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_te
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
 
     /* Confirm that on_send_message_complete callback was fired */
-    ASSERT_INT_EQUALS(test_fixture.send_message_callback_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
     ASSERT_INT_EQUALS(
-        test_fixture.send_message_callback_result.error_code,
+        test_fixture.on_send_message_complete_result.error_code,
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
 
     /* Ensure that the established stream was not affected by the message */
@@ -2493,9 +2494,9 @@ static int s_secure_tunneling_send_v1_data_message_with_no_active_connection_tes
     ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
 
     /* Confirm that on_send_message_complete callback was fired */
-    ASSERT_INT_EQUALS(test_fixture.send_message_callback_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
     ASSERT_INT_EQUALS(
-        test_fixture.send_message_callback_result.error_code,
+        test_fixture.on_send_message_complete_result.error_code,
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION);
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
