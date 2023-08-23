@@ -524,32 +524,68 @@ static void s_wait_for_on_send_message_complete_fired(struct aws_secure_tunnel_m
  *                                    WEBSOCKET MOCK FUNCTIONS
  *****************************************************************************************************************/
 
-/* Serializes message view and sends as Websocket */
+/* Task that simulates a WebSocket payload receiving. */
+struct aws_secure_tunnel_mock_websocket_receive_frame_payload_task {
+    struct aws_task task;
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture;
+    struct aws_byte_buf data_buf;
+    struct aws_byte_buf out_buf;
+};
+
+static void s_secure_tunneling_mock_websocket_receive_frame_payload_task_fn(
+    struct aws_task *task,
+    void *arg,
+    enum aws_task_status status) {
+
+    (void)task;
+
+    struct aws_secure_tunnel_mock_websocket_receive_frame_payload_task *receive_task = arg;
+    if (status != AWS_TASK_STATUS_RUN_READY) {
+        return;
+    }
+
+    struct aws_byte_cursor data_cur = aws_byte_cursor_from_buf(&receive_task->out_buf);
+    receive_task->test_fixture->websocket_function_table->on_incoming_frame_payload_fn(
+        NULL, NULL, data_cur, receive_task->test_fixture->secure_tunnel);
+
+    aws_byte_buf_clean_up(&receive_task->out_buf);
+    aws_byte_buf_clean_up(&receive_task->data_buf);
+    aws_mem_release(receive_task->test_fixture->allocator, receive_task);
+}
+
+/* Serialize a message view and initialize a task for the event loop. The task then will simulate receiving the
+ * WebSocket data.
+ * NOTE In the actual environment, WebSocket operations and the secure tunnel are assigned to the same loop. We can
+ * reproduce this by "receiving" messages from the mocked WebSocket in the same event loop the secure tunnel uses. This
+ * way we don't need to worry about race conditions appearing in the tests that are not possible during the actual
+ * execution.
+ */
 void aws_secure_tunnel_send_mock_message(
     struct aws_secure_tunnel_mock_test_fixture *test_fixture,
     const struct aws_secure_tunnel_message_view *message_view) {
-    /* The actual WebSocket is assigned the same event loop as the secure tunnel but the mock websocket for tests
-     * requires a short sleep to insure there aren't race conditions related to the incoming websocket data being
-     * processed. */
-    aws_thread_current_sleep(aws_timestamp_convert(350, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
-    struct aws_byte_buf data_buf;
-    struct aws_byte_cursor data_cur;
-    struct aws_byte_buf out_buf;
-    aws_iot_st_msg_serialize_from_view(&data_buf, test_fixture->allocator, message_view);
-    data_cur = aws_byte_cursor_from_buf(&data_buf);
-    aws_byte_buf_init(&out_buf, test_fixture->allocator, data_cur.len + PAYLOAD_BYTE_LENGTH_PREFIX);
-    aws_byte_buf_write_be16(&out_buf, (int16_t)data_buf.len);
-    aws_byte_buf_write_to_capacity(&out_buf, &data_cur);
-    data_cur = aws_byte_cursor_from_buf(&out_buf);
-    test_fixture->websocket_function_table->on_incoming_frame_payload_fn(
-        NULL, NULL, data_cur, test_fixture->secure_tunnel);
 
-    aws_byte_buf_clean_up(&out_buf);
-    aws_byte_buf_clean_up(&data_buf);
-    /* The actual WebSocket is assigned the same event loop as the secure tunnel but the mock websocket for tests
-     * requires a short sleep to insure there aren't race conditions related to the incoming websocket data being
-     * processed. */
-    aws_thread_current_sleep(aws_timestamp_convert(350, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
+    struct aws_secure_tunnel_mock_websocket_receive_frame_payload_task *receive_task = aws_mem_calloc(
+        test_fixture->secure_tunnel->allocator,
+        1,
+        sizeof(struct aws_secure_tunnel_mock_websocket_receive_frame_payload_task));
+
+    aws_task_init(
+        &receive_task->task,
+        s_secure_tunneling_mock_websocket_receive_frame_payload_task_fn,
+        (void *)receive_task,
+        "MockWebsocketSendMessage");
+
+    receive_task->test_fixture = test_fixture;
+
+    struct aws_byte_cursor data_cur;
+
+    aws_iot_st_msg_serialize_from_view(&receive_task->data_buf, test_fixture->allocator, message_view);
+    data_cur = aws_byte_cursor_from_buf(&receive_task->data_buf);
+    aws_byte_buf_init(&receive_task->out_buf, test_fixture->allocator, data_cur.len + PAYLOAD_BYTE_LENGTH_PREFIX);
+    aws_byte_buf_write_be16(&receive_task->out_buf, (uint16_t)receive_task->data_buf.len);
+    aws_byte_buf_write_to_capacity(&receive_task->out_buf, &data_cur);
+
+    aws_event_loop_schedule_task_now(test_fixture->secure_tunnel->loop, &receive_task->task);
 }
 
 int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_connection_options *options) {
