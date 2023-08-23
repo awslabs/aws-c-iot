@@ -158,7 +158,6 @@ struct aws_secure_tunnel_connections {
 
     /* Used for streams not using multiplexing (service ids) */
     int32_t stream_id;
-    /* TODO This field should be removed. */
     struct aws_hash_table connection_ids;
 
     /* Table containing streams using multiplexing (service ids) */
