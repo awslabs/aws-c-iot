@@ -1753,7 +1753,7 @@ static bool s_aws_secure_tunnel_should_service_operational_state(
  * Calls on_send_message_complete callback if an error occurs.
  * \endinternal
  */
-void s_process_outbound_data_message(
+static void s_process_outbound_data_message(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_operation *current_operation) {
 
