@@ -1934,7 +1934,9 @@ AWS_TEST_CASE(
     secure_tunneling_existing_connection_start_send_reset_test,
     s_secure_tunneling_existing_connection_start_send_reset_test_fn)
 
-static int s_secure_tunneling_send_v2_data_message_on_v1_connection_fn(struct aws_allocator *allocator, void *ctx) {
+static int s_secure_tunneling_send_v2_data_message_on_v1_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
@@ -1983,10 +1985,12 @@ static int s_secure_tunneling_send_v2_data_message_on_v1_connection_fn(struct aw
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v2_data_message_on_v1_connection,
-    s_secure_tunneling_send_v2_data_message_on_v1_connection_fn)
+    secure_tunneling_send_v2_data_message_on_v1_connection_test,
+    s_secure_tunneling_send_v2_data_message_on_v1_connection_test_fn)
 
-static int s_secure_tunneling_send_v3_data_message_on_v1_connection_fn(struct aws_allocator *allocator, void *ctx) {
+static int s_secure_tunneling_send_v3_data_message_on_v1_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
@@ -2042,10 +2046,12 @@ static int s_secure_tunneling_send_v3_data_message_on_v1_connection_fn(struct aw
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v3_data_message_on_v1_connection,
-    s_secure_tunneling_send_v3_data_message_on_v1_connection_fn)
+    secure_tunneling_send_v3_data_message_on_v1_connection_test,
+    s_secure_tunneling_send_v3_data_message_on_v1_connection_test_fn)
 
-static int s_secure_tunneling_send_v1_data_message_on_v2_connection_fn(struct aws_allocator *allocator, void *ctx) {
+static int s_secure_tunneling_send_v1_data_message_on_v2_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
@@ -2100,10 +2106,12 @@ static int s_secure_tunneling_send_v1_data_message_on_v2_connection_fn(struct aw
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v1_data_message_on_v2_connection,
-    s_secure_tunneling_send_v1_data_message_on_v2_connection_fn)
+    secure_tunneling_send_v1_data_message_on_v2_connection_test,
+    s_secure_tunneling_send_v1_data_message_on_v2_connection_test_fn)
 
-static int s_secure_tunneling_send_v3_data_message_on_v2_connection_fn(struct aws_allocator *allocator, void *ctx) {
+static int s_secure_tunneling_send_v3_data_message_on_v2_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
@@ -2160,10 +2168,12 @@ static int s_secure_tunneling_send_v3_data_message_on_v2_connection_fn(struct aw
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v3_data_message_on_v2_connection,
-    s_secure_tunneling_send_v3_data_message_on_v2_connection_fn)
+    secure_tunneling_send_v3_data_message_on_v2_connection_test,
+    s_secure_tunneling_send_v3_data_message_on_v2_connection_test_fn)
 
-static int s_secure_tunneling_send_v1_data_message_on_v3_connection_fn(struct aws_allocator *allocator, void *ctx) {
+static int s_secure_tunneling_send_v1_data_message_on_v3_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
@@ -2219,10 +2229,12 @@ static int s_secure_tunneling_send_v1_data_message_on_v3_connection_fn(struct aw
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v1_data_message_on_v3_connection,
-    s_secure_tunneling_send_v1_data_message_on_v3_connection_fn)
+    secure_tunneling_send_v1_data_message_on_v3_connection_test,
+    s_secure_tunneling_send_v1_data_message_on_v3_connection_test_fn)
 
-static int s_secure_tunneling_send_v2_data_message_on_v3_connection_fn(struct aws_allocator *allocator, void *ctx) {
+static int s_secure_tunneling_send_v2_data_message_on_v3_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
@@ -2279,10 +2291,10 @@ static int s_secure_tunneling_send_v2_data_message_on_v3_connection_fn(struct aw
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v2_data_message_on_v3_connection,
-    s_secure_tunneling_send_v2_data_message_on_v3_connection_fn)
+    secure_tunneling_send_v2_data_message_on_v3_connection_test,
+    s_secure_tunneling_send_v2_data_message_on_v3_connection_test_fn)
 
-static int s_secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_fn(
+static int s_secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_test_fn(
     struct aws_allocator *allocator,
     void *ctx) {
 
@@ -2344,10 +2356,10 @@ static int s_secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_fn
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v2_data_message_on_incorrect_v2_connection,
-    s_secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_fn)
+    secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_test,
+    s_secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_test_fn)
 
-static int s_secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_fn(
+static int s_secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_test_fn(
     struct aws_allocator *allocator,
     void *ctx) {
 
@@ -2411,10 +2423,10 @@ static int s_secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_fn
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v3_data_message_on_incorrect_v3_connection,
-    s_secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_fn)
+    secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_test,
+    s_secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_test_fn)
 
-static int s_secure_tunneling_send_v1_data_message_with_no_active_connection_fn(
+static int s_secure_tunneling_send_v1_data_message_with_no_active_connection_test_fn(
     struct aws_allocator *allocator,
     void *ctx) {
 
@@ -2459,5 +2471,5 @@ static int s_secure_tunneling_send_v1_data_message_with_no_active_connection_fn(
 }
 
 AWS_TEST_CASE(
-    secure_tunneling_send_v1_data_message_with_no_active_connection,
-    s_secure_tunneling_send_v1_data_message_with_no_active_connection_fn)
+    secure_tunneling_send_v1_data_message_with_no_active_connection_test,
+    s_secure_tunneling_send_v1_data_message_with_no_active_connection_test_fn)
