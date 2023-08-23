@@ -1805,9 +1805,7 @@ void s_process_outbound_data_message(
         } else {
             AWS_LOGF_DEBUG(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: failed to send DATA message with stream id (%d) and connection id (%d) "
-                "with "
-                "error %d(%s)",
+                "id=%p: failed to send DATA message with stream id (%d) and connection id (%d) with error %d(%s)",
                 (void *)secure_tunnel,
                 current_operation->message_view->stream_id,
                 current_operation->message_view->connection_id,
