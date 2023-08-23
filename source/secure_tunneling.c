@@ -309,7 +309,6 @@ static int s_aws_secure_tunnel_set_stream(
     if (service_id == NULL || service_id->len == 0) {
         secure_tunnel->connections->stream_id = stream_id;
         aws_hash_table_clear(&secure_tunnel->connections->connection_ids);
-        /* TODO This case should be treated as error. */
         if (connection_id > 0) {
             struct aws_connection_id_element *connection_id_elem =
                 aws_connection_id_element_new(secure_tunnel->allocator, connection_id);
