@@ -2587,12 +2587,12 @@ int aws_secure_tunnel_send_message(
         (void *)message_op);
 
     if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto destroy_message_op;
+        goto error;
     }
 
     return AWS_OP_SUCCESS;
 
-destroy_message_op:
+error:
     aws_secure_tunnel_operation_release(&message_op->base);
     return aws_last_error();
 }
