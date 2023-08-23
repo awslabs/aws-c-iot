@@ -14,7 +14,6 @@
 #include <aws/common/clock.h>
 #include <aws/common/error.h>
 #include <aws/common/string.h>
-#include <aws/common/thread.h>
 #include <aws/http/websocket.h>
 #include <aws/io/channel_bootstrap.h>
 #include <aws/io/event_loop.h>
