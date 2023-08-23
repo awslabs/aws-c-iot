@@ -361,6 +361,8 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
 
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
+    int error_code = AWS_OP_SUCCESS;
+
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
         stream_id = secure_tunnel->connections->stream_id;
     } else {
@@ -372,13 +374,20 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
                 "id=%p: invalid service id '" PRInSTR "' attempted to be assigned a stream id on an outbound message",
                 (void *)message_view,
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id));
+            error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID;
             goto error;
         }
         struct aws_service_id_element *service_id_elem = elem->value;
         stream_id = service_id_elem->stream_id;
+
+        if (stream_id == INVALID_STREAM_ID) {
+            error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID;
+            goto error;
+        }
     }
 
     if (stream_id == INVALID_STREAM_ID) {
+        error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID;
         goto error;
     }
 
@@ -401,7 +410,7 @@ error:
             aws_secure_tunnel_message_type_to_c_string(message_view->type));
     }
 
-    return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID);
+    return aws_raise_error(error_code);
 }
 
 /*

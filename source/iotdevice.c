@@ -99,6 +99,9 @@ static struct aws_error_info s_errors[] = {
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH,
         "DATA message processing failed due to a protocol version mismatch." ),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID,
+        "Secure Tunnel operation failed due to using inactive service id." ),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE

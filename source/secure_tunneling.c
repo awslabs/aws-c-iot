@@ -1799,6 +1799,98 @@ static bool s_aws_secure_tunnel_should_service_operational_state(
     return now == s_aws_secure_tunnel_compute_operational_state_service_time(secure_tunnel, now);
 }
 
+/**
+ * \internal
+ * Validate an outbound DATA message, set required fields (e.g. stream_id) and send it to the corresponding active
+ * connection.
+ * Calls on_send_message_complete callback if an error occurs.
+ * \endinternal
+ */
+void s_process_outbound_data_message(
+    struct aws_secure_tunnel *secure_tunnel,
+    struct aws_secure_tunnel_operation *current_operation) {
+
+    int error_code = AWS_OP_SUCCESS;
+
+    /*
+     * If message is being sent from DESTINATION MODE, it might be expected that a V2 or V1 connection has
+     * established a default connection id of 1. This default connection id must be stripped before sending
+     * a V1 or V2 message out.
+     */
+    /* FIXME */
+    struct aws_secure_tunnel_operation_message *message_op = current_operation->impl;
+    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE &&
+        secure_tunnel->connections->protocol_version < 3 && current_operation->message_view->connection_id == 1) {
+        message_op->options_storage.storage_view.connection_id = 0;
+    }
+
+    if (secure_tunnel->connections->protocol_version == 0) {
+        error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION;
+        goto error;
+    }
+
+    /* If a data message attempts to be sent on an unopen stream, discard it. */
+    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, current_operation->message_view)) {
+        error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH;
+        goto error;
+    }
+
+    /* An outbound message does not have an assigned stream ID, assign an active stream ID to it. */
+    if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
+            current_operation, secure_tunnel)) {
+        error_code = aws_last_error();
+        goto error;
+    }
+
+    if (!s_aws_secure_tunnel_active_stream_check(secure_tunnel, current_operation->message_view)) {
+        error_code = aws_last_error();
+        if (current_operation->message_view->service_id && current_operation->message_view->service_id->len > 0) {
+            AWS_LOGF_DEBUG(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: failed to send DATA message with service id '" PRInSTR
+                "' stream id (%d) and connection id (%d) with error %d(%s)",
+                (void *)secure_tunnel,
+                AWS_BYTE_CURSOR_PRI(*current_operation->message_view->service_id),
+                current_operation->message_view->stream_id,
+                current_operation->message_view->connection_id,
+                error_code,
+                aws_error_debug_str(error_code));
+        } else {
+            AWS_LOGF_DEBUG(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: failed to send DATA message with stream id (%d) and connection id (%d) "
+                "with "
+                "error %d(%s)",
+                (void *)secure_tunnel,
+                current_operation->message_view->stream_id,
+                current_operation->message_view->connection_id,
+                error_code,
+                aws_error_debug_str(error_code));
+        }
+        goto error;
+    }
+
+    /* Send the Data message through the WebSocket */
+    if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
+        error_code = aws_last_error();
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: failed to send DATA message with error %d(%s)",
+            (void *)secure_tunnel,
+            error_code,
+            aws_error_debug_str(error_code));
+    }
+    aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
+
+    return;
+
+error:
+    if (error_code && secure_tunnel->config->on_send_message_complete) {
+        secure_tunnel->config->on_send_message_complete(
+            AWS_SECURE_TUNNEL_MT_DATA, error_code, secure_tunnel->config->user_data);
+    }
+}
+
 int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure_tunnel) {
     const struct aws_secure_tunnel_vtable *vtable = secure_tunnel->vtable;
     uint64_t now = (*vtable->get_current_time_fn)();
@@ -1851,56 +1943,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 break;
 
             case AWS_STOT_MESSAGE:
-                /* If a data message attempts to be sent on an unopen stream, discard it. */
-                if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
-                        current_operation, secure_tunnel)) {
-                    error_code = aws_last_error();
-                } else {
-                    if (s_aws_secure_tunnel_active_stream_check(secure_tunnel, current_operation->message_view)) {
-                        /* Send the Data message through the WebSocket */
-                        if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
-                            error_code = aws_last_error();
-                            AWS_LOGF_ERROR(
-                                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                                "id=%p: failed to send DATA message with error %d(%s)",
-                                (void *)secure_tunnel,
-                                error_code,
-                                aws_error_debug_str(error_code));
-                        }
-                        aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
-                    } else {
-                        error_code = aws_last_error();
-                        if (current_operation->message_view->service_id &&
-                            current_operation->message_view->service_id->len > 0) {
-                            AWS_LOGF_DEBUG(
-                                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                                "id=%p: failed to send DATA message with service id '" PRInSTR
-                                "' stream id (%d) and connection id (%d) with error %d(%s)",
-                                (void *)secure_tunnel,
-                                AWS_BYTE_CURSOR_PRI(*current_operation->message_view->service_id),
-                                current_operation->message_view->stream_id,
-                                current_operation->message_view->connection_id,
-                                error_code,
-                                aws_error_debug_str(error_code));
-                        } else {
-                            AWS_LOGF_DEBUG(
-                                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                                "id=%p: failed to send DATA message with stream id (%d) and connection id (%d) "
-                                "with "
-                                "error %d(%s)",
-                                (void *)secure_tunnel,
-                                current_operation->message_view->stream_id,
-                                current_operation->message_view->connection_id,
-                                error_code,
-                                aws_error_debug_str(error_code));
-                        }
-                    }
-                }
-                if (error_code && secure_tunnel->config->on_send_message_complete) {
-                    secure_tunnel->config->on_send_message_complete(
-                        AWS_SECURE_TUNNEL_MT_DATA, error_code, secure_tunnel->config->user_data);
-                }
-
+                s_process_outbound_data_message(secure_tunnel, current_operation);
                 break;
 
             case AWS_STOT_STREAM_START:
@@ -2590,22 +2633,6 @@ int aws_secure_tunnel_send_message(
 
     if (message_op == NULL) {
         return aws_last_error();
-    }
-
-    /*
-     * If message is being sent from DESTINATION MODE, it might be expected that a V2 or V1 connection has established a
-     * default connection id of 1. This default connection id must be stripped before sending a V1 or V2 message out.
-     */
-    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE &&
-        secure_tunnel->connections->protocol_version < 3 && message_options->connection_id == 1) {
-        message_op->options_storage.storage_view.connection_id = 0;
-    }
-
-    if (!s_aws_secure_tunnel_is_data_message_valid_for_connections(
-            secure_tunnel, &message_op->options_storage.storage_view)) {
-        AWS_LOGF_WARN(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: Failed to send outbound DATA message", (void *)secure_tunnel);
-        goto destroy_message_op;
     }
 
     AWS_LOGF_DEBUG(
