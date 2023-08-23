@@ -851,19 +851,6 @@ static int s_secure_tunneling_functionality_connect_test_fn(struct aws_allocator
 
 AWS_TEST_CASE(secure_tunneling_functionality_connect_test, s_secure_tunneling_functionality_connect_test_fn)
 
-void s_event_loop_thread(void *arg) {
-    struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
-
-    s_wait_for_connected_successfully(test_fixture);
-
-    struct aws_secure_tunnel_message_view session_reset_message = {
-        .type = AWS_SECURE_TUNNEL_MT_SESSION_RESET,
-    };
-    for (int i = 0; i < 10; ++i) {
-        aws_secure_tunnel_send_mock_message(test_fixture, &session_reset_message);
-    }
-}
-
 int secure_tunneling_client_token_check(const struct aws_http_headers *request_headers, void *user_data) {
     (void)user_data;
     struct aws_byte_cursor client_token_cur;
