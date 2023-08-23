@@ -300,58 +300,6 @@ static bool s_aws_secure_tunnel_active_stream_check(
     return true;
 }
 
-/**
- * \internal
- * Check if DATA message can be sent to one of active connections.
- * \endinternal
- */
-static bool s_aws_secure_tunnel_is_data_message_valid_for_connections(
-    const struct aws_secure_tunnel *secure_tunnel,
-    const struct aws_secure_tunnel_message_view *message_view) {
-
-    if (secure_tunnel->connections->protocol_version == 0) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION);
-        return false;
-    }
-
-    if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_view)) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
-        return false;
-    }
-
-    /* The V1 message will be assigned a stream ID that is currently in use, so it's always valid. */
-    if (secure_tunnel->connections->protocol_version == 1) {
-        return true;
-    }
-
-    /* The message is at least V2 version, check if the requested service ID is available in the secure tunnel. */
-    struct aws_hash_element *elem = NULL;
-    aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
-    if (elem == NULL) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
-        return false;
-    }
-
-    /* Check if the requested service ID is active. */
-    struct aws_service_id_element *service_id_elem = elem->value;
-    if (service_id_elem->stream_id == INVALID_STREAM_ID) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
-        return false;
-    }
-
-    /* The message uses V3 protocol, check connection ID. */
-    if (message_view->connection_id != 0) {
-        struct aws_hash_element *connection_id_elem = NULL;
-        aws_hash_table_find(&service_id_elem->connection_ids, &message_view->connection_id, &connection_id_elem);
-        if (connection_id_elem == NULL) {
-            aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
-            return false;
-        }
-    }
-
-    return true;
-}
-
 static int s_aws_secure_tunnel_set_stream(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_byte_cursor *service_id,
