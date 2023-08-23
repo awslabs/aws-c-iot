@@ -245,8 +245,6 @@ static void s_on_test_secure_tunnel_send_message_complete(
     enum aws_secure_tunnel_message_type type,
     int error_code,
     void *user_data) {
-    (void)type;
-    (void)error_code;
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = user_data;
 
     aws_mutex_lock(&test_fixture->lock);
