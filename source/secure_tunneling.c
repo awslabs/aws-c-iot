@@ -1658,7 +1658,14 @@ static void s_complete_operation(
     struct aws_secure_tunnel_operation *operation,
     int error_code,
     const void *view) {
-    (void)secure_tunnel;
+
+    AWS_LOGF_TRACE(
+        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        "id=%p: Completing operation %s with error %d (%s)",
+        (void *)secure_tunnel,
+        aws_secure_tunnel_operation_type_to_c_string(operation->operation_type),
+        error_code,
+        aws_error_str(error_code));
 
     aws_secure_tunnel_operation_complete(operation, error_code, view);
     aws_secure_tunnel_operation_release(operation);
@@ -1864,6 +1871,12 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
             break;
         }
         int error_code = AWS_OP_SUCCESS;
+
+        AWS_LOGF_TRACE(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Processing %s message",
+            (void *)secure_tunnel,
+            aws_secure_tunnel_operation_type_to_c_string(current_operation->operation_type));
 
         switch (current_operation->operation_type) {
             case AWS_STOT_PING:;

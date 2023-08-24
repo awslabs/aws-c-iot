@@ -2532,7 +2532,7 @@ static int s_secure_tunneling_send_v3_stream_start_message_test_fn(struct aws_al
     ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_STREAM_START);
     ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.error_code, AWS_ERROR_SUCCESS);
 
-    /* Ensure that the established connection is still active */
+    /* Ensure that the established connection is active */
     ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
 
     /* Create and send a V3 DATA message */
@@ -2567,6 +2567,101 @@ static int s_secure_tunneling_send_v3_stream_start_message_test_fn(struct aws_al
 AWS_TEST_CASE(
     secure_tunneling_send_v3_stream_start_message_test,
     s_secure_tunneling_send_v3_stream_start_message_test_fn)
+
+static int s_secure_tunneling_send_v3_stream_start_message_with_reset_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_SOURCE_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V2 STREAM_START message to the server */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_v2_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 0,
+    };
+    ASSERT_INT_EQUALS(
+        aws_secure_tunnel_stream_start(test_fixture.secure_tunnel, &stream_start_v2_message_view), AWS_OP_SUCCESS);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 1);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_STREAM_START);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.error_code, AWS_ERROR_SUCCESS);
+
+    /* Ensure that the established stream is active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    /* Create and send a V3 STREAM_START message to the server */
+    struct aws_byte_cursor service_2 = aws_byte_cursor_from_string(s_service_id_2);
+    struct aws_secure_tunnel_message_view stream_start_v3_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_2,
+        .stream_id = 0,
+        .connection_id = 2,
+    };
+    ASSERT_INT_EQUALS(
+        aws_secure_tunnel_stream_start(test_fixture.secure_tunnel, &stream_start_v3_message_view), AWS_OP_SUCCESS);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 2);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_STREAM_START);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.error_code, AWS_ERROR_SUCCESS);
+
+    /* Ensure that the old stream is inactive */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 0));
+    /* Ensure that the newly established stream is active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_2, 1, 2));
+
+    /* Create and send a V3 DATA message */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_2,
+        .connection_id = 2,
+        .payload = &s_payload_cursor_max_size,
+    };
+
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    /* Since there is no feedback on successful sending, simply sleep. */
+    aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 3);
+
+    /* Ensure that the established connection is still active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_2, 1, 2));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v3_stream_start_message_with_reset_test,
+    s_secure_tunneling_send_v3_stream_start_message_with_reset_test_fn)
 
 static int s_secure_tunneling_send_v3_connection_start_message_test_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
