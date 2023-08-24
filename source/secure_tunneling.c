@@ -1911,6 +1911,8 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                         "established "
                         "Protocol Version and Protocol Version used by outbound STREAM START message.",
                         (void *)secure_tunnel);
+                    /* TODO The following doesn't work as all enqueuing operations are canceled on resetting a tunnel
+                     * connection. */
                     reset_secure_tunnel_connection(secure_tunnel);
                     aws_secure_tunnel_stream_start(secure_tunnel, current_operation->message_view);
                     break;
@@ -1948,7 +1950,6 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 break;
 
             case AWS_STOT_STREAM_RESET:
-
                 if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
                         current_operation, secure_tunnel) == AWS_OP_SUCCESS) {
                     if (current_operation->message_view->connection_id == 0) {
@@ -1974,9 +1975,18 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 break;
 
             case AWS_STOT_CONNECTION_START:
+                if (secure_tunnel->connections->protocol_version != 3) {
+                    AWS_LOGF_WARN(
+                        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                        "Connection Start may only be used with a Protocol V3 stream.");
+                    error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH;
+                } else if (current_operation->message_view->connection_id == 0) {
+                    AWS_LOGF_WARN(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start must include a connection id.");
+                    error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID;
+                }
                 /* If a connection start attempts to be sent on an unopen stream, discard it. */
-                if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
-                        current_operation, secure_tunnel)) {
+                else if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
+                             current_operation, secure_tunnel)) {
                     error_code = aws_last_error();
                 } else if ((*current_operation->vtable->aws_secure_tunnel_operation_set_connection_start_id)(
                                current_operation, secure_tunnel)) {
@@ -2674,17 +2684,6 @@ int aws_secure_tunnel_connection_start(
     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start can only be sent from Source Mode");
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
-    }
-
-    if (secure_tunnel->connections->protocol_version != 3) {
-        AWS_LOGF_WARN(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start may only be used with a Protocol V3 stream.");
-        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH;
-    }
-
-    if (message_options->connection_id == 0) {
-        AWS_LOGF_WARN(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start must include a connection id.");
-        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID;
     }
 
     struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
