@@ -1759,24 +1759,16 @@ static void s_process_outbound_data_message(
 
     int error_code = AWS_OP_SUCCESS;
 
-    /*
-     * If message is being sent from DESTINATION MODE, it might be expected that a V2 or V1 connection has
-     * established a default connection id of 1. This default connection id must be stripped before sending
-     * a V1 or V2 message out.
-     */
-    /* FIXME */
-    struct aws_secure_tunnel_operation_message *message_op = current_operation->impl;
-    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE &&
-        secure_tunnel->connections->protocol_version < 3 && current_operation->message_view->connection_id == 1) {
-        message_op->options_storage.storage_view.connection_id = 0;
-    }
-
     if (secure_tunnel->connections->protocol_version == 0) {
         error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION;
         goto error;
     }
 
-    /* If a data message attempts to be sent on an unopen stream, discard it. */
+    (*current_operation->vtable->aws_secure_tunnel_operation_prepare_message_for_send_fn)(
+        current_operation, secure_tunnel);
+
+    /* If the data message's protocol version doesn't match the version of the current session, the message should
+     * be ignored. */
     if (!s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, current_operation->message_view)) {
         error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH;
         goto error;
@@ -1789,6 +1781,7 @@ static void s_process_outbound_data_message(
         goto error;
     }
 
+    /* If a data message attempts to be sent on an unopen stream, discard it. */
     if (!s_aws_secure_tunnel_active_stream_check(secure_tunnel, current_operation->message_view)) {
         error_code = aws_last_error();
         if (current_operation->message_view->service_id && current_operation->message_view->service_id->len > 0) {
