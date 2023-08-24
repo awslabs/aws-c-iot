@@ -318,11 +318,25 @@ const char *aws_secure_tunnel_message_type_to_c_string(enum aws_secure_tunnel_me
 //***********************************************************************************************************************
 /* THIS API SHOULD ONLY BE USED FROM SOURCE MODE */
 //***********************************************************************************************************************
+/**
+ * Queue a STREAM_START message in a secure tunnel
+ * @note This function should only be used from source mode.
+ * @param secure_tunnel secure tunnel to queue a message for
+ * @param message_options configuration options for the message operation
+ * @return success/failure in the synchronous logic that kicks off the message operation
+ */
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_start(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_options);
 
+/**
+ * Queue a CONNECTION_START message in a secure tunnel
+ * @note This function should only be used from source mode.
+ * @param secure_tunnel secure tunnel to queue a message for
+ * @param message_options configuration options for the message operation
+ * @return success/failure in the synchronous logic that kicks off the message operation
+ */
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_connection_start(
     struct aws_secure_tunnel *secure_tunnel,
@@ -331,6 +345,13 @@ int aws_secure_tunnel_connection_start(
 //***********************************************************************************************************************
 /* THIS API SHOULD NOT BE USED BY THE CUSTOMER AND IS DEPRECATED */
 //***********************************************************************************************************************
+/**
+ * Queue a STREAM_RESET message in a secure tunnel
+ * @deprecated This function should not be used.
+ * @param secure_tunnel secure tunnel to queue a message for
+ * @param message_options configuration options for the message operation
+ * @return success/failure in the synchronous logic that kicks off the message operation
+ */
 AWS_IOTDEVICE_API
 int aws_secure_tunnel_stream_reset(
     struct aws_secure_tunnel *secure_tunnel,

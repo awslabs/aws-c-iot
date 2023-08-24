@@ -77,7 +77,7 @@ static struct aws_error_info s_errors[] = {
         "Error while processing secure tunnel operational state."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY,
-        "Error while processing secure tunnel operational state."),
+        "Secure Tunnel operation failed due to offline queue policy."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_UNEXPECTED_HANGUP,
         "The connection was closed unexpectedly."),
@@ -85,14 +85,23 @@ static struct aws_error_info s_errors[] = {
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP,
         "Secure Tunnel connection interrupted by user request."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
-        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISSMATCH,
-        "Secure Tunnel connection interrupted due to a protocol version missmatch."),
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH,
+        "Secure Tunnel connection interrupted due to a protocol version mismatch."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_TERMINATED,
         "Secure Tunnel terminated by user request."),
-        AWS_DEFINE_ERROR_INFO_IOTDEVICE(
-            AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE,
-            "Error occured while decoding an incoming message." ),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE,
+        "Error occured while decoding an incoming message." ),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION,
+        "DATA message processing failed due to no active connection found." ),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH,
+        "DATA message processing failed due to a protocol version mismatch." ),
+    AWS_DEFINE_ERROR_INFO_IOTDEVICE(
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID,
+        "Secure Tunnel operation failed due to using inactive service id." ),
 };
 /* clang-format on */
 #undef AWS_DEFINE_ERROR_INFO_IOTDEVICE

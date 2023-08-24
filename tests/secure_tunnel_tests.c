@@ -70,11 +70,13 @@ struct secure_tunnel_test_options {
     struct aws_secure_tunnel_mock_websocket_vtable websocket_function_table;
 };
 
-static void s_secure_tunnel_test_init_default_options(struct secure_tunnel_test_options *test_options) {
+static void s_secure_tunnel_test_init_default_options(
+    struct secure_tunnel_test_options *test_options,
+    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode) {
     struct aws_secure_tunnel_options local_secure_tunnel_options = {
         .endpoint_host = aws_byte_cursor_from_string(s_endpoint_host),
         .access_token = aws_byte_cursor_from_string(s_access_token),
-        .local_proxy_mode = AWS_SECURE_TUNNELING_DESTINATION_MODE,
+        .local_proxy_mode = local_proxy_mode,
     };
     test_options->secure_tunnel_options = local_secure_tunnel_options;
 }
@@ -128,6 +130,12 @@ struct aws_secure_tunnel_mock_test_fixture {
     int secure_tunnel_message_sent_count_target;
     int secure_tunnel_message_sent_connection_reset_count;
     int secure_tunnel_message_sent_data_count;
+
+    bool on_send_message_complete_fired;
+    struct {
+        enum aws_secure_tunnel_message_type type;
+        int error_code;
+    } on_send_message_complete_result;
 };
 
 static bool s_secure_tunnel_check_active_stream_id(
@@ -239,9 +247,14 @@ static void s_on_test_secure_tunnel_send_message_complete(
     enum aws_secure_tunnel_message_type type,
     int error_code,
     void *user_data) {
-    (void)type;
-    (void)error_code;
-    (void)user_data;
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture = user_data;
+
+    aws_mutex_lock(&test_fixture->lock);
+    test_fixture->on_send_message_complete_fired = true;
+    test_fixture->on_send_message_complete_result.type = type;
+    test_fixture->on_send_message_complete_result.error_code = error_code;
+    aws_condition_variable_notify_all(&test_fixture->signal);
+    aws_mutex_unlock(&test_fixture->lock);
 }
 
 static void s_on_test_secure_tunnel_on_session_reset(void *user_data) {
@@ -495,36 +508,86 @@ static void s_wait_for_n_messages_received(struct aws_secure_tunnel_mock_test_fi
     aws_mutex_unlock(&test_fixture->lock);
 }
 
+static bool s_has_secure_tunnel_on_send_message_complete_fired(void *arg) {
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
+    return test_fixture->on_send_message_complete_fired;
+}
+
+static void s_wait_for_on_send_message_complete_fired(struct aws_secure_tunnel_mock_test_fixture *test_fixture) {
+    aws_mutex_lock(&test_fixture->lock);
+    aws_condition_variable_wait_pred(
+        &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_on_send_message_complete_fired, test_fixture);
+    /* Reset flag for the next message. */
+    test_fixture->on_send_message_complete_fired = false;
+    aws_mutex_unlock(&test_fixture->lock);
+}
+
 /*****************************************************************************************************************
  *                                    WEBSOCKET MOCK FUNCTIONS
  *****************************************************************************************************************/
 
-/* Serializes message view and sends as Websocket */
+/* Task that simulates a WebSocket payload receiving. */
+struct aws_secure_tunnel_mock_websocket_receive_frame_payload_task {
+    struct aws_task task;
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture;
+    struct aws_byte_buf data_buf;
+    struct aws_byte_buf out_buf;
+};
+
+static void s_secure_tunneling_mock_websocket_receive_frame_payload_task_fn(
+    struct aws_task *task,
+    void *arg,
+    enum aws_task_status status) {
+
+    (void)task;
+
+    struct aws_secure_tunnel_mock_websocket_receive_frame_payload_task *receive_task = arg;
+    if (status != AWS_TASK_STATUS_RUN_READY) {
+        return;
+    }
+
+    struct aws_byte_cursor data_cur = aws_byte_cursor_from_buf(&receive_task->out_buf);
+    receive_task->test_fixture->websocket_function_table->on_incoming_frame_payload_fn(
+        NULL, NULL, data_cur, receive_task->test_fixture->secure_tunnel);
+
+    aws_byte_buf_clean_up(&receive_task->out_buf);
+    aws_byte_buf_clean_up(&receive_task->data_buf);
+    aws_mem_release(receive_task->test_fixture->allocator, receive_task);
+}
+
+/* Serialize a message view and initialize a task for the event loop. The task then will simulate receiving the
+ * WebSocket data.
+ * NOTE In the actual environment, WebSocket operations and the secure tunnel are assigned to the same loop. We can
+ * reproduce this by "receiving" messages from the mocked WebSocket in the same event loop the secure tunnel uses. This
+ * way we don't need to worry about race conditions appearing in the tests that are not possible during the actual
+ * execution.
+ */
 void aws_secure_tunnel_send_mock_message(
     struct aws_secure_tunnel_mock_test_fixture *test_fixture,
     const struct aws_secure_tunnel_message_view *message_view) {
-    /* The actual WebSocket is assigned the same event loop as the secure tunnel but the mock websocket for tests
-     * requires a short sleep to insure there aren't race conditions related to the incoming websocket data being
-     * processed. */
-    aws_thread_current_sleep(aws_timestamp_convert(350, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
-    struct aws_byte_buf data_buf;
-    struct aws_byte_cursor data_cur;
-    struct aws_byte_buf out_buf;
-    aws_iot_st_msg_serialize_from_view(&data_buf, test_fixture->allocator, message_view);
-    data_cur = aws_byte_cursor_from_buf(&data_buf);
-    aws_byte_buf_init(&out_buf, test_fixture->allocator, data_cur.len + PAYLOAD_BYTE_LENGTH_PREFIX);
-    aws_byte_buf_write_be16(&out_buf, (int16_t)data_buf.len);
-    aws_byte_buf_write_to_capacity(&out_buf, &data_cur);
-    data_cur = aws_byte_cursor_from_buf(&out_buf);
-    test_fixture->websocket_function_table->on_incoming_frame_payload_fn(
-        NULL, NULL, data_cur, test_fixture->secure_tunnel);
 
-    aws_byte_buf_clean_up(&out_buf);
-    aws_byte_buf_clean_up(&data_buf);
-    /* The actual WebSocket is assigned the same event loop as the secure tunnel but the mock websocket for tests
-     * requires a short sleep to insure there aren't race conditions related to the incoming websocket data being
-     * processed. */
-    aws_thread_current_sleep(aws_timestamp_convert(350, AWS_TIMESTAMP_MILLIS, AWS_TIMESTAMP_NANOS, NULL));
+    struct aws_secure_tunnel_mock_websocket_receive_frame_payload_task *receive_task = aws_mem_calloc(
+        test_fixture->secure_tunnel->allocator,
+        1,
+        sizeof(struct aws_secure_tunnel_mock_websocket_receive_frame_payload_task));
+
+    aws_task_init(
+        &receive_task->task,
+        s_secure_tunneling_mock_websocket_receive_frame_payload_task_fn,
+        (void *)receive_task,
+        "MockWebsocketSendMessage");
+
+    receive_task->test_fixture = test_fixture;
+
+    struct aws_byte_cursor data_cur;
+
+    aws_iot_st_msg_serialize_from_view(&receive_task->data_buf, test_fixture->allocator, message_view);
+    data_cur = aws_byte_cursor_from_buf(&receive_task->data_buf);
+    aws_byte_buf_init(&receive_task->out_buf, test_fixture->allocator, data_cur.len + PAYLOAD_BYTE_LENGTH_PREFIX);
+    aws_byte_buf_write_be16(&receive_task->out_buf, (uint16_t)receive_task->data_buf.len);
+    aws_byte_buf_write_to_capacity(&receive_task->out_buf, &data_cur);
+
+    aws_event_loop_schedule_task_now(test_fixture->secure_tunnel->loop, &receive_task->task);
 }
 
 int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_connection_options *options) {
@@ -717,12 +780,13 @@ int aws_secure_tunnel_mock_test_fixture_init(
 void aws_secure_tunnel_mock_test_init(
     struct aws_allocator *allocator,
     struct secure_tunnel_test_options *test_options,
-    struct aws_secure_tunnel_mock_test_fixture *test_fixture) {
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture,
+    enum aws_secure_tunneling_local_proxy_mode local_proxy_mode) {
 
     aws_http_library_init(allocator);
     aws_iotdevice_library_init(allocator);
 
-    s_secure_tunnel_test_init_default_options(test_options);
+    s_secure_tunnel_test_init_default_options(test_options, local_proxy_mode);
 
     test_options->secure_tunnel_options.client_token = aws_byte_cursor_from_string(s_client_token);
 
@@ -774,7 +838,7 @@ static int s_secure_tunneling_functionality_connect_test_fn(struct aws_allocator
 
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     test_fixture.header_check = secure_tunneling_access_token_check;
@@ -809,7 +873,7 @@ static int s_secure_tunneling_functionality_client_token_test_fn(struct aws_allo
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     test_fixture.header_check = secure_tunneling_client_token_check;
@@ -884,7 +948,7 @@ static int s_secure_tunneling_fail_and_retry_connection_test_fn(struct aws_alloc
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     test_fixture.secure_tunnel_vtable = *aws_secure_tunnel_get_default_vtable();
@@ -911,7 +975,7 @@ static int s_secure_tunneling_store_service_ids_test_fn(struct aws_allocator *al
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -945,7 +1009,7 @@ static int s_secure_tunneling_receive_stream_start_test_fn(struct aws_allocator 
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -981,7 +1045,7 @@ static int s_secure_tunneling_rejected_service_id_stream_start_test_fn(struct aw
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1015,7 +1079,7 @@ static int s_secure_tunneling_close_stream_on_stream_reset_test_fn(struct aws_al
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1065,7 +1129,7 @@ static int s_secure_tunneling_ignore_stream_reset_for_inactive_stream_test_fn(
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1118,7 +1182,7 @@ static int s_secure_tunneling_session_reset_test_fn(struct aws_allocator *alloca
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1175,7 +1239,7 @@ static int s_secure_tunneling_serializer_data_message_test_fn(struct aws_allocat
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1227,7 +1291,7 @@ static int s_secure_tunneling_max_payload_test_fn(struct aws_allocator *allocato
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1269,7 +1333,7 @@ static int s_secure_tunneling_max_payload_exceed_test_fn(struct aws_allocator *a
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1314,7 +1378,7 @@ static int s_secure_tunneling_receive_connection_start_test_fn(struct aws_alloca
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1360,7 +1424,7 @@ static int s_secure_tunneling_ignore_inactive_stream_message_test_fn(struct aws_
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1413,7 +1477,7 @@ static int s_secure_tunneling_ignore_inactive_connection_id_message_test_fn(
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1466,7 +1530,7 @@ static int s_secure_tunneling_v1_to_v2_stream_start_test_fn(struct aws_allocator
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1517,7 +1581,7 @@ static int s_secure_tunneling_v1_to_v3_stream_start_test_fn(struct aws_allocator
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1569,7 +1633,7 @@ static int s_secure_tunneling_v2_to_v1_stream_start_test_fn(struct aws_allocator
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1620,7 +1684,7 @@ static int s_secure_tunneling_v3_to_v1_stream_start_test_fn(struct aws_allocator
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1673,7 +1737,7 @@ static int s_secure_tunneling_v1_stream_start_v3_message_reset_test_fn(struct aw
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1727,7 +1791,7 @@ static int s_secure_tunneling_v2_stream_start_connection_start_reset_test_fn(
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1777,63 +1841,11 @@ AWS_TEST_CASE(
     secure_tunneling_v2_stream_start_connection_start_reset_test,
     s_secure_tunneling_v2_stream_start_connection_start_reset_test_fn)
 
-static int s_secure_tunneling_ignore_outbound_inactive_connection_id_message_sending_test_fn(
-    struct aws_allocator *allocator,
-    void *ctx) {
-    (void)ctx;
-    struct secure_tunnel_test_options test_options;
-    struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
-    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
-
-    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
-    s_wait_for_connected_successfully(&test_fixture);
-
-    /* Create and send a stream start message from the server to the destination client */
-    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
-    struct aws_secure_tunnel_message_view stream_start_message_view = {
-        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
-        .service_id = &service_1,
-        .stream_id = 1,
-        .connection_id = 2,
-    };
-    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
-
-    /* Wait and confirm that a stream has been started */
-    s_wait_for_stream_started(&test_fixture);
-    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
-
-    /* Create and send a data message from the server to the destination client to an inactive connection id */
-    struct aws_byte_cursor payload_cur = aws_byte_cursor_from_string(s_payload_text);
-    struct aws_secure_tunnel_message_view data_message_view = {
-        .type = AWS_SECURE_TUNNEL_MT_DATA,
-        .service_id = &service_1,
-        .payload = &payload_cur,
-        .connection_id = 3,
-    };
-    aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-
-    /* Confirm that no messages have gone out from the client */
-    aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
-    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
-
-    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
-    s_wait_for_connection_shutdown(&test_fixture);
-
-    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
-
-    return AWS_OP_SUCCESS;
-}
-
-AWS_TEST_CASE(
-    secure_tunneling_ignore_outbound_inactive_connection_id_message_sending_test,
-    s_secure_tunneling_ignore_outbound_inactive_connection_id_message_sending_test_fn)
-
 static int s_secure_tunneling_close_stream_on_connection_reset_test_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1896,7 +1908,7 @@ static int s_secure_tunneling_existing_connection_start_send_reset_test_fn(struc
     (void)ctx;
     struct secure_tunnel_test_options test_options;
     struct aws_secure_tunnel_mock_test_fixture test_fixture;
-    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture);
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
     struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
 
     ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
@@ -1947,3 +1959,780 @@ static int s_secure_tunneling_existing_connection_start_send_reset_test_fn(struc
 AWS_TEST_CASE(
     secure_tunneling_existing_connection_start_send_reset_test,
     s_secure_tunneling_existing_connection_start_send_reset_test_fn)
+
+static int s_secure_tunneling_send_v2_data_message_on_v1_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V1 StreamStart message from the server to the destination client */
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .stream_id = 1,
+    };
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
+
+    /* Create and send a V2 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_1,
+        .payload = &s_payload_cursor_max_size,
+    };
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Ensure that the established stream was not affected by the message */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v2_data_message_on_v1_connection_test,
+    s_secure_tunneling_send_v2_data_message_on_v1_connection_test_fn)
+
+static int s_secure_tunneling_send_v3_data_message_on_v1_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V1 StreamStart message from the server to the destination client */
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .stream_id = 1,
+    };
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
+
+    /* Create and send a V3 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_1,
+        .connection_id = 3,
+        .payload = &s_payload_cursor_max_size,
+    };
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
+
+    /* Ensure that the established stream was not affected by the message */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, NULL, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v3_data_message_on_v1_connection_test,
+    s_secure_tunneling_send_v3_data_message_on_v1_connection_test_fn)
+
+static int s_secure_tunneling_send_v1_data_message_on_v2_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V2 StreamStart message from the server to the destination client */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 1,
+    };
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    /* Create and send a V1 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .payload = &s_payload_cursor_max_size,
+    };
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
+
+    /* Ensure that the established stream was not affected by the message */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v1_data_message_on_v2_connection_test,
+    s_secure_tunneling_send_v1_data_message_on_v2_connection_test_fn)
+
+static int s_secure_tunneling_send_v3_data_message_on_v2_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V2 StreamStart message from the server to the destination client */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 1,
+    };
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    /* Create and send a V3 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_1,
+        .connection_id = 3,
+        .payload = &s_payload_cursor_max_size,
+    };
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
+
+    /* Ensure that the established stream was not affected by the message */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v3_data_message_on_v2_connection_test,
+    s_secure_tunneling_send_v3_data_message_on_v2_connection_test_fn)
+
+static int s_secure_tunneling_send_v1_data_message_on_v3_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V3 StreamStart message from the server to the destination client */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 1,
+        .connection_id = 3,
+    };
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    /* Create and send a V1 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .payload = &s_payload_cursor_max_size,
+    };
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
+
+    /* Ensure that the established stream was not affected by the message */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v1_data_message_on_v3_connection_test,
+    s_secure_tunneling_send_v1_data_message_on_v3_connection_test_fn)
+
+static int s_secure_tunneling_send_v2_data_message_on_v3_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V3 StreamStart message from the server to the destination client */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 1,
+        .connection_id = 3,
+    };
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    /* Create and send a V2 DATA message, this should fail with PROTOCOL VERSION MISMATCH error */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_1,
+        .payload = &s_payload_cursor_max_size,
+    };
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_PROTOCOL_VERSION_MISMATCH);
+
+    /* Ensure that the established stream was not affected by the message */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v2_data_message_on_v3_connection_test,
+    s_secure_tunneling_send_v2_data_message_on_v3_connection_test_fn)
+
+static int s_secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V2 StreamStart message from the server to the destination client */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 1,
+    };
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    /* Create and send a V2 DATA message with incorrect service ID,
+     * this should fail with INVALID SERVICE ID error */
+    struct aws_byte_cursor service_2 = aws_byte_cursor_from_string(s_service_id_2);
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_2,
+        .payload = &s_payload_cursor_max_size,
+    };
+
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID);
+
+    /* Ensure that the established stream was not affected by the message */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_test,
+    s_secure_tunneling_send_v2_data_message_on_incorrect_v2_connection_test_fn)
+
+static int s_secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V3 StreamStart message from the server to the destination client */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 1,
+        .connection_id = 2,
+    };
+    aws_secure_tunnel_send_mock_message(&test_fixture, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_stream_started(&test_fixture);
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    /* Create and send a V3 DATA message with incorrect service ID,
+     * this should fail with INVALID CONNECTION ID error */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_1,
+        .connection_id = 3,
+        .payload = &s_payload_cursor_max_size,
+    };
+
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
+
+    /* Ensure that the established stream was not affected by the message */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_test,
+    s_secure_tunneling_send_v3_data_message_on_incorrect_v3_connection_test_fn)
+
+static int s_secure_tunneling_send_v1_data_message_with_no_active_connection_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V1 DATA message,
+     * this should fail with INVALID CONNECTION ID error */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .payload = &s_payload_cursor_max_size,
+    };
+
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that no messages have gone out from the client */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 0);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_DATA);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION);
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v1_data_message_with_no_active_connection_test,
+    s_secure_tunneling_send_v1_data_message_with_no_active_connection_test_fn)
+
+static int s_secure_tunneling_send_v3_stream_start_message_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_SOURCE_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V3 STREAM_START message to the server */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 0,
+        .connection_id = 2,
+    };
+    aws_secure_tunnel_stream_start(test_fixture.secure_tunnel, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 1);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_STREAM_START);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.error_code, AWS_ERROR_SUCCESS);
+
+    /* Ensure that the established connection is active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
+
+    /* Create and send a V3 DATA message */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_1,
+        .connection_id = 2,
+        .payload = &s_payload_cursor_max_size,
+    };
+
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    /* Since there is no feedback on successful sending, simply sleep. */
+    aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 2);
+
+    /* Ensure that the established connection is still active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v3_stream_start_message_test,
+    s_secure_tunneling_send_v3_stream_start_message_test_fn)
+
+static int s_secure_tunneling_send_v3_stream_start_message_with_reset_test_fn(
+    struct aws_allocator *allocator,
+    void *ctx) {
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_SOURCE_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V2 STREAM_START message to the server */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_v2_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 0,
+    };
+    ASSERT_INT_EQUALS(
+        aws_secure_tunnel_stream_start(test_fixture.secure_tunnel, &stream_start_v2_message_view), AWS_OP_SUCCESS);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 1);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_STREAM_START);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.error_code, AWS_ERROR_SUCCESS);
+
+    /* Ensure that the established stream is active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    /* Create and send a V3 STREAM_START message to the server */
+    struct aws_byte_cursor service_2 = aws_byte_cursor_from_string(s_service_id_2);
+    struct aws_secure_tunnel_message_view stream_start_v3_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_2,
+        .stream_id = 0,
+        .connection_id = 2,
+    };
+    ASSERT_INT_EQUALS(
+        aws_secure_tunnel_stream_start(test_fixture.secure_tunnel, &stream_start_v3_message_view), AWS_OP_SUCCESS);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 1);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_STREAM_START);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH);
+
+    /* Ensure that the old stream is still active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v3_stream_start_message_with_reset_test,
+    s_secure_tunneling_send_v3_stream_start_message_with_reset_test_fn)
+
+static int s_secure_tunneling_send_v3_connection_start_message_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
+
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_SOURCE_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connected_successfully(&test_fixture);
+
+    /* Create and send a V3 StreamStart message to the server */
+    struct aws_byte_cursor service_1 = aws_byte_cursor_from_string(s_service_id_1);
+    struct aws_secure_tunnel_message_view stream_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_STREAM_START,
+        .service_id = &service_1,
+        .stream_id = 0,
+        .connection_id = 2,
+    };
+    aws_secure_tunnel_stream_start(test_fixture.secure_tunnel, &stream_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 1);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_STREAM_START);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.error_code, AWS_ERROR_SUCCESS);
+
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
+
+    /* Create and send a V3 CONNECTION_START message to the server */
+    struct aws_secure_tunnel_message_view connection_start_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_CONNECTION_START,
+        .service_id = &service_1,
+        .stream_id = 0,
+        .connection_id = 3,
+    };
+    aws_secure_tunnel_connection_start(test_fixture.secure_tunnel, &connection_start_message_view);
+
+    /* Wait and confirm that a stream has been started */
+    s_wait_for_on_send_message_complete_fired(&test_fixture);
+
+    /* Confirm that the message has been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 2);
+
+    /* Confirm that on_send_message_complete callback was fired */
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_CONNECTION_START);
+    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.error_code, AWS_ERROR_SUCCESS);
+
+    /* Confirm that the both connections are active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 3));
+
+    /* Create and send a V3 DATA message to the first connection */
+    struct aws_secure_tunnel_message_view data_message_view = {
+        .type = AWS_SECURE_TUNNEL_MT_DATA,
+        .stream_id = 0,
+        .service_id = &service_1,
+        .connection_id = 2,
+        .payload = &s_payload_cursor_max_size,
+    };
+
+    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    /* Send a V3 DATA message to the second connection */
+    data_message_view.connection_id = 3;
+    result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
+    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
+
+    /* Since there is no feedback on successful sending, simply sleep. */
+    aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
+
+    /* Confirm that the messages have been sent */
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 4);
+
+    /* Ensure that the established connections are still active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 2));
+    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_1, 1, 3));
+
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+    s_wait_for_connection_shutdown(&test_fixture);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(
+    secure_tunneling_send_v3_connection_start_message_test,
+    s_secure_tunneling_send_v3_connection_start_message_test_fn)
