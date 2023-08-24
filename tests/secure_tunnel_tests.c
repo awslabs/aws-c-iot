@@ -2619,37 +2619,16 @@ static int s_secure_tunneling_send_v3_stream_start_message_with_reset_test_fn(
     s_wait_for_on_send_message_complete_fired(&test_fixture);
 
     /* Confirm that the message has been sent */
-    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 2);
+    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 1);
 
     /* Confirm that on_send_message_complete callback was fired */
     ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.type, AWS_SECURE_TUNNEL_MT_STREAM_START);
-    ASSERT_INT_EQUALS(test_fixture.on_send_message_complete_result.error_code, AWS_ERROR_SUCCESS);
+    ASSERT_INT_EQUALS(
+        test_fixture.on_send_message_complete_result.error_code,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH);
 
-    /* Ensure that the old stream is inactive */
-    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 0));
-    /* Ensure that the newly established stream is active */
-    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_2, 1, 2));
-
-    /* Create and send a V3 DATA message */
-    struct aws_secure_tunnel_message_view data_message_view = {
-        .type = AWS_SECURE_TUNNEL_MT_DATA,
-        .stream_id = 0,
-        .service_id = &service_2,
-        .connection_id = 2,
-        .payload = &s_payload_cursor_max_size,
-    };
-
-    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-    ASSERT_INT_EQUALS(result, AWS_OP_SUCCESS);
-
-    /* Since there is no feedback on successful sending, simply sleep. */
-    aws_thread_current_sleep(aws_timestamp_convert(1, AWS_TIMESTAMP_SECS, AWS_TIMESTAMP_NANOS, NULL));
-
-    /* Confirm that the message has been sent */
-    ASSERT_INT_EQUALS(test_fixture.secure_tunnel_message_sent_count, 3);
-
-    /* Ensure that the established connection is still active */
-    ASSERT_TRUE(s_secure_tunnel_check_active_connection_id(secure_tunnel, &service_2, 1, 2));
+    /* Ensure that the old stream is still active */
+    ASSERT_TRUE(s_secure_tunnel_check_active_stream_id(secure_tunnel, &service_1, 1));
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
