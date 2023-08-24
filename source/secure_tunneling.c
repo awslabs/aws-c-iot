@@ -1855,22 +1855,23 @@ static void s_process_outbound_stream_start_message(
             (void *)secure_tunnel);
 
         error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH;
-        goto done;
 
         /* TODO The following doesn't work as all enqueued operations are canceled on resetting a tunnel connection. */
-
-        /*
-         * Protocol mismatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
-         * sending the STREAM START request that caused the mismatch.
-         */
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously "
-            "established "
-            "Protocol Version and Protocol Version used by outbound STREAM START message.",
-            (void *)secure_tunnel);
-        reset_secure_tunnel_connection(secure_tunnel);
-        aws_secure_tunnel_stream_start(secure_tunnel, current_operation->message_view);
+        bool is_reset_supported = false;
+        if (is_reset_supported) {
+            /*
+             * Protocol mismatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
+             * sending the STREAM START request that caused the mismatch.
+             */
+            AWS_LOGF_INFO(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously "
+                "established "
+                "Protocol Version and Protocol Version used by outbound STREAM START message.",
+                (void *)secure_tunnel);
+            reset_secure_tunnel_connection(secure_tunnel);
+            aws_secure_tunnel_stream_start(secure_tunnel, current_operation->message_view);
+        }
         goto done;
     }
 
