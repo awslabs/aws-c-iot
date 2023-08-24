@@ -1898,6 +1898,33 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 break;
 
             case AWS_STOT_STREAM_START:
+                /* TODO Extract into function */
+                if (secure_tunnel->connections->protocol_version != 0 &&
+                    !s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, current_operation->message_view)) {
+                    /*
+                     * Protocol mismatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
+                     * sending the STREAM START request that caused the mismatch.
+                     */
+                    AWS_LOGF_INFO(
+                        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                        "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously "
+                        "established "
+                        "Protocol Version and Protocol Version used by outbound STREAM START message.",
+                        (void *)secure_tunnel);
+                    reset_secure_tunnel_connection(secure_tunnel);
+                    aws_secure_tunnel_stream_start(secure_tunnel, current_operation->message_view);
+                    break;
+                }
+
+                if (secure_tunnel->connections->protocol_version == 0) {
+                    secure_tunnel->connections->protocol_version =
+                        s_aws_secure_tunnel_message_min_protocol_check(current_operation->message_view);
+                    AWS_LOGF_INFO(
+                        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                        "id=%p: Secure tunnel client Protocol set to V%d based on outbound STREAM START",
+                        (void *)secure_tunnel,
+                        (int)secure_tunnel->connections->protocol_version);
+                }
                 if ((*current_operation->vtable->aws_secure_tunnel_operation_set_next_stream_id_fn)(
                         current_operation, secure_tunnel)) {
                     error_code = aws_last_error();
@@ -2612,29 +2639,6 @@ int aws_secure_tunnel_stream_start(
     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Stream Start can only be sent from Source Mode");
         return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
-    }
-
-    if (secure_tunnel->connections->protocol_version != 0 &&
-        !s_aws_secure_tunnel_protocol_version_match_check(secure_tunnel, message_options)) {
-        /*
-         * Protocol mismatch results in a full disconnect/reconnect to the Secure Tunnel Service followed by
-         * sending the STREAM START request that caused the mismatch.
-         */
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
-            "Protocol Version and Protocol Version used by outbound STREAM START message.",
-            (void *)secure_tunnel);
-        reset_secure_tunnel_connection(secure_tunnel);
-    }
-
-    if (secure_tunnel->connections->protocol_version == 0) {
-        secure_tunnel->connections->protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message_options);
-        AWS_LOGF_INFO(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Secure tunnel client Protocol set to V%d based on outbound STREAM START",
-            (void *)secure_tunnel,
-            (int)secure_tunnel->connections->protocol_version);
     }
 
     struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
