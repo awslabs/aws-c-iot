@@ -142,6 +142,7 @@ static struct aws_secure_tunnel_operation_vtable s_empty_operation_vtable = {
     .aws_secure_tunnel_operation_assign_stream_id_fn = NULL,
     .aws_secure_tunnel_operation_set_next_stream_id_fn = NULL,
     .aws_secure_tunnel_operation_set_connection_start_id = NULL,
+    .aws_secure_tunnel_operation_prepare_message_for_send_fn = NULL,
 };
 
 /*********************************************************************************************************************
@@ -361,6 +362,8 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
 
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
+    int error_code = AWS_OP_SUCCESS;
+
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
         stream_id = secure_tunnel->connections->stream_id;
     } else {
@@ -372,13 +375,20 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
                 "id=%p: invalid service id '" PRInSTR "' attempted to be assigned a stream id on an outbound message",
                 (void *)message_view,
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id));
+            error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID;
             goto error;
         }
         struct aws_service_id_element *service_id_elem = elem->value;
         stream_id = service_id_elem->stream_id;
+
+        if (stream_id == INVALID_STREAM_ID) {
+            error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID;
+            goto error;
+        }
     }
 
     if (stream_id == INVALID_STREAM_ID) {
+        error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID;
         goto error;
     }
 
@@ -401,7 +411,7 @@ error:
             aws_secure_tunnel_message_type_to_c_string(message_view->type));
     }
 
-    return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID);
+    return aws_raise_error(error_code);
 }
 
 /*
@@ -561,10 +571,30 @@ static int s_aws_secure_tunnel_operation_set_connection_start_id(
     return AWS_OP_SUCCESS;
 }
 
+static void s_aws_secure_tunnel_operation_prepare_message_for_send_fn(
+    struct aws_secure_tunnel_operation *operation,
+    struct aws_secure_tunnel *secure_tunnel) {
+
+    struct aws_secure_tunnel_operation_message *message_op = operation->impl;
+    struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
+
+    /*
+     * If message is being sent from DESTINATION MODE, it might be expected that a V2 or V1 connection has
+     * established a default connection id of 1. This default connection id must be stripped before sending
+     * a V1 or V2 message out.
+     */
+    if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE &&
+        secure_tunnel->connections->protocol_version < 3 && message_view->connection_id == 1) {
+        message_op->options_storage.storage_view.connection_id = 0;
+    }
+}
+
 static struct aws_secure_tunnel_operation_vtable s_message_operation_vtable = {
     .aws_secure_tunnel_operation_assign_stream_id_fn = s_aws_secure_tunnel_operation_message_assign_stream_id,
     .aws_secure_tunnel_operation_set_next_stream_id_fn = s_aws_secure_tunnel_operation_message_set_next_stream_id,
     .aws_secure_tunnel_operation_set_connection_start_id = s_aws_secure_tunnel_operation_set_connection_start_id,
+    .aws_secure_tunnel_operation_prepare_message_for_send_fn =
+        s_aws_secure_tunnel_operation_prepare_message_for_send_fn,
 };
 
 static void s_destroy_operation_message(void *object) {

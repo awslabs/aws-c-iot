@@ -62,6 +62,11 @@ struct aws_secure_tunnel_operation_vtable {
     int (*aws_secure_tunnel_operation_set_connection_start_id)(
         struct aws_secure_tunnel_operation *operation,
         struct aws_secure_tunnel *secure_tunnel);
+
+    /* Perform actions on outbound message before sending it */
+    void (*aws_secure_tunnel_operation_prepare_message_for_send_fn)(
+        struct aws_secure_tunnel_operation *operation,
+        struct aws_secure_tunnel *secure_tunnel);
 };
 
 /**

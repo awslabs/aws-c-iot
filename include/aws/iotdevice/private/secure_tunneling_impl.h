@@ -163,7 +163,7 @@ struct aws_secure_tunnel_connections {
     /* Table containing streams using multiplexing (service ids) */
     struct aws_hash_table service_ids;
 
-    /* Message used for initializing a stream upon a reconnect due to a protocol version missmatch */
+    /* Message used for initializing a stream upon a reconnect due to a protocol version mismatch */
     struct aws_secure_tunnel_message_storage *restore_stream_message_view;
     struct aws_secure_tunnel_message_storage restore_stream_message;
 };
