@@ -27,8 +27,6 @@
 #define IPV4_ADDRESS_SIZE 16
 #define PORT_STRING_SIZE 6
 
-static size_t s_proc_net_tcp_size_hint = 4096;
-static size_t s_proc_net_udp_size_hint = 4096;
 static float PROC_NET_HINT_FACTOR = 1.1f;
 static const int EXPECTED_NETWORK_CONFIG_TOKENS = 5;
 
@@ -103,48 +101,6 @@ void get_network_total_delta(
     delta->bytes_out = curr_total->bytes_out - prev_total->bytes_out;
     delta->packets_in = curr_total->packets_in - prev_total->packets_in;
     delta->packets_out = curr_total->packets_out - prev_total->packets_out;
-}
-
-int read_proc_net_from_file(
-    struct aws_byte_buf *out_buf,
-    struct aws_allocator *allocator,
-    size_t size_hint,
-    const char *filename) {
-    AWS_ZERO_STRUCT(*out_buf);
-    int return_value = AWS_OP_ERR;
-
-    if (aws_byte_buf_init(out_buf, allocator, size_hint)) {
-        return aws_raise_error(aws_last_error());
-    }
-
-    FILE *fp = fopen(filename, "r");
-    if (fp) {
-        size_t read = fread(out_buf->buffer, 1, out_buf->capacity, fp);
-        out_buf->len += read;
-        while (read == size_hint) {
-            int aws_error = 0;
-            if (AWS_OP_SUCCESS != (aws_error = aws_byte_buf_reserve_relative(out_buf, size_hint))) {
-                return_value = aws_error;
-                goto cleanup;
-            }
-            read = fread(out_buf->buffer + out_buf->len, 1, size_hint, fp);
-            size_hint += size_hint;
-        }
-        if (ferror(fp)) {
-            return_value = aws_translate_and_raise_io_error(errno);
-            goto cleanup;
-        }
-        return_value = AWS_OP_SUCCESS;
-    }
-
-cleanup:
-    fclose(fp);
-    if (AWS_OP_SUCCESS != return_value) {
-        aws_byte_buf_clean_up_secure(out_buf);
-        return aws_raise_error(return_value);
-    }
-
-    return return_value;
 }
 
 int get_net_connections_from_proc_buf(
@@ -282,7 +238,7 @@ int get_network_connections(
     AWS_ZERO_STRUCT(net_udp);
     int return_code = AWS_OP_ERR;
 
-    if (read_proc_net_from_file(&net_tcp, allocator, s_proc_net_tcp_size_hint, "/proc/net/tcp")) {
+    if (aws_byte_buf_init_from_file(&net_tcp, allocator, "/proc/net/tcp")) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s",
@@ -292,7 +248,7 @@ int get_network_connections(
     }
     s_proc_net_tcp_size_hint = net_tcp.len * PROC_NET_HINT_FACTOR;
 
-    if (read_proc_net_from_file(&net_udp, allocator, s_proc_net_udp_size_hint, "/proc/net/udp")) {
+    if (aws_byte_buf_init_from_file(&net_udp, allocator, "/proc/net/udp")) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s",
