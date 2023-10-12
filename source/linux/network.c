@@ -240,7 +240,7 @@ int get_network_connections(
     AWS_ZERO_STRUCT(net_udp);
     int return_code = AWS_OP_ERR;
 
-    if (aws_byte_buf_init_from_special_file(&net_tcp, allocator, "/proc/net/tcp", s_proc_net_tcp_size_hint)) {
+    if (aws_byte_buf_init_from_file_with_size_hint(&net_tcp, allocator, "/proc/net/tcp", s_proc_net_tcp_size_hint)) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s",
@@ -250,7 +250,7 @@ int get_network_connections(
     }
     s_proc_net_tcp_size_hint = net_tcp.len * PROC_NET_HINT_FACTOR;
 
-    if (aws_byte_buf_init_from_special_file(&net_udp, allocator, "/proc/net/udp", s_proc_net_udp_size_hint)) {
+    if (aws_byte_buf_init_from_file_with_size_hint(&net_udp, allocator, "/proc/net/udp", s_proc_net_udp_size_hint)) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_NETWORK_CONFIG,
             "id=%p: Failed to retrieve network configuration: %s",
