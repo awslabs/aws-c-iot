@@ -1714,7 +1714,7 @@ static uint64_t s_aws_secure_tunnel_compute_operational_state_service_time(
 
     /* If a message is in transit down the WebSocket, then wait for it to complete */
     if (secure_tunnel->pending_write_completion) {
-        return 0;
+        return now;
     }
 
     /* If we're in the middle of something, keep going */
