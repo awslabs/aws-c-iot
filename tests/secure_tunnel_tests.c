@@ -20,7 +20,6 @@
 #include <aws/io/host_resolver.h>
 #include <aws/io/socket.h>
 #include <aws/testing/aws_test_harness.h>
-#include <inttypes.h>
 
 #define PAYLOAD_BYTE_LENGTH_PREFIX 2
 AWS_STATIC_STRING_FROM_LITERAL(s_access_token, "IAmAnAccessToken");
@@ -679,7 +678,7 @@ void aws_secure_tunnel_test_on_message_received_with_order_validation(
     switch (message_view->type) {
         case AWS_SECURE_TUNNEL_MT_DATA:
             test_fixture->secure_tunnel_message_sent_data_count++;
-            sscanf((const char *)message_view->payload->ptr, "%" PRIu32, &data_value);
+            sscanf((const char *)message_view->payload->ptr, "%d", &data_value);
             if (test_fixture->secure_tunnel_message_sent_previous_data_value > 0 &&
                 data_value != test_fixture->secure_tunnel_message_sent_previous_data_value + 1) {
                 /* We cannot assert in this callback, log error and set corresponding fail flag instead. */
@@ -1489,10 +1488,10 @@ static int s_secure_tunneling_subsequent_writes_test_fn(struct aws_allocator *al
 
     int total_messages = 100;
     for (int i = 0; i < total_messages; ++i) {
-        uint8_t buf[10];
+        uint8_t buf[16];
         struct aws_byte_cursor s_payload_buf = {
             .ptr = buf,
-            .len = 10,
+            .len = 16,
         };
 
         snprintf((char *)buf, sizeof(buf), "%d", i);
