@@ -892,6 +892,7 @@ static void s_secure_tunneling_websocket_on_send_data_complete_callback(
     }
     aws_secure_tunnel_data_tunnel_pair_destroy(pair);
     secure_tunnel->pending_write_completion = false;
+    s_reevaluate_service_task(secure_tunnel);
 }
 
 static bool secure_tunneling_websocket_stream_outgoing_payload(
