@@ -134,7 +134,7 @@ struct aws_secure_tunnel_mock_test_fixture {
     int secure_tunnel_message_sent_count_target;
     int secure_tunnel_message_sent_connection_reset_count;
     int secure_tunnel_message_sent_data_count;
-    int secure_tunnel_message_sent_previous_data_value;
+    int secure_tunnel_message_previous_data_value;
     bool secure_tunnel_messages_received_in_order;
 
     bool on_send_message_complete_fired;
@@ -679,17 +679,17 @@ void aws_secure_tunnel_test_on_message_received_with_order_validation(
         case AWS_SECURE_TUNNEL_MT_DATA:
             test_fixture->secure_tunnel_message_sent_data_count++;
             sscanf((const char *)message_view->payload->ptr, "%d", &data_value);
-            if (test_fixture->secure_tunnel_message_sent_previous_data_value > 0 &&
-                data_value != test_fixture->secure_tunnel_message_sent_previous_data_value + 1) {
+            if (test_fixture->secure_tunnel_message_previous_data_value > 0 &&
+                data_value != test_fixture->secure_tunnel_message_previous_data_value + 1) {
                 /* We cannot assert in this callback, log error and set corresponding fail flag instead. */
                 fprintf(
                     stderr,
                     "ERROR: secure tunnel expected %d, received %d\n",
-                    test_fixture->secure_tunnel_message_sent_previous_data_value + 1,
+                    test_fixture->secure_tunnel_message_previous_data_value + 1,
                     data_value);
                 test_fixture->secure_tunnel_messages_received_in_order = false;
             }
-            test_fixture->secure_tunnel_message_sent_previous_data_value = data_value;
+            test_fixture->secure_tunnel_message_previous_data_value = data_value;
             break;
         case AWS_SECURE_TUNNEL_MT_CONNECTION_RESET:
             test_fixture->secure_tunnel_message_sent_connection_reset_count++;
