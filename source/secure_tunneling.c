@@ -1713,8 +1713,7 @@ static uint64_t s_aws_secure_tunnel_compute_operational_state_service_time(
     struct aws_secure_tunnel *secure_tunnel,
     uint64_t now) {
 
-    /* Another message is in transit down the WebSocket, but schedule a new message to the nearest time to avoid delays.
-     */
+    /* If a message is in transit down the WebSocket, then wait for it to complete */
     if (secure_tunnel->pending_write_completion) {
         return 0;
     }
