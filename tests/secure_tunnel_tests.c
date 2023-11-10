@@ -674,11 +674,11 @@ void aws_secure_tunnel_test_on_message_received_with_order_validation(
 
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_message_sent_count++;
-    int32_t data_value;
+    int data_value;
     switch (message_view->type) {
         case AWS_SECURE_TUNNEL_MT_DATA:
             test_fixture->secure_tunnel_message_sent_data_count++;
-            sscanf((const char *)message_view->payload->ptr, "%d", &data_value);
+            data_value = (int)strtol((const char *)message_view->payload->ptr, NULL, 10);
             if (test_fixture->secure_tunnel_message_previous_data_value > 0 &&
                 data_value != test_fixture->secure_tunnel_message_previous_data_value + 1) {
                 /* We cannot assert in this callback, log error and set corresponding fail flag instead. */
