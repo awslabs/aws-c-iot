@@ -1080,6 +1080,70 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     }
 }
 
+static void s_secure_tunnel_websocket_fail_setup(
+    struct aws_websocket *websocket,
+    int error_code,
+    struct aws_secure_tunnel *secure_tunnel) {
+
+    AWS_FATAL_ASSERT(aws_event_loop_thread_is_callers_thread(secure_tunnel->loop));
+
+    if (secure_tunnel->config->on_connection_complete) {
+        secure_tunnel->config->on_connection_complete(
+            NULL,
+            error_code,
+            secure_tunnel->config->user_data);
+    }
+    s_on_websocket_shutdown(websocket, error_code, secure_tunnel);
+}
+
+struct aws_secure_tunnel_websocket_shutdown_task {
+    struct aws_task task;
+    struct aws_allocator *allocator;
+    struct aws_secure_tunnel *secure_tunnel;
+    struct aws_websocket *websocket;
+    int error_code;
+};
+
+void s_secure_tunnel_websocket_shutdown_task_fn(struct aws_task *task, void *arg, enum aws_task_status status) {
+    (void)task;
+
+    struct aws_secure_tunnel_websocket_shutdown_task *shutdown_task = arg;
+
+    if (status != AWS_TASK_STATUS_RUN_READY) {
+        goto done;
+    }
+
+    s_secure_tunnel_websocket_fail_setup(
+        shutdown_task->websocket,
+        shutdown_task->error_code,
+        shutdown_task->secure_tunnel);
+
+done:
+    aws_mem_release(shutdown_task->allocator, shutdown_task);
+}
+
+static void s_on_websocket_setup_failed(
+    struct aws_websocket *websocket,
+    int error_code,
+    struct aws_secure_tunnel *secure_tunnel) {
+
+    if (aws_event_loop_thread_is_callers_thread(secure_tunnel->loop)) {
+        s_secure_tunnel_websocket_fail_setup(websocket, error_code, secure_tunnel);
+        return;
+    }
+
+    struct aws_secure_tunnel_websocket_shutdown_task *shutdown_task =
+        aws_mem_calloc(secure_tunnel->allocator, 1, sizeof(struct aws_secure_tunnel_websocket_shutdown_task));
+
+    aws_task_init(&shutdown_task->task, s_secure_tunnel_websocket_shutdown_task_fn, shutdown_task, "ShutdownTask");
+    shutdown_task->allocator = secure_tunnel->allocator;
+    shutdown_task->secure_tunnel = secure_tunnel;
+    shutdown_task->websocket = websocket;
+    shutdown_task->error_code = error_code;
+
+    aws_event_loop_schedule_task_now(secure_tunnel->loop, &shutdown_task->task);
+}
+
 /* Called on successful or failed websocket setup attempt */
 static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_data *setup, void *user_data) {
     struct aws_secure_tunnel *secure_tunnel = user_data;
@@ -1091,12 +1155,8 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
     secure_tunnel->websocket = setup->websocket;
 
     if (setup->error_code != AWS_OP_SUCCESS) {
-        /* Report a failed WebSocket Upgrade attempt */
-        if (secure_tunnel->config->on_connection_complete) {
-            secure_tunnel->config->on_connection_complete(NULL, setup->error_code, secure_tunnel->config->user_data);
-        }
         /* Failed/Successful websocket creation and associated errors logged by "websocket-setup" */
-        s_on_websocket_shutdown(secure_tunnel->websocket, setup->error_code, secure_tunnel);
+        s_on_websocket_setup_failed(secure_tunnel->websocket, setup->error_code, secure_tunnel);
         return;
     }
 
