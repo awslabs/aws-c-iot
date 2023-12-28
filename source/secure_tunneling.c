@@ -1088,10 +1088,7 @@ static void s_secure_tunnel_websocket_fail_setup(
     AWS_FATAL_ASSERT(aws_event_loop_thread_is_callers_thread(secure_tunnel->loop));
 
     if (secure_tunnel->config->on_connection_complete) {
-        secure_tunnel->config->on_connection_complete(
-            NULL,
-            error_code,
-            secure_tunnel->config->user_data);
+        secure_tunnel->config->on_connection_complete(NULL, error_code, secure_tunnel->config->user_data);
     }
     s_on_websocket_shutdown(websocket, error_code, secure_tunnel);
 }
@@ -1114,9 +1111,7 @@ void s_secure_tunnel_websocket_shutdown_task_fn(struct aws_task *task, void *arg
     }
 
     s_secure_tunnel_websocket_fail_setup(
-        shutdown_task->websocket,
-        shutdown_task->error_code,
-        shutdown_task->secure_tunnel);
+        shutdown_task->websocket, shutdown_task->error_code, shutdown_task->secure_tunnel);
 
 done:
     aws_mem_release(shutdown_task->allocator, shutdown_task);
