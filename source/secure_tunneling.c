@@ -1087,6 +1087,7 @@ static void s_secure_tunnel_websocket_fail_setup(
 
     AWS_FATAL_ASSERT(aws_event_loop_thread_is_callers_thread(secure_tunnel->loop));
 
+    /* Report a failed WebSocket Upgrade attempt */
     if (secure_tunnel->config->on_connection_complete) {
         secure_tunnel->config->on_connection_complete(NULL, error_code, secure_tunnel->config->user_data);
     }
@@ -1117,6 +1118,8 @@ done:
     aws_mem_release(shutdown_task->allocator, shutdown_task);
 }
 
+/* Called on failed WebSocket setup attempt. Ensures that the actual failed setup logic is executed on the secure
+ * tunnel's event loop. */
 static void s_on_websocket_setup_failed(
     struct aws_websocket *websocket,
     int error_code,
