@@ -1047,7 +1047,7 @@ int aws_websocket_client_connect_fail_once_fn(const struct aws_websocket_client_
 
 static void s_host_resolver_thread(void *arg) {
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
-    struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = AWS_ERROR_HTTP_UNKNOWN };
+    struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = AWS_ERROR_HTTP_UNKNOWN};
     (test_fixture->websocket_function_table->on_connection_setup_fn)(&websocket_setup, test_fixture->secure_tunnel);
     test_fixture->host_resolver_thread_executed = true;
 }
@@ -1079,19 +1079,16 @@ int aws_websocket_client_connect_fail_in_another_thread_fn(
     test_fixture->websocket_function_table->on_incoming_frame_complete_fn = options->on_incoming_frame_complete;
 
     if (aws_thread_init(&test_fixture->host_resolver_thread, test_fixture->allocator)) {
-        AWS_LOGF_ERROR(
-            AWS_LS_HTTP_WEBSOCKET_SETUP,
-            "id=static: Failed to initialize thread.");
+        AWS_LOGF_ERROR(AWS_LS_HTTP_WEBSOCKET_SETUP, "id=static: Failed to initialize thread.");
         return aws_raise_error(AWS_ERROR_HTTP_UNKNOWN);
     }
 
     struct aws_thread_options thread_options = *aws_default_thread_options();
     thread_options.name = aws_byte_cursor_from_c_str("HostResolver");
 
-    if (aws_thread_launch(&test_fixture->host_resolver_thread, s_host_resolver_thread, test_fixture, &thread_options) != AWS_OP_SUCCESS) {
-        AWS_LOGF_ERROR(
-            AWS_LS_HTTP_WEBSOCKET_SETUP,
-            "id=static: Failed to launch thread.");
+    if (aws_thread_launch(&test_fixture->host_resolver_thread, s_host_resolver_thread, test_fixture, &thread_options) !=
+        AWS_OP_SUCCESS) {
+        AWS_LOGF_ERROR(AWS_LS_HTTP_WEBSOCKET_SETUP, "id=static: Failed to launch thread.");
         return aws_raise_error(AWS_ERROR_HTTP_UNKNOWN);
     }
 
