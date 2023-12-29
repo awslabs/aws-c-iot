@@ -143,6 +143,9 @@ struct aws_secure_tunnel_mock_test_fixture {
         enum aws_secure_tunnel_message_type type;
         int error_code;
     } on_send_message_complete_result;
+
+    struct aws_thread host_resolver_thread;
+    bool host_resolver_thread_executed;
 };
 
 static bool s_secure_tunnel_check_active_stream_id(
@@ -380,6 +383,18 @@ static void s_wait_for_connected_successfully(struct aws_secure_tunnel_mock_test
     aws_mutex_lock(&test_fixture->lock);
     aws_condition_variable_wait_pred(
         &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_connected_succesfully, test_fixture);
+    aws_mutex_unlock(&test_fixture->lock);
+}
+
+static bool s_has_secure_tunnel_connection_failed(void *arg) {
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
+    return test_fixture->secure_tunnel_connection_failed;
+}
+
+static void s_wait_for_connection_failed(struct aws_secure_tunnel_mock_test_fixture *test_fixture) {
+    aws_mutex_lock(&test_fixture->lock);
+    aws_condition_variable_wait_pred(
+        &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_connection_failed, test_fixture);
     aws_mutex_unlock(&test_fixture->lock);
 }
 
@@ -1030,6 +1045,59 @@ int aws_websocket_client_connect_fail_once_fn(const struct aws_websocket_client_
     }
 }
 
+static void s_host_resolver_thread(void *arg) {
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
+    struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = AWS_ERROR_HTTP_UNKNOWN };
+    (test_fixture->websocket_function_table->on_connection_setup_fn)(&websocket_setup, test_fixture->secure_tunnel);
+    test_fixture->host_resolver_thread_executed = true;
+}
+
+int aws_websocket_client_connect_fail_in_another_thread_fn(
+    const struct aws_websocket_client_connection_options *options) {
+
+    struct aws_secure_tunnel *secure_tunnel = options->user_data;
+    struct aws_secure_tunnel_mock_test_fixture *test_fixture = secure_tunnel->config->user_data;
+
+    test_fixture->host_resolver_thread_executed = false;
+
+    if (!options->handshake_request) {
+        AWS_LOGF_ERROR(
+            AWS_LS_HTTP_WEBSOCKET_SETUP,
+            "id=static: Invalid connection options, missing required request for websocket client handshake.");
+        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
+    }
+
+    const struct aws_http_headers *request_headers = aws_http_message_get_headers(options->handshake_request);
+    if (test_fixture->header_check) {
+        ASSERT_SUCCESS(test_fixture->header_check(request_headers, test_fixture));
+    }
+
+    test_fixture->websocket_function_table->on_connection_setup_fn = options->on_connection_setup;
+    test_fixture->websocket_function_table->on_connection_shutdown_fn = options->on_connection_shutdown;
+    test_fixture->websocket_function_table->on_incoming_frame_begin_fn = options->on_incoming_frame_begin;
+    test_fixture->websocket_function_table->on_incoming_frame_payload_fn = options->on_incoming_frame_payload;
+    test_fixture->websocket_function_table->on_incoming_frame_complete_fn = options->on_incoming_frame_complete;
+
+    if (aws_thread_init(&test_fixture->host_resolver_thread, test_fixture->allocator)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_HTTP_WEBSOCKET_SETUP,
+            "id=static: Failed to initialize thread.");
+        return aws_raise_error(AWS_ERROR_HTTP_UNKNOWN);
+    }
+
+    struct aws_thread_options thread_options = *aws_default_thread_options();
+    thread_options.name = aws_byte_cursor_from_c_str("HostResolver");
+
+    if (aws_thread_launch(&test_fixture->host_resolver_thread, s_host_resolver_thread, test_fixture, &thread_options) != AWS_OP_SUCCESS) {
+        AWS_LOGF_ERROR(
+            AWS_LS_HTTP_WEBSOCKET_SETUP,
+            "id=static: Failed to launch thread.");
+        return aws_raise_error(AWS_ERROR_HTTP_UNKNOWN);
+    }
+
+    return AWS_OP_SUCCESS;
+}
+
 static int s_secure_tunneling_fail_and_retry_connection_test_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
     struct secure_tunnel_test_options test_options;
@@ -1056,6 +1124,41 @@ static int s_secure_tunneling_fail_and_retry_connection_test_fn(struct aws_alloc
 }
 
 AWS_TEST_CASE(secure_tunneling_fail_and_retry_connection_test, s_secure_tunneling_fail_and_retry_connection_test_fn)
+
+/* Check the case when WebSocket connection fails and a WebSocket setup callback is called from another thread. This
+ * situation can happen on host resolution failure.
+ * NOTE: This test is supposed to be verified by thread sanitizer. */
+static int s_secure_tunneling_fail_ws_in_another_thread_test_fn(struct aws_allocator *allocator, void *ctx) {
+    (void)ctx;
+    struct secure_tunnel_test_options test_options;
+    struct aws_secure_tunnel_mock_test_fixture test_fixture;
+    aws_secure_tunnel_mock_test_init(allocator, &test_options, &test_fixture, AWS_SECURE_TUNNELING_DESTINATION_MODE);
+    struct aws_secure_tunnel *secure_tunnel = test_fixture.secure_tunnel;
+
+    test_fixture.secure_tunnel_vtable = *aws_secure_tunnel_get_default_vtable();
+    test_fixture.secure_tunnel_vtable.aws_websocket_client_connect_fn =
+        aws_websocket_client_connect_fail_in_another_thread_fn;
+    test_fixture.secure_tunnel_vtable.aws_websocket_send_frame_fn = aws_websocket_send_frame_mock_fn;
+    test_fixture.secure_tunnel_vtable.aws_websocket_release_fn = aws_websocket_release_mock_fn;
+    test_fixture.secure_tunnel_vtable.aws_websocket_close_fn = aws_websocket_close_mock_fn;
+    test_fixture.secure_tunnel_vtable.vtable_user_data = &test_fixture;
+
+    test_fixture.secure_tunnel_connection_failed = false;
+    ASSERT_SUCCESS(aws_secure_tunnel_start(secure_tunnel));
+    s_wait_for_connection_failed(&test_fixture);
+    ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
+
+    ASSERT_SUCCESS(aws_thread_join(&test_fixture.host_resolver_thread));
+    aws_thread_clean_up(&test_fixture.host_resolver_thread);
+
+    ASSERT_TRUE(test_fixture.host_resolver_thread_executed);
+
+    aws_secure_tunnel_mock_test_clean_up(&test_fixture);
+
+    return AWS_OP_SUCCESS;
+}
+
+AWS_TEST_CASE(secure_tunneling_fail_ws_in_another_thread_test, s_secure_tunneling_fail_ws_in_another_thread_test_fn)
 
 static int s_secure_tunneling_store_service_ids_test_fn(struct aws_allocator *allocator, void *ctx) {
     (void)ctx;
