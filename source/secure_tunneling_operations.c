@@ -782,7 +782,7 @@ void aws_secure_tunnel_options_storage_log(
             log_handle,
             level,
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: aws_secure_tunnel_options_storage http proxy port set to %" PRIu16,
+            "id=%p: aws_secure_tunnel_options_storage http proxy port set to %" PRIu32,
             (void *)options_storage,
             options_storage->http_proxy_options.port);
 
