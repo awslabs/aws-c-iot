@@ -1080,7 +1080,7 @@ static void s_on_websocket_shutdown(struct aws_websocket *websocket, int error_c
     }
 }
 
-static void s_secure_tunnel_websocket_fail_setup(
+static void s_secure_tunnel_websocket_shutdown(
     struct aws_websocket *websocket,
     int error_code,
     struct aws_secure_tunnel *secure_tunnel) {
@@ -1111,7 +1111,7 @@ void s_secure_tunnel_websocket_shutdown_task_fn(struct aws_task *task, void *arg
         goto done;
     }
 
-    s_secure_tunnel_websocket_fail_setup(
+    s_secure_tunnel_websocket_shutdown(
         shutdown_task->websocket, shutdown_task->error_code, shutdown_task->secure_tunnel);
 
 done:
@@ -1126,7 +1126,7 @@ static void s_on_websocket_setup_failed(
     struct aws_secure_tunnel *secure_tunnel) {
 
     if (aws_event_loop_thread_is_callers_thread(secure_tunnel->loop)) {
-        s_secure_tunnel_websocket_fail_setup(websocket, error_code, secure_tunnel);
+        s_secure_tunnel_websocket_shutdown(websocket, error_code, secure_tunnel);
         return;
     }
 
