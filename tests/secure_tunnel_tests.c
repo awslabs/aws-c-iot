@@ -617,13 +617,6 @@ int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_conne
     struct aws_secure_tunnel *secure_tunnel = options->user_data;
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = secure_tunnel->config->user_data;
 
-    if (!options->handshake_request) {
-        AWS_LOGF_ERROR(
-            AWS_LS_HTTP_WEBSOCKET_SETUP,
-            "id=static: Invalid connection options, missing required request for websocket client handshake.");
-        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
-    }
-
     const struct aws_http_headers *request_headers = aws_http_message_get_headers(options->handshake_request);
     if (test_fixture->header_check) {
         ASSERT_SUCCESS(test_fixture->header_check(request_headers, test_fixture));
@@ -1002,13 +995,6 @@ int aws_websocket_client_connect_fail_once_fn(const struct aws_websocket_client_
     aws_mutex_unlock(&test_fixture->lock);
 
     if (is_connection_failed_once) {
-        if (!options->handshake_request) {
-            AWS_LOGF_ERROR(
-                AWS_LS_HTTP_WEBSOCKET_SETUP,
-                "id=static: Invalid connection options, missing required request for websocket client handshake.");
-            return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
-        }
-
         const struct aws_http_headers *request_headers = aws_http_message_get_headers(options->handshake_request);
         if (test_fixture->header_check) {
             ASSERT_SUCCESS(test_fixture->header_check(request_headers, test_fixture));
@@ -1059,13 +1045,6 @@ int aws_websocket_client_connect_fail_in_another_thread_fn(
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = secure_tunnel->config->user_data;
 
     test_fixture->host_resolver_thread_executed = false;
-
-    if (!options->handshake_request) {
-        AWS_LOGF_ERROR(
-            AWS_LS_HTTP_WEBSOCKET_SETUP,
-            "id=static: Invalid connection options, missing required request for websocket client handshake.");
-        return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
-    }
 
     const struct aws_http_headers *request_headers = aws_http_message_get_headers(options->handshake_request);
     if (test_fixture->header_check) {
