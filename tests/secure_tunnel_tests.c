@@ -916,7 +916,7 @@ int secure_tunneling_access_token_check(const struct aws_http_headers *request_h
         return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
     }
     ASSERT_CURSOR_VALUE_STRING_EQUALS(access_token_cur, s_access_token);
-    return AWS_ERROR_SUCCESS;
+    return AWS_OP_SUCCESS;
 }
 
 static int s_secure_tunneling_functionality_connect_test_fn(struct aws_allocator *allocator, void *ctx) {
@@ -952,7 +952,7 @@ int secure_tunneling_client_token_check(const struct aws_http_headers *request_h
         return aws_raise_error(AWS_ERROR_INVALID_ARGUMENT);
     }
     ASSERT_CURSOR_VALUE_STRING_EQUALS(client_token_cur, s_client_token);
-    return AWS_ERROR_SUCCESS;
+    return AWS_OP_SUCCESS;
 }
 
 static int s_secure_tunneling_functionality_client_token_test_fn(struct aws_allocator *allocator, void *ctx) {

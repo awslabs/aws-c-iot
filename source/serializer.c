@@ -488,5 +488,5 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
     return AWS_OP_SUCCESS;
 
 error:
-    return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE;
+    return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE);
 }
