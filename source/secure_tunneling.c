@@ -2168,12 +2168,9 @@ done:
     aws_mem_release(submit_operation_task->allocator, submit_operation_task);
 }
 
-static int s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aws_secure_tunnel_operation *operation) {
+static void s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aws_secure_tunnel_operation *operation) {
     struct aws_secure_tunnel_submit_operation_task *submit_task =
         aws_mem_calloc(secure_tunnel->allocator, 1, sizeof(struct aws_secure_tunnel_submit_operation_task));
-    if (submit_task == NULL) {
-        return AWS_OP_ERR;
-    }
 
     aws_task_init(
         &submit_task->task, s_secure_tunnel_submit_operation_task_fn, submit_task, "SecureTunnelSubmitOperation");
@@ -2182,8 +2179,6 @@ static int s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aw
     submit_task->operation = operation;
 
     aws_event_loop_schedule_task_now(secure_tunnel->loop, &submit_task->task);
-
-    return AWS_OP_SUCCESS;
 }
 
 /*********************************************************************************************************************
@@ -2655,15 +2650,9 @@ int aws_secure_tunnel_send_message(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return aws_last_error();
 }
 
 int aws_secure_tunnel_stream_start(
@@ -2690,15 +2679,9 @@ int aws_secure_tunnel_stream_start(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
 }
 
 int aws_secure_tunnel_connection_start(
@@ -2725,15 +2708,9 @@ int aws_secure_tunnel_connection_start(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
 }
 
 /*********************************************************************************************************************
@@ -2763,15 +2740,9 @@ int aws_secure_tunnel_stream_reset(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
 }
 
 int aws_secure_tunnel_connection_reset(
@@ -2793,13 +2764,7 @@ int aws_secure_tunnel_connection_reset(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
 }

@@ -60,7 +60,7 @@ int s_hashfn_foreach_total_iface_transfer_metrics(void *context, struct aws_hash
     return AWS_COMMON_HASH_TABLE_ITER_CONTINUE;
 }
 
-enum linux_network_connection_state { LINUX_NCS_UNKNOWN = 0, LINUX_NCS_ESTABLISHED = 1, LINUX_NCS_LISTEN = 10 };
+enum linux_network_connection_state { LINUX_NCS_UNKNOWN = 0, LINUX_NCS_ESTABLISHED = 1, LINUX_NCS_LISTEN = 10, };
 
 static uint16_t map_network_state(uint16_t linux_state) {
     switch (linux_state) {
