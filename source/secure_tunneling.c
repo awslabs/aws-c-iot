@@ -242,6 +242,9 @@ static bool s_aws_secure_tunnel_stream_id_match_check(
     return (stream_id == service_id_elem->stream_id);
 }
 
+/* ERROR_PASS: this function mixes things that shouldn't be mixed.  It returns true/false but also sometimes
+ * sets last error, but not consistently vs. true/false
+ */
 static bool s_aws_secure_tunnel_active_stream_check(
     const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_view) {
@@ -440,6 +443,7 @@ static int s_aws_secure_tunnel_set_connection_id(
                 .connection_id = connection_id,
             };
 
+            /* ERROR_PASS: unchecked return value */
             s_aws_secure_tunnel_remove_connection_id(secure_tunnel, &reset_message);
             if (secure_tunnel->config->on_connection_reset) {
                 secure_tunnel->config->on_connection_reset(
@@ -448,6 +452,7 @@ static int s_aws_secure_tunnel_set_connection_id(
                     secure_tunnel->config->user_data);
             }
 
+            /* ERROR_PASS: return value is not checked  */
             aws_secure_tunnel_connection_reset(secure_tunnel, &reset_message);
 
             return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
@@ -462,6 +467,9 @@ static int s_aws_secure_tunnel_set_connection_id(
     return AWS_OP_SUCCESS;
 }
 
+/* ERROR_PASS: this function sometimes returns error codes and sometimes returns AWS_OP_SUCCESS.  In most cases,
+ * returning an error code from a general purpose do-something function is a bad idea.
+ */
 static int s_aws_secure_tunnel_remove_connection_id(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_view) {
@@ -519,6 +527,8 @@ static void s_aws_secure_tunnel_on_data_received(
             "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming STREAM START message.",
             (void *)secure_tunnel);
+
+        /* ERROR_PASS: unchecked return value */
         reset_secure_tunnel_connection(secure_tunnel);
         return;
     }
@@ -581,7 +591,9 @@ static void s_aws_secure_tunnel_on_stream_start_received(
             "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming STREAM START message.",
             (void *)secure_tunnel);
+        /* ERROR_PASS: unchecked return value */
         reset_secure_tunnel_connection(secure_tunnel);
+        /* ERROR_PASS: unchecked return value */
         aws_secure_tunnel_message_storage_init(
             &secure_tunnel->connections->restore_stream_message,
             secure_tunnel->allocator,
@@ -600,6 +612,9 @@ static void s_aws_secure_tunnel_on_stream_start_received(
      */
     s_set_absent_connection_id_to_one(message_view, &connection_id);
 
+    /* ERROR_PASS: danger, danger, danger - this function returns AWS_OP_SUCCESS/AWS_OP_ERR but the result is
+     * being used like it returns an error code.  Pass aws_last_error() in perhaps.
+     */
     int result =
         s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, message_view->stream_id, connection_id);
 
@@ -619,12 +634,17 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
             "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming STREAM RESET message.",
             (void *)secure_tunnel);
+
+        /* ERROR_PASS: unchecked return value */
         reset_secure_tunnel_connection(secure_tunnel);
         return;
     }
 
     int result = AWS_OP_SUCCESS;
     if (s_aws_secure_tunnel_stream_id_match_check(secure_tunnel, message_view->service_id, message_view->stream_id)) {
+        /* ERROR_PASS: danger, danger, danger - this function returns AWS_OP_SUCCESS/AWS_OP_ERR but the result is
+         * being used like it returns an error code.  Pass aws_last_error() in perhaps.
+         */
         result = s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, INVALID_STREAM_ID, 0);
         if (secure_tunnel->config->on_stream_reset) {
             secure_tunnel->config->on_stream_reset(message_view, result, secure_tunnel->config->user_data);
@@ -732,6 +752,7 @@ static void s_aws_secure_tunnel_on_connection_start_received(
             "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming CONNECTION START message.",
             (void *)secure_tunnel);
+        /* ERROR_PASS: unchecked return value */
         reset_secure_tunnel_connection(secure_tunnel);
         return;
     }
@@ -742,6 +763,9 @@ static void s_aws_secure_tunnel_on_connection_start_received(
     s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
     if (s_aws_secure_tunnel_stream_id_match_check(secure_tunnel, message_view->service_id, message_view->stream_id)) {
+        /* ERROR_PASS: danger, danger, danger - this function returns AWS_OP_SUCCESS/AWS_OP_ERR but the result is
+         * being used like it returns an error code.  Pass aws_last_error() in perhaps.
+         */
         int result =
             s_aws_secure_tunnel_set_connection_id(secure_tunnel, message_view->service_id, message_view->connection_id);
         if (secure_tunnel->config->on_connection_start) {
@@ -775,6 +799,7 @@ static void s_aws_secure_tunnel_on_connection_reset_received(
             "id=%p: Secure Tunnel will be reset due to Protocol Version mismatch between previously established "
             "Protocol Version and Protocol Version used by incoming CONNECTION RESET message.",
             (void *)secure_tunnel);
+        /* ERROR_PASS: unchecked return value */
         reset_secure_tunnel_connection(secure_tunnel);
         return;
     }
@@ -784,6 +809,9 @@ static void s_aws_secure_tunnel_on_connection_reset_received(
      */
     s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
+    /* ERROR_PASS: danger, danger, danger - this function returns a mixture of error codes and AWS_OP_SUCCESS.
+     * If this is changed to return AWS_OP_ERR/AWS_OP_SUCCESS then aws_last_error() should be submitted to the callback.
+     */
     int result = s_aws_secure_tunnel_remove_connection_id(secure_tunnel, message_view);
 
     if (secure_tunnel->config->on_connection_reset) {
@@ -795,6 +823,7 @@ static void s_aws_secure_tunnel_connected_on_message_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view) {
 
+    /* ERROR_PASS: it seems weird that our core message handler function has absolutely no error conditions */
     aws_secure_tunnel_message_view_log(message_view, AWS_LL_DEBUG);
     switch (message_view->type) {
         case AWS_SECURE_TUNNEL_MT_DATA:
@@ -828,6 +857,7 @@ static void s_aws_secure_tunnel_connected_on_message_received(
         case AWS_SECURE_TUNNEL_MT_UNKNOWN:
         default:
             if (!message_view->ignorable) {
+                /* ERROR_PASS: but we *are* ignoring it anyways? */
                 AWS_LOGF_ERROR(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                     "Encountered an unknown but un-ignorable message. type=%s",
@@ -837,6 +867,9 @@ static void s_aws_secure_tunnel_connected_on_message_received(
     }
 }
 
+/* ERROR_PASS: this function returns a mixture of error code and AWS_OP_SUCCESS.  Unless there's a really good reason,
+ * it should return AWS_OP_SUCCESS/AWS_OP_ERR and callers should use aws_last_error()
+ */
 static int s_process_received_data(struct aws_secure_tunnel *secure_tunnel) {
 
     struct aws_byte_buf *received_data = &secure_tunnel->received_data;
@@ -909,6 +942,9 @@ static bool secure_tunneling_websocket_stream_outgoing_payload(
             return false;
         }
         pair->length_prefix_written = true;
+
+        /* ERROR_PASS: this value is never used.
+         */
         space_available = out_buf->capacity - out_buf->len;
     }
 
@@ -1005,6 +1041,7 @@ static bool s_on_websocket_incoming_frame_complete(
     (void)frame;
 
     if (error_code) {
+        /* ERROR_PASS: This seems fatal? */
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Error on s_on_websocket_incoming_frame_complete() with error %d(%s).",
@@ -1090,7 +1127,7 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
 
     secure_tunnel->websocket = setup->websocket;
 
-    if (setup->error_code != AWS_OP_SUCCESS) {
+    if (setup->error_code != AWS_ERROR_SUCCESS) {
         /* Report a failed WebSocket Upgrade attempt */
         if (secure_tunnel->config->on_connection_complete) {
             secure_tunnel->config->on_connection_complete(NULL, setup->error_code, secure_tunnel->config->user_data);
@@ -1104,6 +1141,10 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
     AWS_FATAL_ASSERT(aws_event_loop_thread_is_callers_thread(secure_tunnel->loop));
 
     if (secure_tunnel->desired_state != AWS_STS_CONNECTED) {
+        /* ERROR_PASS: this isn't correct.  The error branch shuts down with setup->error_code, but that's
+         * AWS_ERROR_SUCCESS.  Don't raise an error, set an error code and have the error branch
+         * use it.
+         */
         aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP);
         goto error;
     }
@@ -1140,7 +1181,7 @@ void s_secure_tunneling_websocket_transform_complete_task_fn(
     secure_tunnel->handshake_request = aws_http_message_acquire(websocket_transform_complete_task->handshake);
 
     int error_code = websocket_transform_complete_task->error_code;
-    if (error_code == 0 && secure_tunnel->desired_state == AWS_STS_CONNECTED) {
+    if (error_code == AWS_ERROR_SUCCESS && secure_tunnel->desired_state == AWS_STS_CONNECTED) {
         struct aws_websocket_client_connection_options websocket_options = {
             .allocator = secure_tunnel->allocator,
             .bootstrap = secure_tunnel->config->bootstrap,
@@ -1184,6 +1225,7 @@ void s_secure_tunneling_websocket_transform_complete_task_fn(
     }
 
 error:;
+    /* ERROR_PASS: let's absolutely enforce that error_code is not AWS_ERROR_SUCCESS here */
     struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = error_code};
     s_on_websocket_setup(&websocket_setup, secure_tunnel);
 
@@ -1289,6 +1331,10 @@ static int s_websocket_connect(struct aws_secure_tunnel *secure_tunnel) {
     task->error_code = AWS_OP_SUCCESS;
     task->handshake = handshake;
 
+    /* ERROR_PASS: I don't understand why we're doing this.  The handshake transform exists to let users or config
+     * apply custom transformations on the handshake.  But I don't see any custom transformations.   I just see
+     * a fixed request.  So why go through the trouble of scheduling an async completion task?
+     */
     aws_event_loop_schedule_task_now(secure_tunnel->loop, &task->task);
 
     return AWS_OP_SUCCESS;
@@ -1393,6 +1439,7 @@ static uint64_t s_aws_secure_tunnel_compute_reconnect_backoff_no_jitter(struct a
     return aws_mul_u64_saturating((uint64_t)1 << retry_count, MIN_RECONNECT_DELAY_MS);
 }
 
+/* ERROR_PASS: should this be a public API up in common? */
 uint64_t aws_secure_tunnel_random_in_range(uint64_t from, uint64_t to) {
     uint64_t max = aws_max_u64(from, to);
     uint64_t min = aws_min_u64(from, to);
@@ -1552,9 +1599,6 @@ static struct aws_secure_tunnel_change_desired_state_task *s_aws_secure_tunnel_c
 
     struct aws_secure_tunnel_change_desired_state_task *change_state_task =
         aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_change_desired_state_task));
-    if (change_state_task == NULL) {
-        return NULL;
-    }
 
     aws_task_init(&change_state_task->task, s_change_state_task_fn, (void *)change_state_task, "ChangeStateTask");
     change_state_task->allocator = secure_tunnel->allocator;
@@ -1585,14 +1629,6 @@ static int s_aws_secure_tunnel_change_desired_state(
     struct aws_secure_tunnel_change_desired_state_task *task =
         s_aws_secure_tunnel_change_desired_state_task_new(secure_tunnel->allocator, secure_tunnel, desired_state);
 
-    if (task == NULL) {
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: failed to create change desired state task",
-            (void *)secure_tunnel);
-        return AWS_OP_ERR;
-    }
-
     aws_event_loop_schedule_task_now(secure_tunnel->loop, &task->task);
 
     return AWS_OP_SUCCESS;
@@ -1603,16 +1639,9 @@ static int s_aws_secure_tunnel_change_desired_state(
  */
 int reset_secure_tunnel_connection(struct aws_secure_tunnel *secure_tunnel) {
 
+    /* This can't fail because AWS_STS_CLEAN_DISCONNECT is a valid desired state */
     struct aws_secure_tunnel_change_desired_state_task *task = s_aws_secure_tunnel_change_desired_state_task_new(
         secure_tunnel->allocator, secure_tunnel, AWS_STS_CLEAN_DISCONNECT);
-
-    if (task == NULL) {
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: failed to create change desired state task",
-            (void *)secure_tunnel);
-        return AWS_OP_ERR;
-    }
 
     aws_event_loop_schedule_task_now(secure_tunnel->loop, &task->task);
 
@@ -1910,6 +1939,17 @@ done:
     }
 }
 
+/*
+ * ERROR_PASS:
+ * This function has a number of open issues
+ *
+ * 1. We always return AWS_OP_SUCCESS.  operational_error_code is never set.  Based on how this function is used
+ * anything that did return AWS_OP_ERR would cause the websocket connection to be closed.  So there's a need to
+ * classify or sort errors into connection-fatal vs. operation-fatal and bubble up as appropriate.
+ *
+ * 2. Regardless of errors during operation handling, every operation is completed with AWS_ERROR_SUCCESS.  This
+ * seems wrong.
+ */
 int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure_tunnel) {
     const struct aws_secure_tunnel_vtable *vtable = secure_tunnel->vtable;
     uint64_t now = (*vtable->get_current_time_fn)();
@@ -1964,6 +2004,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 AWS_ZERO_STRUCT(frame_options);
                 frame_options.opcode = AWS_WEBSOCKET_OPCODE_PING;
                 frame_options.fin = true;
+                /* ERROR_PASS: return value not checked here */
                 secure_tunnel->vtable->aws_websocket_send_frame_fn(secure_tunnel->websocket, &frame_options);
                 break;
 
@@ -1983,6 +2024,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                         if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
                             error_code = aws_last_error();
                         } else {
+                            /* ERROR_PASS: return value not checked here */
                             s_aws_secure_tunnel_set_stream(
                                 secure_tunnel,
                                 current_operation->message_view->service_id,
@@ -1991,6 +2033,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                         }
                         aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
                     } else {
+                        /* ERROR_PASS: should this fail the operation? */
                         AWS_LOGF_WARN(
                             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                             "id=%p: failed to send STREAM RESET message must not have a connection id",
@@ -2030,6 +2073,8 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                     aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
                 }
 
+                /* ERROR_PASS: a tunnel-global callback that only gets invoked on one operation type's failure is
+                 * strange. */
                 if (error_code && secure_tunnel->config->on_send_message_complete) {
                     secure_tunnel->config->on_send_message_complete(
                         AWS_SECURE_TUNNEL_MT_CONNECTION_START, error_code, secure_tunnel->config->user_data);
@@ -2168,12 +2213,9 @@ done:
     aws_mem_release(submit_operation_task->allocator, submit_operation_task);
 }
 
-static int s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aws_secure_tunnel_operation *operation) {
+static void s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aws_secure_tunnel_operation *operation) {
     struct aws_secure_tunnel_submit_operation_task *submit_task =
         aws_mem_calloc(secure_tunnel->allocator, 1, sizeof(struct aws_secure_tunnel_submit_operation_task));
-    if (submit_task == NULL) {
-        return AWS_OP_ERR;
-    }
 
     aws_task_init(
         &submit_task->task, s_secure_tunnel_submit_operation_task_fn, submit_task, "SecureTunnelSubmitOperation");
@@ -2182,8 +2224,6 @@ static int s_submit_operation(struct aws_secure_tunnel *secure_tunnel, struct aw
     submit_task->operation = operation;
 
     aws_event_loop_schedule_task_now(secure_tunnel->loop, &submit_task->task);
-
-    return AWS_OP_SUCCESS;
 }
 
 /*********************************************************************************************************************
@@ -2339,7 +2379,7 @@ static void s_reevaluate_service_task(struct aws_secure_tunnel *secure_tunnel) {
  * Update Loop
  ********************************************************************************************************************/
 
-static int s_aws_secure_tunnel_queue_ping(struct aws_secure_tunnel *secure_tunnel) {
+static void s_aws_secure_tunnel_queue_ping(struct aws_secure_tunnel *secure_tunnel) {
     s_reset_ping(secure_tunnel);
 
     AWS_LOGF_DEBUG(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: queuing PING", (void *)secure_tunnel);
@@ -2347,8 +2387,6 @@ static int s_aws_secure_tunnel_queue_ping(struct aws_secure_tunnel *secure_tunne
     struct aws_secure_tunnel_operation_pingreq *pingreq_op =
         aws_secure_tunnel_operation_pingreq_new(secure_tunnel->allocator);
     s_enqueue_operation_front(secure_tunnel, &pingreq_op->base);
-
-    return AWS_OP_SUCCESS;
 }
 
 static bool s_service_state_stopped(struct aws_secure_tunnel *secure_tunnel) {
@@ -2379,17 +2417,7 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
     }
 
     if (now >= secure_tunnel->next_ping_time) {
-        if (s_aws_secure_tunnel_queue_ping(secure_tunnel)) {
-            int error_code = aws_last_error();
-            AWS_LOGF_ERROR(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: failed to queue PINGREQ with error %d(%s)",
-                (void *)secure_tunnel,
-                error_code,
-                aws_error_debug_str(error_code));
-            s_secure_tunnel_shutdown_websocket(secure_tunnel, error_code);
-            return;
-        }
+        s_aws_secure_tunnel_queue_ping(secure_tunnel);
     }
 
     if (aws_secure_tunnel_service_operational_state(secure_tunnel)) {
@@ -2646,7 +2674,7 @@ int aws_secure_tunnel_send_message(
         secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_MESSAGE);
 
     if (message_op == NULL) {
-        return aws_last_error();
+        return AWS_OP_ERR;
     }
 
     AWS_LOGF_DEBUG(
@@ -2655,15 +2683,9 @@ int aws_secure_tunnel_send_message(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return aws_last_error();
 }
 
 int aws_secure_tunnel_stream_start(
@@ -2690,15 +2712,9 @@ int aws_secure_tunnel_stream_start(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
 }
 
 int aws_secure_tunnel_connection_start(
@@ -2725,15 +2741,9 @@ int aws_secure_tunnel_connection_start(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
 }
 
 /*********************************************************************************************************************
@@ -2763,15 +2773,9 @@ int aws_secure_tunnel_stream_reset(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
 }
 
 int aws_secure_tunnel_connection_reset(
@@ -2793,13 +2797,7 @@ int aws_secure_tunnel_connection_reset(
         (void *)secure_tunnel,
         (void *)message_op);
 
-    if (s_submit_operation(secure_tunnel, &message_op->base)) {
-        goto error;
-    }
+    s_submit_operation(secure_tunnel, &message_op->base);
 
     return AWS_OP_SUCCESS;
-
-error:
-    aws_secure_tunnel_operation_release(&message_op->base);
-    return AWS_OP_ERR;
 }
