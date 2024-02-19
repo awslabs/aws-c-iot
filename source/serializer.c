@@ -21,7 +21,9 @@ static int s_iot_st_encode_varint_uint32_t(struct aws_byte_buf *buffer, uint32_t
             AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
         n = n >> 7;
     }
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, (uint8_t)n) == AWS_OP_SUCCESS, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
+    AWS_RETURN_ERROR_IF2(
+        aws_byte_buf_append_byte_dynamic_secure(buffer, (uint8_t)n) == AWS_OP_SUCCESS,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
     return AWS_OP_SUCCESS;
 }
 
@@ -48,11 +50,17 @@ static int s_iot_st_encode_varint_negative_uint32_t(struct aws_byte_buf *buffer,
         n = n >> 1;
         n = n | 0x80;
     }
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, (uint8_t)n) == AWS_OP_SUCCESS, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
+    AWS_RETURN_ERROR_IF2(
+        aws_byte_buf_append_byte_dynamic_secure(buffer, (uint8_t)n) == AWS_OP_SUCCESS,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
     for (int i = 0; i < 10 - byte_count - 2; i++) {
-        AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, 0xFF) == AWS_OP_SUCCESS, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
+        AWS_RETURN_ERROR_IF2(
+            aws_byte_buf_append_byte_dynamic_secure(buffer, 0xFF) == AWS_OP_SUCCESS,
+            AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
     }
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, 0x1) == AWS_OP_SUCCESS, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
+    AWS_RETURN_ERROR_IF2(
+        aws_byte_buf_append_byte_dynamic_secure(buffer, 0x1) == AWS_OP_SUCCESS,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
     return AWS_OP_SUCCESS;
 }
 
@@ -72,7 +80,8 @@ static int s_iot_st_encode_varint(
     struct aws_byte_buf *buffer) {
     const uint8_t field_and_wire_type = (field_number << AWS_IOT_ST_FIELD_NUMBER_SHIFT) + wire_type;
     AWS_RETURN_ERROR_IF2(
-        aws_byte_buf_append_byte_dynamic_secure(buffer, field_and_wire_type) == AWS_OP_SUCCESS, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
+        aws_byte_buf_append_byte_dynamic_secure(buffer, field_and_wire_type) == AWS_OP_SUCCESS,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
     return s_iot_st_encode_varint_pos(buffer, value);
 }
 
@@ -82,8 +91,12 @@ static int s_iot_st_encode_byte_range(
     const struct aws_byte_cursor *payload,
     struct aws_byte_buf *buffer) {
     const uint8_t field_and_wire_type = (field_number << AWS_IOT_ST_FIELD_NUMBER_SHIFT) + wire_type;
-    AWS_RETURN_ERROR_IF2(aws_byte_buf_append_byte_dynamic_secure(buffer, field_and_wire_type) == AWS_OP_SUCCESS, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
-    AWS_RETURN_ERROR_IF2(s_iot_st_encode_varint_uint32_t(buffer, (uint32_t)payload->len) == AWS_OP_SUCCESS, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
+    AWS_RETURN_ERROR_IF2(
+        aws_byte_buf_append_byte_dynamic_secure(buffer, field_and_wire_type) == AWS_OP_SUCCESS,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
+    AWS_RETURN_ERROR_IF2(
+        s_iot_st_encode_varint_uint32_t(buffer, (uint32_t)payload->len) == AWS_OP_SUCCESS,
+        AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
     struct aws_byte_cursor temp = aws_byte_cursor_from_array(payload->ptr, payload->len);
     return aws_byte_buf_append_dynamic_secure(buffer, &temp);
 }
@@ -424,7 +437,8 @@ int aws_secure_tunnel_deserialize_message_from_cursor(
 
         switch (wire_type) {
             case AWS_SECURE_TUNNEL_PBWT_VARINT:
-                if (s_aws_secure_tunnel_deserialize_varint_from_cursor_to_message(cursor, field_number, &message_view)) {
+                if (s_aws_secure_tunnel_deserialize_varint_from_cursor_to_message(
+                        cursor, field_number, &message_view)) {
                     goto error;
                 }
                 break;
