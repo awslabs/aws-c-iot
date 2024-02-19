@@ -622,7 +622,9 @@ int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_conne
 
     void *pointer = test_fixture;
     struct aws_websocket_on_connection_setup_data websocket_setup = {
-        .error_code = AWS_ERROR_SUCCESS, .websocket = pointer};
+        .error_code = AWS_ERROR_SUCCESS,
+        .websocket = pointer,
+    };
 
     (test_fixture->websocket_function_table->on_connection_setup_fn)(&websocket_setup, secure_tunnel);
     secure_tunnel->websocket = pointer;
@@ -1007,7 +1009,9 @@ int aws_websocket_client_connect_fail_once_fn(const struct aws_websocket_client_
 
         void *pointer = test_fixture;
         struct aws_websocket_on_connection_setup_data websocket_setup = {
-            .error_code = AWS_ERROR_SUCCESS, .websocket = pointer};
+            .error_code = AWS_ERROR_SUCCESS,
+            .websocket = pointer,
+        };
 
         (test_fixture->websocket_function_table->on_connection_setup_fn)(&websocket_setup, secure_tunnel);
 
