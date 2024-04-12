@@ -991,7 +991,6 @@ struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
     pair->type = message_view->type;
     pair->length_prefix_written = false;
     if (aws_iot_st_msg_serialize_from_view(&pair->buf, allocator, message_view)) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
         goto error;
     }
 
@@ -1000,7 +999,6 @@ struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
     return pair;
 
 error:
-
     aws_secure_tunnel_data_tunnel_pair_destroy(pair);
     return NULL;
 }

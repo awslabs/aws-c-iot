@@ -2709,7 +2709,7 @@ int aws_secure_tunnel_connection_start(
 
     if (secure_tunnel->config->local_proxy_mode == AWS_SECURE_TUNNELING_DESTINATION_MODE) {
         AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start can only be sent from Source Mode");
-        return AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE;
+        return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INCORRECT_MODE);
     }
 
     struct aws_secure_tunnel_operation_message *message_op = aws_secure_tunnel_operation_message_new(
