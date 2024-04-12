@@ -1596,8 +1596,6 @@ void reset_secure_tunnel_connection(struct aws_secure_tunnel *secure_tunnel) {
         secure_tunnel->allocator, secure_tunnel, AWS_STS_CLEAN_DISCONNECT);
 
     aws_event_loop_schedule_task_now(secure_tunnel->loop, &task->task);
-
-    return AWS_OP_SUCCESS;
 }
 
 /*********************************************************************************************************************
