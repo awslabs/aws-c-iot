@@ -624,9 +624,6 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
 
     struct aws_secure_tunnel_operation_message *message_op =
         aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_operation_message));
-    if (message_op == NULL) {
-        return NULL;
-    }
 
     message_op->allocator = allocator;
     message_op->base.vtable = &s_message_operation_vtable;
@@ -645,7 +642,6 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
 error:
 
     aws_secure_tunnel_operation_release(&message_op->base);
-
     return NULL;
 }
 
