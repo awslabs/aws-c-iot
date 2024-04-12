@@ -250,7 +250,7 @@ int aws_iot_st_msg_serialize_from_view(
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Failure computing message length while serializing message",
-            message_view);
+            (void *)message_view);
         return AWS_OP_ERR;
     }
 
@@ -269,12 +269,14 @@ int aws_iot_st_msg_serialize_from_view(
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: Failure encoding message type while serializing message",
-                message_view);
+                (void *)message_view);
             goto cleanup;
         }
     } else {
         AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: Message type missing while serializing message", message_view);
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Message type missing while serializing message",
+            (void *)message_view);
         goto cleanup;
     }
 
@@ -283,7 +285,7 @@ int aws_iot_st_msg_serialize_from_view(
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: Failure encoding stream id while serializing message",
-                message_view);
+                (void *)message_view);
             goto cleanup;
         }
     }
@@ -293,7 +295,7 @@ int aws_iot_st_msg_serialize_from_view(
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: Failure encoding connection id while serializing message",
-                message_view);
+                (void *)message_view);
             goto cleanup;
         }
     }
@@ -303,7 +305,7 @@ int aws_iot_st_msg_serialize_from_view(
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: Failure encoding ignorable while serializing message",
-                message_view);
+                (void *)message_view);
             goto cleanup;
         }
     }
@@ -313,7 +315,7 @@ int aws_iot_st_msg_serialize_from_view(
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: Failure encoding payload while serializing message",
-                message_view);
+                (void *)message_view);
             goto cleanup;
         }
     }
@@ -324,7 +326,7 @@ int aws_iot_st_msg_serialize_from_view(
                 AWS_LOGF_ERROR(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                     "id=%p: Failure encoding service id while serializing message",
-                    message_view);
+                    (void *)message_view);
                 goto cleanup;
             }
         }
@@ -333,7 +335,7 @@ int aws_iot_st_msg_serialize_from_view(
                 AWS_LOGF_ERROR(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                     "id=%p: Failure encoding service id 2 while serializing message",
-                    message_view);
+                    (void *)message_view);
                 goto cleanup;
             }
         }
@@ -342,7 +344,7 @@ int aws_iot_st_msg_serialize_from_view(
                 AWS_LOGF_ERROR(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                     "id=%p: Failure encoding service id 3 while serializing message",
-                    message_view);
+                    (void *)message_view);
                 goto cleanup;
             }
         }
@@ -351,7 +353,7 @@ int aws_iot_st_msg_serialize_from_view(
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: Failure encoding service id while serializing message",
-                message_view);
+                (void *)message_view);
             goto cleanup;
         }
     }
