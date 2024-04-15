@@ -48,7 +48,7 @@ static void s_reevaluate_service_task(struct aws_secure_tunnel *secure_tunnel);
 static void s_aws_secure_tunnel_connected_on_message_received(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_message_view *message_view);
-static int s_aws_secure_tunnel_remove_connection_id(
+static void s_aws_secure_tunnel_remove_connection_id(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_view);
 void reset_secure_tunnel_connection(struct aws_secure_tunnel *secure_tunnel);
@@ -406,11 +406,10 @@ static int s_aws_secure_tunnel_set_connection_id(
                     AWS_BYTE_CURSOR_PRI(*service_id),
                     connection_id);
             }
-
         } else {
             /*
-             * If the connection id is already stored something is wrong and this connection id must be removed and a
-             * connection reset must be sent for this connection id
+             * If the connection id is already stored, something is wrong and this connection id must
+             * be removed and a connection reset must be sent for this connection id.
              */
             aws_connection_id_destroy(connection_id_elem);
             if (service_id == NULL || service_id->len == 0) {
@@ -456,29 +455,60 @@ static int s_aws_secure_tunnel_set_connection_id(
             (void *)secure_tunnel);
         return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
     }
+
     return AWS_OP_SUCCESS;
 }
 
-static int s_aws_secure_tunnel_remove_connection_id(
+static void s_aws_secure_tunnel_remove_connection_id(
     struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_view) {
 
-    if (s_aws_secure_tunnel_active_stream_check(secure_tunnel, message_view)) {
-        return AWS_OP_ERR;
-    } else {
-        struct aws_hash_table *table_to_remove_from = NULL;
+    struct aws_hash_table *table_to_remove_from = NULL;
+    uint32_t connection_id = message_view->connection_id;
 
-        if (message_view->service_id == NULL || message_view->service_id->len == 0) {
-            table_to_remove_from = &secure_tunnel->connections->connection_ids;
-        } else {
-            struct aws_hash_element *elem = NULL;
-            aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
-            struct aws_service_id_element *service_id_elem = elem->value;
-            table_to_remove_from = &service_id_elem->connection_ids;
+    /*
+     * No service id means either V1 protocol is being used or V3 protocol is being used on a tunnel without service ids
+     */
+    if (message_view->service_id == NULL || message_view->service_id->len == 0) {
+        /*
+         * No service id means either V1 protocol is being used or V3 protocol is being used on a tunnel
+         * without service ids. In both cases, the connection_ids table is being used to store the connection.
+         */
+        table_to_remove_from = &secure_tunnel->connections->connection_ids;
+
+        if (connection_id == 0) {
+            connection_id = 1;
         }
+    } else {
+        /*
+         * Since a service id is being used, we must first check that the service id exists for this secure tunnel.
+         */
+        struct aws_hash_element *elem = NULL;
+        aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
+        if (elem == NULL) {
+            /*
+             * service id did not exist for connection id to be removed from. There is nothing left to do.
+             */
+            return;
+        }
+        /*
+         * The service id was found and its table of connection ids set to table_to_remove_from
+         */
+        struct aws_service_id_element *service_id_elem = elem->value;
+        table_to_remove_from = &service_id_elem->connection_ids;
+    }
 
-        aws_hash_table_remove(table_to_remove_from, &message_view->connection_id, NULL, NULL);
-
+    /*
+     * Before attempting to remove the connection id, we check if it exists in the table. If it doesn't,
+     * there's nothing left to do.
+     */
+    struct aws_hash_element *connection_id_elem = NULL;
+    aws_hash_table_find(table_to_remove_from, &connection_id, &connection_id_elem);
+    if (connection_id_elem != NULL) {
+        /*
+         * We know it exists so we remove it.
+         */
+        aws_hash_table_remove(table_to_remove_from, &connection_id, NULL, NULL);
         if (message_view->service_id == NULL || message_view->service_id->len == 0) {
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -494,8 +524,6 @@ static int s_aws_secure_tunnel_remove_connection_id(
                 message_view->connection_id);
         }
     }
-
-    return AWS_OP_SUCCESS;
 }
 
 /*****************************************************************************************************************
@@ -597,8 +625,11 @@ static void s_aws_secure_tunnel_on_stream_start_received(
      */
     s_set_absent_connection_id_to_one(message_view, &connection_id);
 
-    int result =
-        s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, message_view->stream_id, connection_id);
+    int result = AWS_OP_SUCCESS;
+    if (s_aws_secure_tunnel_set_stream(
+            secure_tunnel, message_view->service_id, message_view->stream_id, connection_id)) {
+        result = aws_last_error();
+    }
 
     if (secure_tunnel->config->on_stream_start) {
         secure_tunnel->config->on_stream_start(message_view, result, secure_tunnel->config->user_data);
@@ -620,9 +651,11 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
         return;
     }
 
-    int result = AWS_OP_SUCCESS;
     if (s_aws_secure_tunnel_stream_id_match_check(secure_tunnel, message_view->service_id, message_view->stream_id)) {
-        result = s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, INVALID_STREAM_ID, 0);
+        int result = AWS_OP_SUCCESS;
+        if (s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, INVALID_STREAM_ID, 0)) {
+            result = aws_last_error();
+        }
         if (secure_tunnel->config->on_stream_reset) {
             secure_tunnel->config->on_stream_reset(message_view, result, secure_tunnel->config->user_data);
         }
@@ -739,8 +772,11 @@ static void s_aws_secure_tunnel_on_connection_start_received(
     s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
     if (s_aws_secure_tunnel_stream_id_match_check(secure_tunnel, message_view->service_id, message_view->stream_id)) {
-        int result =
-            s_aws_secure_tunnel_set_connection_id(secure_tunnel, message_view->service_id, message_view->connection_id);
+        int result = AWS_OP_SUCCESS;
+        if (s_aws_secure_tunnel_set_connection_id(
+                secure_tunnel, message_view->service_id, message_view->connection_id)) {
+            result = aws_last_error();
+        }
         if (secure_tunnel->config->on_connection_start) {
             secure_tunnel->config->on_connection_start(message_view, result, secure_tunnel->config->user_data);
         }
@@ -781,14 +817,10 @@ static void s_aws_secure_tunnel_on_connection_reset_received(
      */
     s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
-    int result = AWS_OP_SUCCESS;
-
-    if (s_aws_secure_tunnel_remove_connection_id(secure_tunnel, message_view)) {
-        result = aws_last_error();
-    }
+    s_aws_secure_tunnel_remove_connection_id(secure_tunnel, message_view);
 
     if (secure_tunnel->config->on_connection_reset) {
-        secure_tunnel->config->on_connection_reset(message_view, result, secure_tunnel->config->user_data);
+        secure_tunnel->config->on_connection_reset(message_view, AWS_OP_SUCCESS, secure_tunnel->config->user_data);
     }
 }
 
@@ -1963,6 +1995,8 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                         if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
                             error_code = aws_last_error();
                         } else {
+                            // TODO handle this error. It will return an AWS_OP_ERR if something fails at which point
+                            // aws_last_error() should be used to report the error that occurred.
                             s_aws_secure_tunnel_set_stream(
                                 secure_tunnel,
                                 current_operation->message_view->service_id,
@@ -2021,8 +2055,7 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                         current_operation, secure_tunnel)) {
                     error_code = aws_last_error();
                 } else {
-                    error_code =
-                        s_aws_secure_tunnel_remove_connection_id(secure_tunnel, current_operation->message_view);
+                    s_aws_secure_tunnel_remove_connection_id(secure_tunnel, current_operation->message_view);
 
                     /*
                      * If we have a stream id, we should send the CONNECTION RESET message even if we do not have a
