@@ -412,6 +412,7 @@ static int s_aws_secure_tunnel_set_connection_id(
              * be removed and a connection reset must be sent for this connection id.
              */
             aws_connection_id_destroy(connection_id_elem);
+
             if (service_id == NULL || service_id->len == 0) {
                 AWS_LOGF_INFO(
                     AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -435,8 +436,8 @@ static int s_aws_secure_tunnel_set_connection_id(
                 .connection_id = connection_id,
             };
 
-            // TODO unchecked return value
             s_aws_secure_tunnel_remove_connection_id(secure_tunnel, &reset_message);
+
             if (secure_tunnel->config->on_connection_reset) {
                 secure_tunnel->config->on_connection_reset(
                     &reset_message,
@@ -444,7 +445,9 @@ static int s_aws_secure_tunnel_set_connection_id(
                     secure_tunnel->config->user_data);
             }
 
-            aws_secure_tunnel_connection_reset(secure_tunnel, &reset_message);
+            if (aws_secure_tunnel_connection_reset(secure_tunnel, &reset_message)) {
+                return AWS_OP_ERR;
+            }
 
             return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
         }
@@ -607,13 +610,25 @@ static void s_aws_secure_tunnel_on_stream_start_received(
             "Protocol Version and Protocol Version used by incoming STREAM START message.",
             (void *)secure_tunnel);
         reset_secure_tunnel_connection(secure_tunnel);
-        aws_secure_tunnel_message_storage_init(
-            &secure_tunnel->connections->restore_stream_message,
-            secure_tunnel->allocator,
-            message_view,
-            AWS_STOT_STREAM_START);
-        secure_tunnel->connections->restore_stream_message_view = &secure_tunnel->connections->restore_stream_message;
-        return;
+        if (aws_secure_tunnel_message_storage_init(
+                &secure_tunnel->connections->restore_stream_message,
+                secure_tunnel->allocator,
+                message_view,
+                AWS_STOT_STREAM_START)) {
+            int error_code = aws_last_error();
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Secure Tunnel reset due to Protocol Version mismatch failed to set a restore stream message "
+                "with error %d(%s)",
+                (void *)secure_tunnel,
+                error_code,
+                aws_error_debug_str(error_code));
+            return;
+        } else {
+            secure_tunnel->connections->restore_stream_message_view =
+                &secure_tunnel->connections->restore_stream_message;
+            return;
+        }
     }
 
     uint32_t connection_id = message_view->connection_id;
