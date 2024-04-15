@@ -242,7 +242,7 @@ static bool s_aws_secure_tunnel_stream_id_match_check(
     return (stream_id == service_id_elem->stream_id);
 }
 
-static bool s_aws_secure_tunnel_active_stream_check(
+static int s_aws_secure_tunnel_active_stream_check(
     const struct aws_secure_tunnel *secure_tunnel,
     const struct aws_secure_tunnel_message_view *message_view) {
     /*
@@ -250,7 +250,7 @@ static bool s_aws_secure_tunnel_active_stream_check(
      */
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
         if (secure_tunnel->connections->stream_id != message_view->stream_id) {
-            return false;
+            return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID);
         }
 
         uint32_t connection_id = message_view->connection_id;
@@ -265,25 +265,22 @@ static bool s_aws_secure_tunnel_active_stream_check(
         struct aws_hash_element *connection_id_elem = NULL;
         aws_hash_table_find(&secure_tunnel->connections->connection_ids, &connection_id, &connection_id_elem);
         if (connection_id_elem == NULL) {
-            aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
-            return false;
+            return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
         }
-        return true;
+        return AWS_OP_SUCCESS;
     }
 
     /* Check if service id is being used by the secure tunnel */
     struct aws_hash_element *elem = NULL;
     aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
     if (elem == NULL) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
-        return false;
+        return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
     }
 
     /* Check if the stream id is the currently active one */
     struct aws_service_id_element *service_id_elem = elem->value;
     if (message_view->stream_id != service_id_elem->stream_id) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID);
-        return false;
+        return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID);
     }
 
     /* V1 and V2 will be considered active at this point with a matching stream id but V3 streams will need to have
@@ -292,12 +289,11 @@ static bool s_aws_secure_tunnel_active_stream_check(
         struct aws_hash_element *connection_id_elem = NULL;
         aws_hash_table_find(&service_id_elem->connection_ids, &message_view->connection_id, &connection_id_elem);
         if (connection_id_elem == NULL) {
-            aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
-            return false;
+            return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID);
         }
     }
 
-    return true;
+    return AWS_OP_SUCCESS;
 }
 
 static int s_aws_secure_tunnel_set_stream(
@@ -440,6 +436,7 @@ static int s_aws_secure_tunnel_set_connection_id(
                 .connection_id = connection_id,
             };
 
+            // TODO unchecked return value
             s_aws_secure_tunnel_remove_connection_id(secure_tunnel, &reset_message);
             if (secure_tunnel->config->on_connection_reset) {
                 secure_tunnel->config->on_connection_reset(
@@ -467,6 +464,8 @@ static int s_aws_secure_tunnel_remove_connection_id(
     const struct aws_secure_tunnel_message_view *message_view) {
 
     if (s_aws_secure_tunnel_active_stream_check(secure_tunnel, message_view)) {
+        return AWS_OP_ERR;
+    } else {
         struct aws_hash_table *table_to_remove_from = NULL;
 
         if (message_view->service_id == NULL || message_view->service_id->len == 0) {
@@ -494,8 +493,6 @@ static int s_aws_secure_tunnel_remove_connection_id(
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id),
                 message_view->connection_id);
         }
-    } else {
-        return aws_last_error();
     }
 
     return AWS_OP_SUCCESS;
@@ -531,10 +528,6 @@ static void s_aws_secure_tunnel_on_data_received(
     }
 
     if (s_aws_secure_tunnel_active_stream_check(secure_tunnel, message_view)) {
-        if (secure_tunnel->config->on_message_received) {
-            secure_tunnel->config->on_message_received(message_view, secure_tunnel->config->user_data);
-        }
-    } else {
         if (message_view->service_id->len > 0) {
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -551,6 +544,10 @@ static void s_aws_secure_tunnel_on_data_received(
                 (void *)secure_tunnel,
                 message_view->stream_id,
                 message_view->connection_id);
+        }
+    } else {
+        if (secure_tunnel->config->on_message_received) {
+            secure_tunnel->config->on_message_received(message_view, secure_tunnel->config->user_data);
         }
     }
 }
@@ -784,7 +781,11 @@ static void s_aws_secure_tunnel_on_connection_reset_received(
      */
     s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
-    int result = s_aws_secure_tunnel_remove_connection_id(secure_tunnel, message_view);
+    int result = AWS_OP_SUCCESS;
+
+    if (s_aws_secure_tunnel_remove_connection_id(secure_tunnel, message_view)) {
+        result = aws_last_error();
+    }
 
     if (secure_tunnel->config->on_connection_reset) {
         secure_tunnel->config->on_connection_reset(message_view, result, secure_tunnel->config->user_data);
@@ -1769,7 +1770,7 @@ static void s_process_outbound_data_message(
     }
 
     /* If a data message attempts to be sent on an unopen stream, discard it. */
-    if (!s_aws_secure_tunnel_active_stream_check(secure_tunnel, current_operation->message_view)) {
+    if (s_aws_secure_tunnel_active_stream_check(secure_tunnel, current_operation->message_view)) {
         error_code = aws_last_error();
         if (current_operation->message_view->service_id && current_operation->message_view->service_id->len > 0) {
             AWS_LOGF_DEBUG(

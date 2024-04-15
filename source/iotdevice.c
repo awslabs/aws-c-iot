@@ -92,7 +92,7 @@ static struct aws_error_info s_errors[] = {
         "Secure Tunnel terminated by user request."),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DECODE_FAILURE,
-        "Error occured while decoding an incoming message." ),
+        "Error occurred while decoding an incoming message." ),
     AWS_DEFINE_ERROR_INFO_IOTDEVICE(
         AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION,
         "DATA message processing failed due to no active connection found." ),
