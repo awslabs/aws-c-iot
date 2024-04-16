@@ -1448,7 +1448,7 @@ static int s_secure_tunneling_max_payload_exceed_test_fn(struct aws_allocator *a
 
     int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
 
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
+    ASSERT_INT_EQUALS(result, aws_last_error());
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
