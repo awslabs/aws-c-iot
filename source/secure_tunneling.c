@@ -957,7 +957,6 @@ static bool secure_tunneling_websocket_stream_outgoing_payload(
             return false;
         }
         pair->length_prefix_written = true;
-        space_available = out_buf->capacity - out_buf->len;
     }
 
     if (pair->length_prefix_written == true) {
@@ -1059,6 +1058,7 @@ static bool s_on_websocket_incoming_frame_complete(
             (void *)user_data,
             error_code,
             aws_error_debug_str(error_code));
+        return false;
     }
 
     return true;
@@ -1068,7 +1068,7 @@ static void s_secure_tunnel_shutdown(struct aws_client_bootstrap *bootstrap, int
     (void)bootstrap;
     struct aws_secure_tunnel *secure_tunnel = user_data;
 
-    if (error_code == AWS_ERROR_SUCCESS) {
+    if (error_code == AWS_OP_SUCCESS) {
         error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_UNEXPECTED_HANGUP;
     }
 
@@ -1088,7 +1088,6 @@ static void s_secure_tunnel_shutdown(struct aws_client_bootstrap *bootstrap, int
 
 /* Normal call to shutdown the websocket */
 static void s_secure_tunnel_shutdown_websocket(struct aws_secure_tunnel *secure_tunnel, int error_code) {
-    (void)error_code;
     if (secure_tunnel->current_state != AWS_STS_CONNECTED && secure_tunnel->current_state != AWS_STS_CLEAN_DISCONNECT) {
         AWS_LOGF_ERROR(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -1153,14 +1152,13 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
 
     if (secure_tunnel->desired_state != AWS_STS_CONNECTED) {
         aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP);
-        goto error;
+        s_on_websocket_shutdown(
+            secure_tunnel->websocket, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP, secure_tunnel);
+        return;
     }
 
     s_change_current_state(secure_tunnel, AWS_STS_CONNECTED);
-
     return;
-error:
-    s_on_websocket_shutdown(secure_tunnel->websocket, setup->error_code, secure_tunnel);
 }
 
 struct aws_secure_tunnel_websocket_transform_complete_task {
@@ -1188,52 +1186,50 @@ void s_secure_tunneling_websocket_transform_complete_task_fn(
     secure_tunnel->handshake_request = aws_http_message_acquire(websocket_transform_complete_task->handshake);
 
     int error_code = websocket_transform_complete_task->error_code;
-    if (error_code == 0 && secure_tunnel->desired_state == AWS_STS_CONNECTED) {
-        struct aws_websocket_client_connection_options websocket_options = {
-            .allocator = secure_tunnel->allocator,
-            .bootstrap = secure_tunnel->config->bootstrap,
-            .socket_options = &secure_tunnel->config->socket_options,
-            .tls_options = &secure_tunnel->tls_con_opt,
-            .host = aws_byte_cursor_from_string(secure_tunnel->config->endpoint_host),
-            .port = 443,
-            .handshake_request = secure_tunnel->handshake_request,
-            .manual_window_management = false,
-            .user_data = secure_tunnel,
-            .requested_event_loop = secure_tunnel->loop,
+    if (error_code == AWS_OP_SUCCESS) {
+        if (secure_tunnel->desired_state == AWS_STS_CONNECTED) {
+            struct aws_websocket_client_connection_options websocket_options = {
+                .allocator = secure_tunnel->allocator,
+                .bootstrap = secure_tunnel->config->bootstrap,
+                .socket_options = &secure_tunnel->config->socket_options,
+                .tls_options = &secure_tunnel->tls_con_opt,
+                .host = aws_byte_cursor_from_string(secure_tunnel->config->endpoint_host),
+                .port = 443,
+                .handshake_request = secure_tunnel->handshake_request,
+                .manual_window_management = false,
+                .user_data = secure_tunnel,
+                .requested_event_loop = secure_tunnel->loop,
 
-            .on_connection_setup = s_on_websocket_setup,
-            .on_connection_shutdown = s_on_websocket_shutdown,
-            .on_incoming_frame_begin = s_on_websocket_incoming_frame_begin,
-            .on_incoming_frame_payload = s_on_websocket_incoming_frame_payload,
-            .on_incoming_frame_complete = s_on_websocket_incoming_frame_complete,
+                .on_connection_setup = s_on_websocket_setup,
+                .on_connection_shutdown = s_on_websocket_shutdown,
+                .on_incoming_frame_begin = s_on_websocket_incoming_frame_begin,
+                .on_incoming_frame_payload = s_on_websocket_incoming_frame_payload,
+                .on_incoming_frame_complete = s_on_websocket_incoming_frame_complete,
 
-            .host_resolution_config = &secure_tunnel->host_resolution_config,
-        };
+                .host_resolution_config = &secure_tunnel->host_resolution_config,
+            };
 
-        if (secure_tunnel->config->http_proxy_config != NULL) {
-            websocket_options.proxy_options = &secure_tunnel->config->http_proxy_options;
-        }
+            if (secure_tunnel->config->http_proxy_config != NULL) {
+                websocket_options.proxy_options = &secure_tunnel->config->http_proxy_options;
+            }
 
-        if (secure_tunnel->vtable->aws_websocket_client_connect_fn(&websocket_options)) {
-            AWS_LOGF_ERROR(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Failed to initiate websocket connection.",
-                (void *)secure_tunnel);
-            error_code = aws_last_error();
-            goto error;
-        }
-
-        goto done;
-    } else {
-        if (error_code == AWS_ERROR_SUCCESS) {
+            if (secure_tunnel->vtable->aws_websocket_client_connect_fn(&websocket_options)) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: Failed to initiate websocket connection.",
+                    (void *)secure_tunnel);
+                error_code = aws_last_error();
+            }
+        } else {
             AWS_ASSERT(secure_tunnel->desired_state != AWS_STS_CONNECTED);
             error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP;
         }
     }
 
-error:;
-    struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = error_code};
-    s_on_websocket_setup(&websocket_setup, secure_tunnel);
+    if (error_code != AWS_OP_SUCCESS) {
+        struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = error_code};
+        s_on_websocket_setup(&websocket_setup, secure_tunnel);
+    }
 
 done:
     aws_http_message_release(websocket_transform_complete_task->handshake);
@@ -1318,7 +1314,7 @@ static int s_websocket_connect(struct aws_secure_tunnel *secure_tunnel) {
 
     struct aws_http_message *handshake = s_new_handshake_request(secure_tunnel);
     if (handshake == NULL) {
-        goto error;
+        return AWS_OP_ERR;
     }
 
     AWS_LOGF_TRACE(
@@ -1340,9 +1336,6 @@ static int s_websocket_connect(struct aws_secure_tunnel *secure_tunnel) {
     aws_event_loop_schedule_task_now(secure_tunnel->loop, &task->task);
 
     return AWS_OP_SUCCESS;
-
-error:
-    return AWS_OP_ERR;
 }
 
 static void s_reset_ping(struct aws_secure_tunnel *secure_tunnel) {
@@ -1639,7 +1632,6 @@ static int s_aws_secure_tunnel_change_desired_state(
  * Disconnect the Secure Tunnel from the Secure Tunnel service and reset all stream ids
  */
 void reset_secure_tunnel_connection(struct aws_secure_tunnel *secure_tunnel) {
-
     struct aws_secure_tunnel_change_desired_state_task *task = s_aws_secure_tunnel_change_desired_state_task_new(
         secure_tunnel->allocator, secure_tunnel, AWS_STS_CLEAN_DISCONNECT);
 
@@ -1937,17 +1929,15 @@ done:
     }
 }
 
-int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure_tunnel) {
+void aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure_tunnel) {
     const struct aws_secure_tunnel_vtable *vtable = secure_tunnel->vtable;
     uint64_t now = (*vtable->get_current_time_fn)();
 
     /* Should we write data? */
     bool should_service = s_aws_secure_tunnel_should_service_operational_state(secure_tunnel, now);
     if (!should_service) {
-        return AWS_OP_SUCCESS;
+        return;
     }
-
-    int operational_error_code = AWS_ERROR_SUCCESS;
 
     do {
         /* if no current operation, pull one in and setup encode */
@@ -1991,7 +1981,9 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 AWS_ZERO_STRUCT(frame_options);
                 frame_options.opcode = AWS_WEBSOCKET_OPCODE_PING;
                 frame_options.fin = true;
-                secure_tunnel->vtable->aws_websocket_send_frame_fn(secure_tunnel->websocket, &frame_options);
+                if (secure_tunnel->vtable->aws_websocket_send_frame_fn(secure_tunnel->websocket, &frame_options)) {
+                    error_code = aws_last_error();
+                }
                 break;
 
             case AWS_STOT_MESSAGE:
@@ -2005,21 +1997,28 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
             case AWS_STOT_STREAM_RESET:
                 if ((*current_operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(
                         current_operation, secure_tunnel) == AWS_OP_SUCCESS) {
+
                     if (current_operation->message_view->connection_id == 0) {
                         /* Send the Stream Reset message through the WebSocket */
                         if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
                             error_code = aws_last_error();
                         } else {
-                            // TODO handle this error. It will return an AWS_OP_ERR if something fails at which point
-                            // aws_last_error() should be used to report the error that occurred.
-                            s_aws_secure_tunnel_set_stream(
-                                secure_tunnel,
-                                current_operation->message_view->service_id,
-                                INVALID_STREAM_ID,
-                                current_operation->message_view->connection_id);
+                            if (s_aws_secure_tunnel_set_stream(
+                                    secure_tunnel,
+                                    current_operation->message_view->service_id,
+                                    INVALID_STREAM_ID,
+                                    current_operation->message_view->connection_id)) {
+                                error_code = aws_last_error();
+                            }
                         }
                         aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
                     } else {
+                        /*
+                         * There is no callback specific to a Stream Reset failing.
+                         * aws_secure_tunnel_stream_reset() should not be called as it is using deprecated API and
+                         * functionality related to Stream Reset should be handled without customer interaction.
+                         * We will log a warning on failure but take no further action.
+                         */
                         AWS_LOGF_WARN(
                             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                             "id=%p: failed to send STREAM RESET message must not have a connection id",
@@ -2059,6 +2058,11 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                     aws_secure_tunnel_message_view_log(current_operation->message_view, AWS_LL_DEBUG);
                 }
 
+                /*
+                 * There is a singular callback for all outbound messages. The customer will need to coordinate
+                 * and parse the callback contents to determine what operation they initiated that resulted in
+                 * the message completion callback.
+                 */
                 if (error_code && secure_tunnel->config->on_send_message_complete) {
                     secure_tunnel->config->on_send_message_complete(
                         AWS_SECURE_TUNNEL_MT_CONNECTION_START, error_code, secure_tunnel->config->user_data);
@@ -2077,17 +2081,24 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                      * currently active stream
                      */
                     if (s_secure_tunneling_send(secure_tunnel, current_operation->message_view)) {
+                        error_code = aws_last_error();
                         AWS_LOGF_ERROR(
                             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                             "id=%p: failed to send DATA message with error %d(%s)",
                             (void *)secure_tunnel,
-                            aws_last_error(),
-                            aws_error_debug_str(aws_last_error()));
+                            error_code,
+                            aws_error_debug_str(error_code));
                     }
                 }
 
                 if (error_code) {
-                    AWS_LOGF_ERROR(
+                    /*
+                     * There is no callback specific to a Connection Reset failing.
+                     * aws_secure_tunnel_connection_reset() should not be called as it is using deprecated API and
+                     * functionality related to Connection Reset should be handled without customer interaction.
+                     * We will log a warning on failure but take no further action.
+                     */
+                    AWS_LOGF_WARN(
                         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                         "id=%p: failed to send CONNECTION RESET message with error %d(%s)",
                         (void *)secure_tunnel,
@@ -2101,18 +2112,22 @@ int aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secure
                 break;
         }
 
+        if (error_code != AWS_OP_SUCCESS) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: error encountered during servicing of operation type `(%s)`: %d(%s)",
+                (void *)secure_tunnel,
+                aws_secure_tunnel_operation_type_to_c_string(current_operation->operation_type),
+                error_code,
+                aws_error_debug_str(error_code));
+        }
+
         s_complete_operation(secure_tunnel, current_operation, AWS_OP_SUCCESS, NULL);
         secure_tunnel->current_operation = NULL;
 
         now = (*vtable->get_current_time_fn)();
         should_service = s_aws_secure_tunnel_should_service_operational_state(secure_tunnel, now);
     } while (should_service);
-
-    if (operational_error_code != AWS_ERROR_SUCCESS) {
-        return aws_raise_error(operational_error_code);
-    }
-
-    return AWS_OP_SUCCESS;
 }
 
 void aws_secure_tunnel_operational_state_clean_up(struct aws_secure_tunnel *secure_tunnel) {
@@ -2362,7 +2377,7 @@ static void s_reevaluate_service_task(struct aws_secure_tunnel *secure_tunnel) {
  * Update Loop
  ********************************************************************************************************************/
 
-static int s_aws_secure_tunnel_queue_ping(struct aws_secure_tunnel *secure_tunnel) {
+static void s_aws_secure_tunnel_queue_ping(struct aws_secure_tunnel *secure_tunnel) {
     s_reset_ping(secure_tunnel);
 
     AWS_LOGF_DEBUG(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "id=%p: queuing PING", (void *)secure_tunnel);
@@ -2370,8 +2385,6 @@ static int s_aws_secure_tunnel_queue_ping(struct aws_secure_tunnel *secure_tunne
     struct aws_secure_tunnel_operation_pingreq *pingreq_op =
         aws_secure_tunnel_operation_pingreq_new(secure_tunnel->allocator);
     s_enqueue_operation_front(secure_tunnel, &pingreq_op->base);
-
-    return AWS_OP_SUCCESS;
 }
 
 static bool s_service_state_stopped(struct aws_secure_tunnel *secure_tunnel) {
@@ -2402,30 +2415,10 @@ static void s_service_state_connected(struct aws_secure_tunnel *secure_tunnel, u
     }
 
     if (now >= secure_tunnel->next_ping_time) {
-        if (s_aws_secure_tunnel_queue_ping(secure_tunnel)) {
-            int error_code = aws_last_error();
-            AWS_LOGF_ERROR(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: failed to queue PINGREQ with error %d(%s)",
-                (void *)secure_tunnel,
-                error_code,
-                aws_error_debug_str(error_code));
-            s_secure_tunnel_shutdown_websocket(secure_tunnel, error_code);
-            return;
-        }
+        s_aws_secure_tunnel_queue_ping(secure_tunnel);
     }
 
-    if (aws_secure_tunnel_service_operational_state(secure_tunnel)) {
-        int error_code = aws_last_error();
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: failed to service CONNECTED operation queue with error %d(%s)",
-            (void *)secure_tunnel,
-            error_code,
-            aws_error_debug_str(error_code));
-        s_secure_tunnel_shutdown_websocket(secure_tunnel, error_code);
-        return;
-    }
+    aws_secure_tunnel_service_operational_state(secure_tunnel);
 }
 
 static void s_service_state_clean_disconnect(struct aws_secure_tunnel *secure_tunnel, uint64_t now) {
@@ -2448,17 +2441,7 @@ static void s_service_state_clean_disconnect(struct aws_secure_tunnel *secure_tu
         return;
     }
 
-    if (aws_secure_tunnel_service_operational_state(secure_tunnel)) {
-        int error_code = aws_last_error();
-        AWS_LOGF_ERROR(
-            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: failed to service CLEAN_DISCONNECT operation queue with error %d(%s)",
-            (void *)secure_tunnel,
-            error_code,
-            aws_error_debug_str(error_code));
-        s_secure_tunnel_shutdown_websocket(secure_tunnel, error_code);
-        return;
-    }
+    aws_secure_tunnel_service_operational_state(secure_tunnel);
 }
 
 static void s_service_state_pending_reconnect(struct aws_secure_tunnel *secure_tunnel, uint64_t now) {
@@ -2669,7 +2652,7 @@ int aws_secure_tunnel_send_message(
         secure_tunnel->allocator, secure_tunnel, message_options, AWS_STOT_MESSAGE);
 
     if (message_op == NULL) {
-        return aws_last_error();
+        return AWS_OP_ERR;
     }
 
     AWS_LOGF_DEBUG(
