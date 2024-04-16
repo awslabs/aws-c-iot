@@ -29,6 +29,14 @@ list(APPEND CMAKE_MODULE_PATH ${AWS_MODULE_PATH})
 
 if (USE_EXTERNAL_DEPS_SOURCES)
     set(IN_SOURCE_BUILD ON)
+
+    if (NOT aws-c-common_SOURCE_DIR)
+        message(FATAL_ERROR "USE_EXTERNAL_DEPS_SOURCES option is set, but aws-c-common project is not configured."
+            " aws-c-common must be added using add_subdirectory command (or one of the higher-level commands that"
+            " uses add_subdirectory, like FetchContent)")
+    endif()
+
+    list(APPEND CMAKE_MODULE_PATH "${aws-c-common_SOURCE_DIR}/cmake")
 endif()
 
 include(AwsCFlags)
