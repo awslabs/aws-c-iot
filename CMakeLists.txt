@@ -5,6 +5,8 @@ if (POLICY CMP0069)
     cmake_policy(SET CMP0069 NEW) # Enable LTO/IPO if available in the compiler, see AwsCFlags
 endif()
 
+option(USE_EXTERNAL_DEPS_SOURCES "Use dependencies provided by add_subdirectory command" OFF)
+
 if (DEFINED CMAKE_PREFIX_PATH)
     file(TO_CMAKE_PATH "${CMAKE_PREFIX_PATH}" CMAKE_PREFIX_PATH)
 endif()
@@ -24,6 +26,18 @@ set(AWS_MODULE_DIR "/${CMAKE_INSTALL_LIBDIR}/cmake")
 string(REPLACE ";" "${AWS_MODULE_DIR};" AWS_MODULE_PATH "${CMAKE_PREFIX_PATH}${AWS_MODULE_DIR}")
 # Append that generated list to the module search path
 list(APPEND CMAKE_MODULE_PATH ${AWS_MODULE_PATH})
+
+if (USE_EXTERNAL_DEPS_SOURCES)
+    set(IN_SOURCE_BUILD ON)
+
+    if (NOT aws-c-common_SOURCE_DIR)
+        message(FATAL_ERROR "USE_EXTERNAL_DEPS_SOURCES option is set, but aws-c-common project is not configured."
+            " aws-c-common must be added using add_subdirectory command (or one of the higher-level commands that"
+            " uses add_subdirectory, like FetchContent)")
+    endif()
+
+    list(APPEND CMAKE_MODULE_PATH "${aws-c-common_SOURCE_DIR}/cmake")
+endif()
 
 include(AwsCFlags)
 include(AwsCheckHeaders)
