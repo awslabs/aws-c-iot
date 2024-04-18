@@ -621,8 +621,10 @@ int aws_websocket_client_connect_mock_fn(const struct aws_websocket_client_conne
     test_fixture->websocket_function_table->on_incoming_frame_complete_fn = options->on_incoming_frame_complete;
 
     void *pointer = test_fixture;
-    struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = AWS_ERROR_SUCCESS,
-                                                                     .websocket = pointer};
+    struct aws_websocket_on_connection_setup_data websocket_setup = {
+        .error_code = AWS_ERROR_SUCCESS,
+        .websocket = pointer,
+    };
 
     (test_fixture->websocket_function_table->on_connection_setup_fn)(&websocket_setup, secure_tunnel);
     secure_tunnel->websocket = pointer;
@@ -1006,8 +1008,10 @@ int aws_websocket_client_connect_fail_once_fn(const struct aws_websocket_client_
         test_fixture->websocket_function_table->on_incoming_frame_complete_fn = options->on_incoming_frame_complete;
 
         void *pointer = test_fixture;
-        struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = AWS_ERROR_SUCCESS,
-                                                                         .websocket = pointer};
+        struct aws_websocket_on_connection_setup_data websocket_setup = {
+            .error_code = AWS_ERROR_SUCCESS,
+            .websocket = pointer,
+        };
 
         (test_fixture->websocket_function_table->on_connection_setup_fn)(&websocket_setup, secure_tunnel);
 
@@ -1446,9 +1450,8 @@ static int s_secure_tunneling_max_payload_exceed_test_fn(struct aws_allocator *a
         .payload = &s_payload_cursor_max_size_exceeded,
     };
 
-    int result = aws_secure_tunnel_send_message(secure_tunnel, &data_message_view);
-
-    ASSERT_INT_EQUALS(result, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
+    ASSERT_FAILS(aws_secure_tunnel_send_message(secure_tunnel, &data_message_view));
+    ASSERT_INT_EQUALS(aws_last_error(), AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_OPTIONS_VALIDATION);
 
     ASSERT_SUCCESS(aws_secure_tunnel_stop(secure_tunnel));
     s_wait_for_connection_shutdown(&test_fixture);
