@@ -1079,10 +1079,7 @@ static void s_secure_tunnel_shutdown(struct aws_client_bootstrap *bootstrap, int
     }
 
     if (!aws_linked_list_empty(&secure_tunnel->queued_operations)) {
-        s_complete_operation_list(
-            secure_tunnel,
-            &secure_tunnel->queued_operations,
-            AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_OPERATION_FAILED_DUE_TO_OFFLINE_QUEUE_POLICY);
+        s_complete_operation_list(secure_tunnel, &secure_tunnel->queued_operations, error_code);
     }
 }
 
