@@ -368,11 +368,6 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
         struct aws_hash_element *elem = NULL;
         aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
         if (elem == NULL) {
-            AWS_LOGF_WARN(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: invalid service id '" PRInSTR "' attempted to be assigned a stream id on an outbound message",
-                (void *)message_view,
-                AWS_BYTE_CURSOR_PRI(*message_view->service_id));
             aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
             goto error;
         }
@@ -395,13 +390,13 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
 
 error:
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
-        AWS_LOGF_DEBUG(
+        AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: No active stream to assign outbound %s message a stream id",
             (void *)secure_tunnel,
             aws_secure_tunnel_message_type_to_c_string(message_view->type));
     } else {
-        AWS_LOGF_DEBUG(
+        AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: No active stream with service id '" PRInSTR "' to assign outbound %s message a stream id",
             (void *)secure_tunnel,
