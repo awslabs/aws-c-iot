@@ -1808,27 +1808,33 @@ static void s_process_outbound_data_message(
     /* If a data message attempts to be sent on an unopen stream, discard it. */
     if (s_aws_secure_tunnel_active_stream_check(secure_tunnel, current_operation->message_view)) {
         error_code = aws_last_error();
-        if (current_operation->message_view->service_id && current_operation->message_view->service_id->len > 0) {
-            AWS_LOGF_DEBUG(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: failed to send DATA message with service id '" PRInSTR
-                "' stream id (%d) and connection id (%d) with error %d(%s)",
-                (void *)secure_tunnel,
-                AWS_BYTE_CURSOR_PRI(*current_operation->message_view->service_id),
-                current_operation->message_view->stream_id,
-                current_operation->message_view->connection_id,
-                error_code,
-                aws_error_debug_str(error_code));
-        } else {
-            AWS_LOGF_DEBUG(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: failed to send DATA message with stream id (%d) and connection id (%d) with error %d(%s)",
-                (void *)secure_tunnel,
-                current_operation->message_view->stream_id,
-                current_operation->message_view->connection_id,
-                error_code,
-                aws_error_debug_str(error_code));
-        }
+        AWS_LOGF_DEBUG(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: failed to send DATA message with error %d(%s)",
+            (void *)secure_tunnel,
+            error_code,
+            aws_error_debug_str(error_code));
+        // if (current_operation->message_view->service_id && current_operation->message_view->service_id->len > 0) {
+        //     AWS_LOGF_DEBUG(
+        //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        //         "id=%p: failed to send DATA message with service id '" PRInSTR
+        //         "' stream id (%d) and connection id (%d) with error %d(%s)",
+        //         (void *)secure_tunnel,
+        //         AWS_BYTE_CURSOR_PRI(*current_operation->message_view->service_id),
+        //         current_operation->message_view->stream_id,
+        //         current_operation->message_view->connection_id,
+        //         error_code,
+        //         aws_error_debug_str(error_code));
+        // } else {
+        //     AWS_LOGF_DEBUG(
+        //         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+        //         "id=%p: failed to send DATA message with stream id (%d) and connection id (%d) with error %d(%s)",
+        //         (void *)secure_tunnel,
+        //         current_operation->message_view->stream_id,
+        //         current_operation->message_view->connection_id,
+        //         error_code,
+        //         aws_error_debug_str(error_code));
+        // }
         goto done;
     }
 
