@@ -127,17 +127,6 @@ void aws_secure_tunnel_operation_complete(
         (*operation->vtable->aws_secure_tunnel_operation_completion_fn)(operation, error_code, associated_view);
     }
 }
-// STEVE TODO aws_secure_tunnel_operation_assign_stream_id_fn returns an int that is not used.
-// Look into where and how it should be used and whether we need to error out or do anything beyond the
-// warning that is provided within the function itself.
-// void aws_secure_tunnel_operation_assign_stream_id(
-//     struct aws_secure_tunnel_operation *operation,
-//     struct aws_secure_tunnel *secure_tunnel) {
-//     AWS_FATAL_ASSERT(operation->vtable != NULL);
-//     if (operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn != NULL) {
-//         (*operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(operation, secure_tunnel);
-//     }
-// }
 
 static struct aws_secure_tunnel_operation_vtable s_empty_operation_vtable = {
     .aws_secure_tunnel_operation_completion_fn = NULL,
