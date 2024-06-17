@@ -1146,7 +1146,6 @@ static void s_on_websocket_setup(const struct aws_websocket_on_connection_setup_
     AWS_FATAL_ASSERT(aws_event_loop_thread_is_callers_thread(secure_tunnel->loop));
 
     if (secure_tunnel->desired_state != AWS_STS_CONNECTED) {
-        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP);
         s_on_websocket_shutdown(
             secure_tunnel->websocket, AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP, secure_tunnel);
         return;
