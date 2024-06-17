@@ -591,9 +591,7 @@ static void s_aws_secure_tunnel_on_stream_start_received(
      * being used this session
      */
     if (secure_tunnel->connections->protocol_version == 0) {
-
-        uint8_t message_protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message_view);
-        secure_tunnel->connections->protocol_version = message_protocol_version;
+        secure_tunnel->connections->protocol_version = s_aws_secure_tunnel_message_min_protocol_check(message_view);
         AWS_LOGF_INFO(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: Secure tunnel client Protocol set to V%d based on received STREAM START",
