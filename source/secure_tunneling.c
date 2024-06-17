@@ -1215,7 +1215,6 @@ void s_secure_tunneling_websocket_transform_complete_task_fn(
                 error_code = aws_last_error();
             }
         } else {
-            AWS_ASSERT(secure_tunnel->desired_state != AWS_STS_CONNECTED);
             error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP;
         }
     }
