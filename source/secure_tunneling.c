@@ -1180,49 +1180,52 @@ void s_secure_tunneling_websocket_transform_complete_task_fn(
     secure_tunnel->handshake_request = aws_http_message_acquire(websocket_transform_complete_task->handshake);
 
     int error_code = websocket_transform_complete_task->error_code;
-    if (error_code == AWS_OP_SUCCESS) {
-        if (secure_tunnel->desired_state == AWS_STS_CONNECTED) {
-            struct aws_websocket_client_connection_options websocket_options = {
-                .allocator = secure_tunnel->allocator,
-                .bootstrap = secure_tunnel->config->bootstrap,
-                .socket_options = &secure_tunnel->config->socket_options,
-                .tls_options = &secure_tunnel->tls_con_opt,
-                .host = aws_byte_cursor_from_string(secure_tunnel->config->endpoint_host),
-                .port = 443,
-                .handshake_request = secure_tunnel->handshake_request,
-                .manual_window_management = false,
-                .user_data = secure_tunnel,
-                .requested_event_loop = secure_tunnel->loop,
+    if (error_code == 0 && secure_tunnel->desired_state == AWS_STS_CONNECTED) {
+        struct aws_websocket_client_connection_options websocket_options = {
+            .allocator = secure_tunnel->allocator,
+            .bootstrap = secure_tunnel->config->bootstrap,
+            .socket_options = &secure_tunnel->config->socket_options,
+            .tls_options = &secure_tunnel->tls_con_opt,
+            .host = aws_byte_cursor_from_string(secure_tunnel->config->endpoint_host),
+            .port = 443,
+            .handshake_request = secure_tunnel->handshake_request,
+            .manual_window_management = false,
+            .user_data = secure_tunnel,
+            .requested_event_loop = secure_tunnel->loop,
 
-                .on_connection_setup = s_on_websocket_setup,
-                .on_connection_shutdown = s_on_websocket_shutdown,
-                .on_incoming_frame_begin = s_on_websocket_incoming_frame_begin,
-                .on_incoming_frame_payload = s_on_websocket_incoming_frame_payload,
-                .on_incoming_frame_complete = s_on_websocket_incoming_frame_complete,
+            .on_connection_setup = s_on_websocket_setup,
+            .on_connection_shutdown = s_on_websocket_shutdown,
+            .on_incoming_frame_begin = s_on_websocket_incoming_frame_begin,
+            .on_incoming_frame_payload = s_on_websocket_incoming_frame_payload,
+            .on_incoming_frame_complete = s_on_websocket_incoming_frame_complete,
 
-                .host_resolution_config = &secure_tunnel->host_resolution_config,
-            };
+            .host_resolution_config = &secure_tunnel->host_resolution_config,
+        };
 
-            if (secure_tunnel->config->http_proxy_config != NULL) {
-                websocket_options.proxy_options = &secure_tunnel->config->http_proxy_options;
-            }
+        if (secure_tunnel->config->http_proxy_config != NULL) {
+            websocket_options.proxy_options = &secure_tunnel->config->http_proxy_options;
+        }
 
-            if (secure_tunnel->vtable->aws_websocket_client_connect_fn(&websocket_options)) {
-                AWS_LOGF_ERROR(
-                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                    "id=%p: Failed to initiate websocket connection.",
-                    (void *)secure_tunnel);
-                error_code = aws_last_error();
-            }
-        } else {
+        if (secure_tunnel->vtable->aws_websocket_client_connect_fn(&websocket_options)) {
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Failed to initiate websocket connection.",
+                (void *)secure_tunnel);
+            error_code = aws_last_error();
+            goto error;
+        }
+
+        goto done;
+    } else {
+        if (error_code == AWS_ERROR_SUCCESS) {
+            AWS_ASSERT(secure_tunnel->desired_state != AWS_STS_CONNECTED);
             error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_USER_REQUESTED_STOP;
         }
     }
 
-    if (error_code != AWS_OP_SUCCESS) {
-        struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = error_code};
-        s_on_websocket_setup(&websocket_setup, secure_tunnel);
-    }
+error:
+    struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = error_code};
+    s_on_websocket_setup(&websocket_setup, secure_tunnel);
 
 done:
     aws_http_message_release(websocket_transform_complete_task->handshake);
