@@ -1223,7 +1223,7 @@ void s_secure_tunneling_websocket_transform_complete_task_fn(
         }
     }
 
-error:
+error:;
     struct aws_websocket_on_connection_setup_data websocket_setup = {.error_code = error_code};
     s_on_websocket_setup(&websocket_setup, secure_tunnel);
 
