@@ -2013,10 +2013,14 @@ void aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secur
                 if (secure_tunnel->connections->protocol_version != 3) {
                     AWS_LOGF_WARN(
                         AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                        "Connection Start may only be used with a Protocol V3 stream.");
+                        "id=%p: Connection Start may only be used with a Protocol V3 stream.",
+                        (void *)secure_tunnel);
                     error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_PROTOCOL_VERSION_MISMATCH;
                 } else if (current_operation->message_view->connection_id == 0) {
-                    AWS_LOGF_WARN(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Connection Start must include a connection id.");
+                    AWS_LOGF_WARN(
+                        AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                        "id=%p: Connection Start must include a connection id.",
+                        (void *)secure_tunnel);
                     error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_CONNECTION_ID;
                 }
                 /* If a connection start attempts to be sent on an unopen stream, discard it. */
