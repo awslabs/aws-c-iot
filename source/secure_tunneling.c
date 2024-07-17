@@ -638,14 +638,14 @@ static void s_aws_secure_tunnel_on_stream_start_received(
      */
     s_set_absent_connection_id_to_one(message_view, &connection_id);
 
-    int result = AWS_OP_SUCCESS;
+    int error_code = AWS_ERROR_SUCCESS;
     if (s_aws_secure_tunnel_set_stream(
             secure_tunnel, message_view->service_id, message_view->stream_id, connection_id)) {
-        result = aws_last_error();
+        error_code = aws_last_error();
     }
 
     if (secure_tunnel->config->on_stream_start) {
-        secure_tunnel->config->on_stream_start(message_view, result, secure_tunnel->config->user_data);
+        secure_tunnel->config->on_stream_start(message_view, error_code, secure_tunnel->config->user_data);
     }
 }
 
@@ -665,12 +665,12 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
     }
 
     if (s_aws_secure_tunnel_stream_id_match_check(secure_tunnel, message_view->service_id, message_view->stream_id)) {
-        int result = AWS_OP_SUCCESS;
+        int error_code = AWS_ERROR_SUCCESS;
         if (s_aws_secure_tunnel_set_stream(secure_tunnel, message_view->service_id, INVALID_STREAM_ID, 0)) {
-            result = aws_last_error();
+            error_code = aws_last_error();
         }
         if (secure_tunnel->config->on_stream_reset) {
-            secure_tunnel->config->on_stream_reset(message_view, result, secure_tunnel->config->user_data);
+            secure_tunnel->config->on_stream_reset(message_view, error_code, secure_tunnel->config->user_data);
         }
     } else {
         if (message_view->service_id->len > 0) {
@@ -785,13 +785,13 @@ static void s_aws_secure_tunnel_on_connection_start_received(
     s_set_absent_connection_id_to_one(message_view, &message_view->connection_id);
 
     if (s_aws_secure_tunnel_stream_id_match_check(secure_tunnel, message_view->service_id, message_view->stream_id)) {
-        int result = AWS_OP_SUCCESS;
+        int error_code = AWS_ERROR_SUCCESS;
         if (s_aws_secure_tunnel_set_connection_id(
                 secure_tunnel, message_view->service_id, message_view->connection_id)) {
-            result = aws_last_error();
+            error_code = aws_last_error();
         }
         if (secure_tunnel->config->on_connection_start) {
-            secure_tunnel->config->on_connection_start(message_view, result, secure_tunnel->config->user_data);
+            secure_tunnel->config->on_connection_start(message_view, error_code, secure_tunnel->config->user_data);
         }
     } else {
         if (message_view->service_id->len > 0) {
@@ -833,7 +833,7 @@ static void s_aws_secure_tunnel_on_connection_reset_received(
     s_aws_secure_tunnel_remove_connection_id(secure_tunnel, message_view);
 
     if (secure_tunnel->config->on_connection_reset) {
-        secure_tunnel->config->on_connection_reset(message_view, AWS_OP_SUCCESS, secure_tunnel->config->user_data);
+        secure_tunnel->config->on_connection_reset(message_view, AWS_ERROR_SUCCESS, secure_tunnel->config->user_data);
     }
 }
 
@@ -1066,7 +1066,7 @@ static void s_secure_tunnel_shutdown(struct aws_client_bootstrap *bootstrap, int
     (void)bootstrap;
     struct aws_secure_tunnel *secure_tunnel = user_data;
 
-    if (error_code == AWS_OP_SUCCESS) {
+    if (error_code == AWS_ERROR_SUCCESS) {
         error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_UNEXPECTED_HANGUP;
     }
 
@@ -1780,7 +1780,7 @@ static void s_process_outbound_data_message(
     struct aws_secure_tunnel *secure_tunnel,
     struct aws_secure_tunnel_operation *current_operation) {
 
-    int error_code = AWS_OP_SUCCESS;
+    int error_code = AWS_ERROR_SUCCESS;
 
     if (secure_tunnel->connections->protocol_version == 0) {
         error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_DATA_NO_ACTIVE_CONNECTION;
@@ -1942,7 +1942,7 @@ void aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secur
         if (current_operation == NULL) {
             break;
         }
-        int error_code = AWS_OP_SUCCESS;
+        int error_code = AWS_ERROR_SUCCESS;
 
         AWS_LOGF_TRACE(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
@@ -2097,7 +2097,7 @@ void aws_secure_tunnel_service_operational_state(struct aws_secure_tunnel *secur
                 break;
         }
 
-        if (error_code != AWS_OP_SUCCESS) {
+        if (error_code != AWS_ERROR_SUCCESS) {
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
                 "id=%p: error encountered during servicing of operation type `(%s)`: %d(%s)",
