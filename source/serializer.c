@@ -247,6 +247,10 @@ int aws_iot_st_msg_serialize_from_view(
     const struct aws_secure_tunnel_message_view *message_view) {
     size_t message_total_length = 0;
     if (s_iot_st_compute_message_length(message_view, &message_total_length)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Failure computing message length while serializing message",
+            (void *)message_view);
         return AWS_OP_ERR;
     }
 
@@ -256,70 +260,109 @@ int aws_iot_st_msg_serialize_from_view(
         (void *)message_view,
         message_total_length);
 
-    if (aws_byte_buf_init(buffer, allocator, message_total_length) != AWS_OP_SUCCESS) {
+    if (aws_byte_buf_init(buffer, allocator, message_total_length)) {
         return AWS_OP_ERR;
     }
 
     if (message_view->type != AWS_SECURE_TUNNEL_MT_UNKNOWN) {
         if (s_iot_st_encode_type(message_view->type, buffer)) {
-            goto cleanup;
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Failure encoding message type while serializing message",
+                (void *)message_view);
+            goto error;
         }
     } else {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Message missing type during encoding");
-        goto cleanup;
+        AWS_LOGF_ERROR(
+            AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+            "id=%p: Message type missing while serializing message",
+            (void *)message_view);
+        goto error;
     }
 
     if (message_view->stream_id != 0) {
         if (s_iot_st_encode_stream_id(message_view->stream_id, buffer)) {
-            goto cleanup;
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Failure encoding stream id while serializing message",
+                (void *)message_view);
+            goto error;
         }
     }
 
     if (message_view->connection_id != 0) {
         if (s_iot_st_encode_connection_id(message_view->connection_id, buffer)) {
-            goto cleanup;
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Failure encoding connection id while serializing message",
+                (void *)message_view);
+            goto error;
         }
     }
 
     if (message_view->ignorable != 0) {
         if (s_iot_st_encode_ignorable(message_view->ignorable, buffer)) {
-            goto cleanup;
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Failure encoding ignorable while serializing message",
+                (void *)message_view);
+            goto error;
         }
     }
 
     if (message_view->payload != NULL) {
         if (s_iot_st_encode_payload(message_view->payload, buffer)) {
-            goto cleanup;
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Failure encoding payload while serializing message",
+                (void *)message_view);
+            goto error;
         }
     }
 
     if (message_view->type == AWS_SECURE_TUNNEL_MT_SERVICE_IDS) {
         if (message_view->service_id != 0) {
             if (s_iot_st_encode_service_ids(message_view->service_id, buffer)) {
-                goto cleanup;
+                AWS_LOGF_ERROR(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: Failure encoding service id while serializing message",
+                    (void *)message_view);
+                goto error;
             }
         }
         if (message_view->service_id_2 != 0) {
             if (s_iot_st_encode_service_ids(message_view->service_id_2, buffer)) {
-                goto cleanup;
+                AWS_LOGF_ERROR(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: Failure encoding service id 2 while serializing message",
+                    (void *)message_view);
+                goto error;
             }
         }
         if (message_view->service_id_3 != 0) {
             if (s_iot_st_encode_service_ids(message_view->service_id_3, buffer)) {
-                goto cleanup;
+                AWS_LOGF_ERROR(
+                    AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                    "id=%p: Failure encoding service id 3 while serializing message",
+                    (void *)message_view);
+                goto error;
             }
         }
     } else if (message_view->service_id != NULL) {
         if (s_iot_st_encode_service_id(message_view->service_id, buffer)) {
-            goto cleanup;
+            AWS_LOGF_ERROR(
+                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
+                "id=%p: Failure encoding service id while serializing message",
+                (void *)message_view);
+            goto error;
         }
     }
 
     return AWS_OP_SUCCESS;
 
-cleanup:
+error:
     aws_byte_buf_clean_up(buffer);
-    return AWS_OP_ERR;
+    return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_ENCODE_FAILURE);
 }
 
 /*****************************************************************************************************************

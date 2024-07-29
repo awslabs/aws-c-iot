@@ -128,15 +128,6 @@ void aws_secure_tunnel_operation_complete(
     }
 }
 
-void aws_secure_tunnel_operation_assign_stream_id(
-    struct aws_secure_tunnel_operation *operation,
-    struct aws_secure_tunnel *secure_tunnel) {
-    AWS_FATAL_ASSERT(operation->vtable != NULL);
-    if (operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn != NULL) {
-        (*operation->vtable->aws_secure_tunnel_operation_assign_stream_id_fn)(operation, secure_tunnel);
-    }
-}
-
 static struct aws_secure_tunnel_operation_vtable s_empty_operation_vtable = {
     .aws_secure_tunnel_operation_completion_fn = NULL,
     .aws_secure_tunnel_operation_assign_stream_id_fn = NULL,
@@ -362,33 +353,26 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
 
     struct aws_secure_tunnel_message_view *message_view = &message_op->options_storage.storage_view;
 
-    int error_code = AWS_OP_SUCCESS;
-
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
         stream_id = secure_tunnel->connections->stream_id;
     } else {
         struct aws_hash_element *elem = NULL;
         aws_hash_table_find(&secure_tunnel->connections->service_ids, message_view->service_id, &elem);
         if (elem == NULL) {
-            AWS_LOGF_WARN(
-                AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: invalid service id '" PRInSTR "' attempted to be assigned a stream id on an outbound message",
-                (void *)message_view,
-                AWS_BYTE_CURSOR_PRI(*message_view->service_id));
-            error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID;
+            aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_SERVICE_ID);
             goto error;
         }
         struct aws_service_id_element *service_id_elem = elem->value;
         stream_id = service_id_elem->stream_id;
 
         if (stream_id == INVALID_STREAM_ID) {
-            error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID;
+            aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INACTIVE_SERVICE_ID);
             goto error;
         }
     }
 
     if (stream_id == INVALID_STREAM_ID) {
-        error_code = AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID;
+        aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_INVALID_STREAM_ID);
         goto error;
     }
 
@@ -397,13 +381,13 @@ static int s_aws_secure_tunnel_operation_message_assign_stream_id(
 
 error:
     if (message_view->service_id == NULL || message_view->service_id->len == 0) {
-        AWS_LOGF_DEBUG(
+        AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: No active stream to assign outbound %s message a stream id",
             (void *)secure_tunnel,
             aws_secure_tunnel_message_type_to_c_string(message_view->type));
     } else {
-        AWS_LOGF_DEBUG(
+        AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
             "id=%p: No active stream with service id '" PRInSTR "' to assign outbound %s message a stream id",
             (void *)secure_tunnel,
@@ -411,7 +395,7 @@ error:
             aws_secure_tunnel_message_type_to_c_string(message_view->type));
     }
 
-    return aws_raise_error(error_code);
+    return AWS_OP_ERR;
 }
 
 /*
@@ -624,9 +608,6 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
 
     struct aws_secure_tunnel_operation_message *message_op =
         aws_mem_calloc(allocator, 1, sizeof(struct aws_secure_tunnel_operation_message));
-    if (message_op == NULL) {
-        return NULL;
-    }
 
     message_op->allocator = allocator;
     message_op->base.vtable = &s_message_operation_vtable;
@@ -645,7 +626,6 @@ struct aws_secure_tunnel_operation_message *aws_secure_tunnel_operation_message_
 error:
 
     aws_secure_tunnel_operation_release(&message_op->base);
-
     return NULL;
 }
 
@@ -991,7 +971,6 @@ struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
     pair->type = message_view->type;
     pair->length_prefix_written = false;
     if (aws_iot_st_msg_serialize_from_view(&pair->buf, allocator, message_view)) {
-        AWS_LOGF_ERROR(AWS_LS_IOTDEVICE_SECURE_TUNNELING, "Failure serializing message");
         goto error;
     }
 
@@ -1000,7 +979,6 @@ struct data_tunnel_pair *aws_secure_tunnel_data_tunnel_pair_new(
     return pair;
 
 error:
-
     aws_secure_tunnel_data_tunnel_pair_destroy(pair);
     return NULL;
 }
