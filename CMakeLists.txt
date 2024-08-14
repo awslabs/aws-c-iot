@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(aws-c-iot C)
 
-if (POLICY CMP0069)
-    cmake_policy(SET CMP0069 NEW) # Enable LTO/IPO if available in the compiler, see AwsCFlags
-endif()
-
 option(USE_EXTERNAL_DEPS_SOURCES "Use dependencies provided by add_subdirectory command" OFF)
 
 if (DEFINED CMAKE_PREFIX_PATH)
@@ -90,6 +86,7 @@ file(GLOB IOT_SRC
         ${AWS_IOT_PRIV_HEADERS}
         )
 
+aws_set_common_policies()
 add_library(${PROJECT_NAME} ${IOT_HEADERS} ${IOT_SRC})
 aws_set_common_properties(${PROJECT_NAME})
 aws_prepare_symbol_visibility_args(${PROJECT_NAME} "AWS_IOTDEVICE")
