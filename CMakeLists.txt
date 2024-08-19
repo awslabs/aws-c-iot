@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.13)
 project(aws-c-iot C)
 
 option(USE_EXTERNAL_DEPS_SOURCES "Use dependencies provided by add_subdirectory command" OFF)
@@ -86,7 +86,6 @@ file(GLOB IOT_SRC
         ${AWS_IOT_PRIV_HEADERS}
         )
 
-aws_set_common_policies()
 add_library(${PROJECT_NAME} ${IOT_HEADERS} ${IOT_SRC})
 aws_set_common_properties(${PROJECT_NAME})
 aws_prepare_symbol_visibility_args(${PROJECT_NAME} "AWS_IOTDEVICE")
