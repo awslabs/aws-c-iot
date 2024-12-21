@@ -26,6 +26,7 @@ include(AwsSharedLibSetup)
 include(AwsSanitizers)
 include(CheckCCompilerFlag)
 include(AwsFindPackage)
+include(GNUInstallDirs)
 
 # Platform specific includes and source
 
@@ -93,8 +94,8 @@ aws_use_package(aws-c-mqtt)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${DEP_AWS_LIBS})
 aws_prepare_shared_lib_exports(${PROJECT_NAME})
 
-install(FILES ${AWS_IOT_HEADERS}  DESTINATION "${INCLUDE_DIRECTORY}/aws/iotdevice" COMPONENT Development)
-install(FILES ${AWS_IOT_PRIV_EXPOSED_HEADERS}  DESTINATION "${INCLUDE_DIRECTORY}/aws/iotdevice/private" COMPONENT Development)
+install(FILES ${AWS_IOT_HEADERS}  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/aws/iotdevice" COMPONENT Development)
+install(FILES ${AWS_IOT_PRIV_EXPOSED_HEADERS}  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/aws/iotdevice/private" COMPONENT Development)
 
 if (BUILD_SHARED_LIBS)
    set (TARGET_DIR "shared")
@@ -103,7 +104,7 @@ else()
 endif()
 
 install(EXPORT "${PROJECT_NAME}-targets"
-        DESTINATION "${LIBRARY_DIRECTORY}/cmake/${PROJECT_NAME}/${TARGET_DIR}"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}/${TARGET_DIR}"
         NAMESPACE AWS::
         COMPONENT Development)
 
@@ -112,7 +113,7 @@ configure_file("cmake/${PROJECT_NAME}-config.cmake"
         @ONLY)
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}-config.cmake"
-        DESTINATION "${LIBRARY_DIRECTORY}/cmake/${PROJECT_NAME}/"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}/"
         COMPONENT Development)
 
 include(CTest)
