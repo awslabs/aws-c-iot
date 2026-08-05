@@ -32,7 +32,7 @@ enum aws_secure_tunnel_message_type {
     AWS_SECURE_TUNNEL_MT_UNKNOWN = 0,
 
     /**
-     * Data messages carry a payload with a sequence of bytes to write to the the active data stream
+     * Data messages carry a payload with a sequence of bytes to write to the active data stream
      */
     AWS_SECURE_TUNNEL_MT_DATA = 1,
 
@@ -163,7 +163,7 @@ typedef void(aws_secure_tunneling_on_connection_reset_fn)(
     int error_code,
     void *user_data);
 /**
- * Signature of callback to invoke on session reset recieved from the Secure Tunnel Service
+ * Signature of callback to invoke on session reset received from the Secure Tunnel Service
  */
 typedef void(aws_secure_tunneling_on_session_reset_fn)(void *user_data);
 /**

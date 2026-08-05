@@ -65,7 +65,7 @@ enum aws_secure_tunnel_state {
      * and then transmitting a STREAM RESET message to all open streams.
      *
      * Next States:
-     *    WEBSOCKET_SHUTDOWN - on sucessful (or unsuccessful) disconnection
+     *    WEBSOCKET_SHUTDOWN - on successful (or unsuccessful) disconnection
      *    PENDING_RECONNECT - unexpected WebSocket shutdown completion and desired state still CONNECTED
      *    STOPPED - unexpected WebSocket shutdown completion and desired state no longer CONNECTED
      */
@@ -218,7 +218,7 @@ struct aws_secure_tunnel {
     struct aws_task service_task;
 
     /*
-     * Tracks when the secure tunnel's service task is next schedule to run.  Is zero if the task is not scheduled to
+     * Tracks when the secure tunnel's service task is next scheduled to run.  Is zero if the task is not scheduled to
      * run or we are in the middle of a service (so technically not scheduled too).
      */
     uint64_t next_service_task_run_time;
@@ -279,8 +279,8 @@ struct aws_secure_tunnel {
 
     /*
      * When should the next PINGREQ be sent?
-     * The secure tunneling endpoint ELB drops idle connect after 1 minute. we need to send a ping periodically to keep
-     * the connection alive.
+     * The secure tunneling endpoint ELB drops idle connections after 1 minute. We need to send a ping periodically to
+     * keep the connection alive.
      */
     uint64_t next_ping_time;
 };

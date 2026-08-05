@@ -110,7 +110,7 @@ struct aws_secure_tunnel_mock_test_fixture {
     bool listener_destroyed;
     bool secure_tunnel_connected;
     bool secure_tunnel_terminated;
-    bool secure_tunnel_connected_succesfully;
+    bool secure_tunnel_connected_successfully;
     bool secure_tunnel_connection_shutdown;
     bool secure_tunnel_connection_failed;
     bool secure_tunnel_stream_started;
@@ -211,7 +211,7 @@ static void s_on_test_secure_tunnel_connection_complete(
     aws_mutex_lock(&test_fixture->lock);
     if (error_code == 0 && test_fixture->secure_tunnel_connected == false) {
         test_fixture->secure_tunnel_connection_shutdown = false;
-        test_fixture->secure_tunnel_connected_succesfully = true;
+        test_fixture->secure_tunnel_connected_successfully = true;
         test_fixture->secure_tunnel_connected = true;
     } else {
         test_fixture->secure_tunnel_connection_failed = true;
@@ -227,7 +227,7 @@ static void s_on_test_secure_tunnel_connection_shutdown(int error_code, void *us
     aws_mutex_lock(&test_fixture->lock);
     test_fixture->secure_tunnel_connection_shutdown = true;
     test_fixture->secure_tunnel_connected = false;
-    test_fixture->secure_tunnel_connected_succesfully = false;
+    test_fixture->secure_tunnel_connected_successfully = false;
     test_fixture->secure_tunnel_stream_started = false;
     aws_condition_variable_notify_all(&test_fixture->signal);
     aws_mutex_unlock(&test_fixture->lock);
@@ -371,15 +371,15 @@ static void s_wait_for_secure_tunnel_terminated(struct aws_secure_tunnel_mock_te
     aws_mutex_unlock(&test_fixture->lock);
 }
 
-static bool s_has_secure_tunnel_connected_succesfully(void *arg) {
+static bool s_has_secure_tunnel_connected_successfully(void *arg) {
     struct aws_secure_tunnel_mock_test_fixture *test_fixture = arg;
-    return test_fixture->secure_tunnel_connected_succesfully;
+    return test_fixture->secure_tunnel_connected_successfully;
 }
 
 static void s_wait_for_connected_successfully(struct aws_secure_tunnel_mock_test_fixture *test_fixture) {
     aws_mutex_lock(&test_fixture->lock);
     aws_condition_variable_wait_pred(
-        &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_connected_succesfully, test_fixture);
+        &test_fixture->signal, &test_fixture->lock, s_has_secure_tunnel_connected_successfully, test_fixture);
     aws_mutex_unlock(&test_fixture->lock);
 }
 

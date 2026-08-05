@@ -328,7 +328,7 @@ static int s_aws_secure_tunnel_set_stream(
     if (elem == NULL) {
         AWS_LOGF_WARN(
             AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-            "id=%p: Incomming stream set request for unsupported service_id: " PRInSTR,
+            "id=%p: Incoming stream set request for unsupported service_id: " PRInSTR,
             (void *)secure_tunnel,
             AWS_BYTE_CURSOR_PRI(*service_id));
         return aws_raise_error(AWS_ERROR_IOTDEVICE_SECURE_TUNNELING_BAD_SERVICE_ID);
@@ -562,7 +562,7 @@ static void s_aws_secure_tunnel_on_data_received(
         if (message_view->service_id->len > 0) {
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Incomming DATA message on inactive stream with service id '" PRInSTR
+                "id=%p: Incoming DATA message on inactive stream with service id '" PRInSTR
                 "' stream id (%d) connection id (%d) ignored",
                 (void *)secure_tunnel,
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id),
@@ -571,7 +571,7 @@ static void s_aws_secure_tunnel_on_data_received(
         } else {
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Incomming DATA message on inactive stream with stream id (%d) connection id (%d) ignored",
+                "id=%p: Incoming DATA message on inactive stream with stream id (%d) connection id (%d) ignored",
                 (void *)secure_tunnel,
                 message_view->stream_id,
                 message_view->connection_id);
@@ -633,7 +633,7 @@ static void s_aws_secure_tunnel_on_stream_start_received(
 
     /*
      * An absent connection ID will result in connection id being set to 1. The connection is considered a V1
-     * connection at this point and the future existance of an unexpected connection ID will result in a full reset
+     * connection at this point and the future existence of an unexpected connection ID will result in a full reset
      * of the client as mixed protocol versions is not supported.
      */
     s_set_absent_connection_id_to_one(message_view, &connection_id);
@@ -676,14 +676,14 @@ static void s_aws_secure_tunnel_on_stream_reset_received(
         if (message_view->service_id->len > 0) {
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Incomming STREAM RESET on inactive stream with service id '" PRInSTR "' stream id (%d) ignored",
+                "id=%p: Incoming STREAM RESET on inactive stream with service id '" PRInSTR "' stream id (%d) ignored",
                 (void *)secure_tunnel,
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id),
                 message_view->stream_id);
         } else {
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Incomming STREAM RESET on inactive stream with stream id (%d) ignored",
+                "id=%p: Incoming STREAM RESET on inactive stream with stream id (%d) ignored",
                 (void *)secure_tunnel,
                 message_view->stream_id);
         }
@@ -797,7 +797,7 @@ static void s_aws_secure_tunnel_on_connection_start_received(
         if (message_view->service_id->len > 0) {
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Incomming CONNECTION START on inactive stream with service id '" PRInSTR
+                "id=%p: Incoming CONNECTION START on inactive stream with service id '" PRInSTR
                 "' stream id (%d) ignored",
                 (void *)secure_tunnel,
                 AWS_BYTE_CURSOR_PRI(*message_view->service_id),
@@ -805,7 +805,7 @@ static void s_aws_secure_tunnel_on_connection_start_received(
         } else {
             AWS_LOGF_INFO(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "id=%p: Incomming CONNECTION START on inactive stream with stream id (%d) ignored",
+                "id=%p: Incoming CONNECTION START on inactive stream with stream id (%d) ignored",
                 (void *)secure_tunnel,
                 message_view->stream_id);
         }

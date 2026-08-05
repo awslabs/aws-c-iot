@@ -342,7 +342,7 @@ void aws_secure_tunnel_message_storage_clean_up(struct aws_secure_tunnel_message
 }
 
 /*
- * Retreives and assigns the stream id on an outbound message based on the service id (or lack of one for V1).
+ * Retrieves and assigns the stream id on an outbound message based on the service id (or lack of one for V1).
  */
 static int s_aws_secure_tunnel_operation_message_assign_stream_id(
     struct aws_secure_tunnel_operation *operation,
@@ -839,7 +839,7 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
         if (aws_uuid_init(&uuid)) {
             AWS_LOGF_ERROR(
                 AWS_LS_IOTDEVICE_SECURE_TUNNELING,
-                "Failed to initiate an uuid struct: %s",
+                "Failed to initiate a uuid struct: %s",
                 aws_error_str(aws_last_error()));
             goto error;
         }
@@ -872,7 +872,6 @@ struct aws_secure_tunnel_options_storage *aws_secure_tunnel_options_storage_new(
     storage->on_message_received = options->on_message_received;
     storage->user_data = options->user_data;
 
-    storage->local_proxy_mode = options->local_proxy_mode;
     storage->on_connection_complete = options->on_connection_complete;
     storage->on_connection_shutdown = options->on_connection_shutdown;
     storage->on_send_message_complete = options->on_send_message_complete;
