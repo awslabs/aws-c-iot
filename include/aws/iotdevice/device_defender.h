@@ -58,7 +58,7 @@ typedef void(aws_iotdevice_defender_task_canceled_fn)(void *userdata);
  *     topic with a message. In this scenario, the client_error_code will be
  *     AWS_ERROR_SUCCESS, and rejected_message_payload will contain the payload of the
  *     rejected message received.
- * \param[in]    rejected_message_payload    response payload recieved from rejection topic
+ * \param[in]    rejected_message_payload    response payload received from rejection topic
  * \param[in]    userdata                    callback userdata
  */
 typedef void(

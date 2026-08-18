@@ -739,7 +739,7 @@ static void s_get_custom_metrics_data(
                 default:
                     AWS_LOGF_ERROR(
                         AWS_LS_IOTDEVICE_DEFENDER_TASK,
-                        "id=%p: Cannot retreive metric for unknown metric type: %d, name: %s",
+                        "id=%p: Cannot retrieve metric for unknown metric type: %d, name: %s",
                         (void *)defender_task,
                         custom_metric_data[metric_index].metric->type,
                         aws_string_c_str(custom_metric_data[metric_index].metric->metric_name));
@@ -907,8 +907,8 @@ static void s_reporting_task_fn(struct aws_task *task, void *userdata, enum aws_
 
         /* serialize and publish MAY not publish successfully, but in the event
            of failure, it will handle cleaning up the memory it allocated and
-           and invoke the task failure callback. If it succeeeds, task completion
-           deferred until puback packet for the report is recieved. */
+           invoke the task failure callback. If it succeeds, task completion is
+           deferred until puback packet for the report is received. */
         s_serialize_and_publish_defender_report(
             defender_task, &totals, ptr_delta_xfer, &net_conns, custom_metrics_len, custom_metric_data);
 
