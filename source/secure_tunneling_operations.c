@@ -906,6 +906,10 @@ void aws_secure_tunnel_connections_destroy(struct aws_secure_tunnel_connections 
     aws_mem_release(connections->allocator, connections);
 }
 
+static bool s_aws_byte_cursor_eq(const void *a, const void *b) {
+    return aws_byte_cursor_eq(a, b);
+}
+
 struct aws_secure_tunnel_connections *aws_secure_tunnel_connections_new(struct aws_allocator *allocator) {
     AWS_PRECONDITION(allocator != NULL);
 
@@ -919,7 +923,7 @@ struct aws_secure_tunnel_connections *aws_secure_tunnel_connections_new(struct a
             allocator,
             3,
             aws_hash_byte_cursor_ptr,
-            (aws_hash_callback_eq_fn *)aws_byte_cursor_eq,
+            s_aws_byte_cursor_eq,
             NULL,
             s_destroy_service_id)) {
         goto error;
