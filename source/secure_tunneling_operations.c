@@ -919,7 +919,7 @@ struct aws_secure_tunnel_connections *aws_secure_tunnel_connections_new(struct a
             allocator,
             3,
             aws_hash_byte_cursor_ptr,
-            (aws_hash_callback_eq_fn *)aws_byte_cursor_eq,
+            aws_byte_cursor_eq_cb,
             NULL,
             s_destroy_service_id)) {
         goto error;
