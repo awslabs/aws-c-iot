@@ -154,7 +154,11 @@ jobs:
         python builder.pyz build -p ${{ env.PACKAGE_NAME }} --cmake-extra=-DBUILD_SHARED_LIBS=ON
 
   macos:
-    runs-on: macos-14 # latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-latest]
     steps:
     - uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -167,7 +171,11 @@ jobs:
         ./builder build -p ${{ env.PACKAGE_NAME }}
 
   macos-x64:
-    runs-on: macos-14-large # latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-large, macos-latest-large]
     steps:
     - uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -180,7 +188,11 @@ jobs:
         ./builder build -p ${{ env.PACKAGE_NAME }} --cmake-extra=-DCMAKE_NO_SYSTEM_FROM_IMPORTED=ON
 
   macos-s2n:
-    runs-on: macos-14 # latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-latest]
     steps:
     - uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -193,7 +205,11 @@ jobs:
         ./builder build -p ${{ env.PACKAGE_NAME }}
 
   macos-x64-s2n:
-    runs-on: macos-14-large # latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-large, macos-latest-large]
     steps:
     - uses: aws-actions/configure-aws-credentials@v4
       with:
